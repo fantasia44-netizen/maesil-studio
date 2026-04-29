@@ -143,17 +143,21 @@ def _test_fal(api_key: str):
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
         import httpx
-        r = httpx.get(
+        # POST with minimal payload — 422 means auth OK but bad params, 401 means bad key
+        r = httpx.post(
             'https://fal.run/fal-ai/flux/schnell',
-            headers={'Authorization': f'Key {api_key}'},
-            timeout=10,
+            headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
+            json={'prompt': 'test'},
+            timeout=15,
         )
-        if r.status_code in (200, 422):  # 422 = 파라미터 없음이지만 인증은 통과
-            return jsonify(ok=True, message=f'연결 성공 (HTTP {r.status_code})')
+        if r.status_code in (200, 422):
+            return jsonify(ok=True, message=f'연결 성공 — 인증 확인됨')
         elif r.status_code == 401:
             return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
+        elif r.status_code == 403:
+            return jsonify(ok=False, message='접근 거부 (403) — 키 권한을 확인하세요.')
         else:
-            return jsonify(ok=False, message=f'HTTP {r.status_code}')
+            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:100]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')
 
