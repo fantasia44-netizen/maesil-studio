@@ -1,6 +1,6 @@
 """어드민 - 시스템 설정 (API 키 / DB 연결 등)"""
 import logging
-from flask import render_template, request, redirect, url_for, flash, current_app
+from flask import render_template, request, jsonify, current_app
 from flask_login import login_required
 from blueprints.admin import admin_bp
 from models import require_superadmin
@@ -8,24 +8,25 @@ from services.tz_utils import now_kst
 
 logger = logging.getLogger(__name__)
 
-# 관리 가능한 설정 키 목록
 CONFIG_KEYS = [
-    # (key, label, type, description)
-    ('anthropic_api_key',       'Claude API Key',              'secret', 'Anthropic Claude 텍스트 생성'),
-    ('openai_api_key',          'OpenAI API Key',              'secret', 'DALL-E / GPT Image 이미지 생성'),
-    ('fal_api_key',             'fal.ai API Key',              'secret', 'FLUX 이미지 생성'),
-    ('ideogram_api_key',        'Ideogram API Key',            'secret', '한글 텍스트 이미지 생성'),
-    ('portone_api_secret',      'PortOne API Secret',          'secret', '결제 API'),
-    ('portone_store_id',        'PortOne Store ID',            'text',   ''),
-    ('portone_channel_card',    'PortOne 카드 채널 키',         'text',   ''),
-    ('portone_channel_kakao',   'PortOne 카카오 채널 키',       'text',   ''),
-    ('image_provider',          '이미지 생성 엔진',              'text',   'dalle | flux | ideogram'),
-    ('smtp_host',               'SMTP 호스트',                  'text',   '이메일 발송'),
-    ('smtp_port',               'SMTP 포트',                    'text',   ''),
-    ('smtp_user',               'SMTP 사용자',                  'text',   ''),
-    ('smtp_password',           'SMTP 비밀번호',                'secret', ''),
-    ('smtp_from',               'SMTP 발신자',                  'text',   ''),
+    # (key, label, type, description, testable)
+    ('anthropic_api_key',     'Claude API Key',         'secret', 'Anthropic Claude 텍스트 생성',  True),
+    ('fal_api_key',           'fal.ai API Key',         'secret', 'FLUX 이미지 생성',              True),
+    ('ideogram_api_key',      'Ideogram API Key',       'secret', '한글 텍스트 이미지 생성',       True),
+    ('openai_api_key',        'OpenAI API Key',         'secret', 'DALL-E / GPT (선택)',            False),
+    ('portone_api_secret',    'PortOne API Secret',     'secret', '결제 API',                      False),
+    ('portone_store_id',      'PortOne Store ID',       'text',   '',                              False),
+    ('portone_channel_card',  'PortOne 카드 채널 키',   'text',   '',                              False),
+    ('portone_channel_kakao', 'PortOne 카카오 채널 키', 'text',   '',                              False),
+    ('image_provider',        '이미지 생성 엔진',        'text',   'dalle | flux | ideogram',       False),
+    ('smtp_host',             'SMTP 호스트',             'text',   '이메일 발송',                   False),
+    ('smtp_port',             'SMTP 포트',               'text',   '',                              False),
+    ('smtp_user',             'SMTP 사용자',             'text',   '',                              False),
+    ('smtp_password',         'SMTP 비밀번호',           'secret', '',                              False),
+    ('smtp_from',             'SMTP 발신자',             'text',   '',                              False),
 ]
+
+TESTABLE_KEYS = {c[0] for c in CONFIG_KEYS if c[4]}
 
 
 def _get_all_configs(supabase) -> dict:
@@ -35,7 +36,7 @@ def _get_all_configs(supabase) -> dict:
         for row in (rows.data or []):
             k = row['key']
             if row.get('value_secret'):
-                result[k] = '••••••••'  # 마스킹
+                result[k] = '••••••••'
             else:
                 result[k] = row.get('value_text', '')
         return result
@@ -73,26 +74,107 @@ def settings():
                            configs=configs)
 
 
-@admin_bp.route('/settings/save', methods=['POST'])
+@admin_bp.route('/settings/save-key', methods=['POST'])
 @login_required
 @require_superadmin
-def save_settings():
+def save_key():
     supabase = current_app.supabase
-    saved = 0
-    for key, label, type_, _ in CONFIG_KEYS:
-        value = request.form.get(key, '').strip()
-        if not value:
-            continue
-        if value == '••••••••':
-            continue  # 마스킹된 값은 변경 안 함
-        try:
-            _upsert_config(supabase, key, value, is_secret=(type_ == 'secret'))
-            saved += 1
-        except Exception as e:
-            logger.error(f'[ADMIN] save_settings error ({key}): {e}')
+    data = request.json or {}
+    key = data.get('key', '').strip()
+    value = data.get('value', '').strip()
 
-    if saved > 0:
-        flash(f'{saved}개 설정이 저장되었습니다.', 'success')
-    else:
-        flash('변경된 값이 없습니다.', 'info')
-    return redirect(url_for('admin.settings'))
+    if not key:
+        return jsonify(ok=False, message='키가 없습니다.')
+    if value == '••••••••':
+        return jsonify(ok=False, message='변경된 값이 없습니다.')
+
+    cfg = next((c for c in CONFIG_KEYS if c[0] == key), None)
+    if not cfg:
+        return jsonify(ok=False, message='허용되지 않는 키입니다.')
+
+    try:
+        _upsert_config(supabase, key, value, is_secret=(cfg[2] == 'secret'))
+        return jsonify(ok=True, message='저장되었습니다.')
+    except Exception as e:
+        logger.error(f'[ADMIN] save_key error ({key}): {e}')
+        return jsonify(ok=False, message=f'저장 실패: {e}')
+
+
+@admin_bp.route('/settings/test/<key>', methods=['POST'])
+@login_required
+@require_superadmin
+def test_key(key):
+    if key not in TESTABLE_KEYS:
+        return jsonify(ok=False, message='테스트할 수 없는 키입니다.')
+
+    # 저장된 실제 값 읽기
+    from services.config_service import get_config
+    try:
+        if key == 'anthropic_api_key':
+            return _test_anthropic(get_config('anthropic_api_key'))
+        elif key == 'fal_api_key':
+            return _test_fal(get_config('fal_api_key'))
+        elif key == 'ideogram_api_key':
+            return _test_ideogram(get_config('ideogram_api_key'))
+    except Exception as e:
+        return jsonify(ok=False, message=f'오류: {e}')
+
+    return jsonify(ok=False, message='테스트 구현 없음')
+
+
+def _test_anthropic(api_key: str):
+    if not api_key:
+        return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001',
+            max_tokens=10,
+            messages=[{'role': 'user', 'content': 'hi'}],
+        )
+        return jsonify(ok=True, message=f'연결 성공 — 모델: {msg.model}')
+    except Exception as e:
+        return jsonify(ok=False, message=f'연결 실패: {e}')
+
+
+def _test_fal(api_key: str):
+    if not api_key:
+        return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
+    try:
+        import httpx
+        r = httpx.get(
+            'https://fal.run/fal-ai/flux/schnell',
+            headers={'Authorization': f'Key {api_key}'},
+            timeout=10,
+        )
+        if r.status_code in (200, 422):  # 422 = 파라미터 없음이지만 인증은 통과
+            return jsonify(ok=True, message=f'연결 성공 (HTTP {r.status_code})')
+        elif r.status_code == 401:
+            return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
+        else:
+            return jsonify(ok=False, message=f'HTTP {r.status_code}')
+    except Exception as e:
+        return jsonify(ok=False, message=f'연결 실패: {e}')
+
+
+def _test_ideogram(api_key: str):
+    if not api_key:
+        return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
+    try:
+        import httpx
+        r = httpx.get(
+            'https://api.ideogram.ai/manage/api/subscription',
+            headers={'Api-Key': api_key},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            tier = data.get('tier_id', '알 수 없음')
+            return jsonify(ok=True, message=f'연결 성공 — 플랜: {tier}')
+        elif r.status_code == 401:
+            return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
+        else:
+            return jsonify(ok=False, message=f'HTTP {r.status_code}')
+    except Exception as e:
+        return jsonify(ok=False, message=f'연결 실패: {e}')

@@ -5,49 +5,117 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-8">
-    <div class="alert alert-warning small">
+
+    <div class="alert alert-warning small mb-4">
       <i class="bi bi-shield-lock me-1"></i>
-      이 페이지의 변경사항은 즉시 적용됩니다. API 키는 암호화되어 저장됩니다.
+      API 키는 암호화되어 DB에 저장됩니다. 키별로 저장하세요.
     </div>
 
-    <form method="POST" action="{{ url_for('admin.save_settings') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% set ns = namespace(group='') %}
+    {% for key, label, type_, desc, testable in CONFIG_KEYS %}
+      {% set g = 'Claude / AI' if ('api_key' in key or 'provider' in key) else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일') %}
 
-      {% set groups = {} %}
-      {% for key, label, type_, desc in CONFIG_KEYS %}
-        {% set group = 'Claude/AI' if 'api_key' in key or 'provider' in key else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일') %}
-        {% if group not in groups %}{% set _ = groups.update({group: []}) %}{% endif %}
-      {% endfor %}
+      {% if g != ns.group %}
+        {% if ns.group %}</div></div>{% endif %}
+        {% set ns.group = g %}
+        <div class="card mb-3">
+          <div class="card-header py-2"><h6 class="mb-0 fw-bold">{{ g }}</h6></div>
+          <div class="card-body p-3">
+      {% endif %}
 
-      {% set current_group = namespace(val='') %}
-      {% for key, label, type_, desc in CONFIG_KEYS %}
-        {% set group = 'Claude/AI' if 'api_key' in key or 'provider' in key else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일') %}
-        {% if group != current_group.val %}
-          {% if current_group.val %}</div></div>{% endif %}
-          {% set current_group.val = group %}
-          <div class="card mb-3">
-            <div class="card-header py-3"><h6 class="mb-0 fw-bold">{{ group }}</h6></div>
-            <div class="card-body p-4">
-        {% endif %}
-
-        <div class="mb-3">
-          <label class="form-label fw-semibold small">{{ label }}
-            {% if desc %}<span class="text-muted fw-normal">— {{ desc }}</span>{% endif %}
-          </label>
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">
+          {{ label }}
+          {% if desc %}<span class="text-muted fw-normal">— {{ desc }}</span>{% endif %}
+        </label>
+        <div class="input-group input-group-sm">
           <input type="{{ 'password' if type_ == 'secret' else 'text' }}"
-                 name="{{ key }}"
-                 class="form-control form-control-sm"
+                 id="inp_{{ key }}"
+                 class="form-control"
                  value="{{ configs.get(key, '') }}"
-                 placeholder="{{ '••••••••' if type_ == 'secret' else '' }}"
+                 placeholder="{{ '저장된 값 있음 (변경 시 입력)' if configs.get(key) else '미설정' }}"
                  autocomplete="off">
+          {% if testable %}
+          <button class="btn btn-outline-secondary" type="button"
+                  onclick="testKey('{{ key }}', this)" title="연결 테스트">
+            <i class="bi bi-wifi me-1"></i>테스트
+          </button>
+          {% endif %}
+          <button class="btn btn-outline-primary" type="button"
+                  onclick="saveKey('{{ key }}', '{{ type_ }}', this)">
+            <i class="bi bi-save me-1"></i>저장
+          </button>
         </div>
-      {% endfor %}
-      </div></div>
+        <div id="msg_{{ key }}" class="form-text mt-1"></div>
+      </div>
 
-      <button type="submit" class="btn fw-semibold px-5" style="background:#e8355a;color:#fff">
-        <i class="bi bi-save me-1"></i>설정 저장
-      </button>
-    </form>
+    {% endfor %}
+    </div></div>
+
   </div>
 </div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const CSRF = '{{ csrf_token() }}';
+
+async function saveKey(key, type_, btn) {
+  const inp = document.getElementById('inp_' + key);
+  const msg = document.getElementById('msg_' + key);
+  const val = inp.value.trim();
+
+  if (!val || val === '••••••••') {
+    showMsg(msg, '변경된 값이 없습니다.', 'text-warning');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const res = await fetch('/admin/settings/save-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ key, value: val }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showMsg(msg, '✓ ' + data.message, 'text-success');
+      if (type_ === 'secret') { inp.value = ''; inp.placeholder = '저장된 값 있음 (변경 시 입력)'; }
+    } else {
+      showMsg(msg, '✗ ' + data.message, 'text-danger');
+    }
+  } catch(e) {
+    showMsg(msg, '✗ 오류가 발생했습니다.', 'text-danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-save me-1"></i>저장';
+  }
+}
+
+async function testKey(key, btn) {
+  const msg = document.getElementById('msg_' + key);
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const res = await fetch('/admin/settings/test/' + key, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+    });
+    const data = await res.json();
+    showMsg(msg, (data.ok ? '✓ ' : '✗ ') + data.message, data.ok ? 'text-success' : 'text-danger');
+  } catch(e) {
+    showMsg(msg, '✗ 오류가 발생했습니다.', 'text-danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-wifi me-1"></i>테스트';
+  }
+}
+
+function showMsg(el, text, cls) {
+  el.className = 'form-text mt-1 ' + cls;
+  el.textContent = text;
+  setTimeout(() => { el.textContent = ''; el.className = 'form-text mt-1'; }, 6000);
+}
+</script>
 {% endblock %}
