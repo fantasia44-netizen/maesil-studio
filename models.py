@@ -112,7 +112,8 @@ class User(UserMixin):
         self.name = row.get('name', self.email.split('@')[0])
         self.plan_type = row.get('plan_type', 'free')
         self._is_active = row.get('is_active', True)
-        self.site_role = row.get('site_role', 'user')  # 'user' | 'superadmin'
+        self.site_role = row.get('site_role', 'user')  # 'user' | 'operator_admin' | 'superadmin'
+        self.operator_id = row.get('operator_id')
         self.subscription_status = row.get('subscription_status', 'trial')
         self.trial_ends_at = row.get('trial_ends_at')
         self.current_period_end = row.get('current_period_end')
@@ -125,6 +126,10 @@ class User(UserMixin):
     @property
     def is_superadmin(self):
         return self.site_role == 'superadmin'
+
+    @property
+    def is_operator_admin(self):
+        return self.site_role in ('superadmin', 'operator_admin')
 
     @property
     def plan_info(self):

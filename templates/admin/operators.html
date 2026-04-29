@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}운영사 관리 — 어드민{% endblock %}
+{% block breadcrumb %}어드민 / 운영사 관리{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0">운영사 관리</h4>
+  <a href="{{ url_for('admin.operator_new') }}" class="btn fw-semibold" style="background:#e8355a;color:#fff">
+    <i class="bi bi-plus-lg me-1"></i> 운영사 추가
+  </a>
+</div>
+
+<div class="row g-3">
+  {% for op in operators %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div style="width:40px;height:40px;border-radius:10px;background:#fdedf1;display:flex;align-items:center;justify-content:center">
+            <i class="bi bi-building" style="color:#e8355a"></i>
+          </div>
+          <div>
+            <div class="fw-bold">{{ op.name }}</div>
+            <span class="badge bg-light text-dark small">{{ op.plan_type }}</span>
+            {% if not op.is_active %}
+              <span class="badge bg-secondary small">비활성</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="row g-2 text-center mb-3">
+          <div class="col-6">
+            <div class="bg-light rounded p-2">
+              <div class="fw-bold">{{ op.user_count }}</div>
+              <div class="text-muted" style="font-size:.75rem">팀원 / {{ op.max_users }}</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="bg-light rounded p-2">
+              <div class="fw-bold">{{ op.brand_count }}</div>
+              <div class="text-muted" style="font-size:.75rem">브랜드 / {{ op.max_brands }}</div>
+            </div>
+          </div>
+        </div>
+        <a href="{{ url_for('admin.operator_detail', op_id=op.id) }}" class="btn btn-outline-secondary btn-sm w-100">
+          관리하기 →
+        </a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-center py-5 text-muted">
+    <i class="bi bi-building fs-1 d-block mb-2"></i>
+    운영사가 없습니다.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

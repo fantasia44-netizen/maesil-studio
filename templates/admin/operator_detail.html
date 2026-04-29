@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}{{ op.name }} — 운영사 관리{% endblock %}
+{% block breadcrumb %}어드민 / <a href="{{ url_for('admin.operators') }}">운영사</a> / {{ op.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-building me-2"></i>{{ op.name }}</h4>
+  <span class="badge bg-light text-dark">{{ op.plan_type }} · 브랜드 {{ brands|length }}/{{ op.max_brands }} · 팀원 {{ members|length }}/{{ op.max_users }}</span>
+</div>
+
+<div class="row g-4">
+
+  <!-- 브랜드 목록 -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>브랜드 ({{ brands|length }})</span>
+        <a href="{{ url_for('brand.new') }}" class="btn btn-sm fw-semibold" style="background:#e8355a;color:#fff">
+          <i class="bi bi-plus-lg"></i> 추가
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% for brand in brands %}
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+          <div>
+            <span class="fw-semibold">{{ brand.name }}</span>
+            {% if brand.is_default %}<span class="badge ms-1" style="background:#fdedf1;color:#e8355a;font-size:.7rem">기본</span>{% endif %}
+          </div>
+          <a href="{{ url_for('brand.edit', brand_id=brand.id) }}" class="btn btn-sm btn-outline-secondary">편집</a>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-4 mb-0">브랜드가 없습니다.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 팀원 관리 -->
+  <div class="col-lg-7">
+    <div class="card mb-3">
+      <div class="card-header">팀원 초대</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.operator_invite', op_id=op.id) }}" class="row g-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="col-md-6">
+            <input type="email" name="email" class="form-control form-control-sm" placeholder="이메일 (기존 가입자)" required>
+          </div>
+          <div class="col-md-4">
+            <select name="site_role" class="form-select form-select-sm">
+              <option value="user">일반 직원</option>
+              <option value="operator_admin">관리자</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-sm w-100 fw-semibold" style="background:#e8355a;color:#fff">추가</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">팀원 ({{ members|length }}명)</div>
+      <div class="list-group list-group-flush">
+        {% for member in members %}
+        <div class="list-group-item px-3 py-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold">{{ member.name or member.email }}</div>
+              <div class="text-muted small">{{ member.email }}</div>
+              <span class="badge mt-1 {% if member.site_role == 'operator_admin' %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">
+                {{ '관리자' if member.site_role == 'operator_admin' else '직원' }}
+              </span>
+            </div>
+            <form method="POST" action="{{ url_for('admin.operator_remove_user', op_id=op.id, user_id=member.id) }}"
+                  onsubmit="return confirm('팀에서 제거하시겠습니까?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger">제거</button>
+            </form>
+          </div>
+
+          <!-- 브랜드 배정 -->
+          <form method="POST" action="{{ url_for('admin.operator_assign_brand', op_id=op.id) }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="user_id" value="{{ member.id }}">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              {% for brand in brands %}
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" name="brand_ids"
+                       value="{{ brand.id }}" id="b_{{ member.id }}_{{ brand.id }}"
+                       {% if brand.id in access_map.get(member.id, []) %}checked{% endif %}>
+                <label class="form-check-label small" for="b_{{ member.id }}_{{ brand.id }}">
+                  {{ brand.name }}
+                </label>
+              </div>
+              {% endfor %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary ms-1">배정 저장</button>
+            </div>
+            <div class="text-muted" style="font-size:.72rem;margin-top:.25rem">
+              체크 없으면 전체 브랜드 접근
+            </div>
+          </form>
+        </div>
+        {% else %}
+        <div class="list-group-item text-muted text-center py-4">팀원이 없습니다.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

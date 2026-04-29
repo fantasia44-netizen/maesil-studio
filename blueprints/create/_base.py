@@ -10,24 +10,53 @@ from models import POINT_COSTS
 logger = logging.getLogger(__name__)
 
 
-def get_default_brand(supabase):
-    """사용자의 기본 브랜드 프로필 반환"""
+def get_accessible_brands(supabase) -> list:
+    """사용자가 접근 가능한 브랜드 목록
+    - operator 소속 + admin → operator 전체 브랜드
+    - operator 소속 + 일반 직원 → user_brand_access 배정 브랜드 (없으면 전체)
+    - 개인 사용자 → 본인 브랜드만
+    """
+    user = current_user
+    if user.operator_id:
+        if user.is_operator_admin:
+            result = supabase.table('brand_profiles').select('*').eq(
+                'operator_id', user.operator_id
+            ).order('is_default', desc=True).execute()
+            return result.data or []
+        # 일반 직원: 배정된 브랜드 확인
+        access = supabase.table('user_brand_access').select('brand_id').eq(
+            'user_id', user.id
+        ).execute()
+        brand_ids = [r['brand_id'] for r in (access.data or [])]
+        if brand_ids:
+            result = supabase.table('brand_profiles').select('*').in_(
+                'id', brand_ids
+            ).execute()
+        else:
+            result = supabase.table('brand_profiles').select('*').eq(
+                'operator_id', user.operator_id
+            ).order('is_default', desc=True).execute()
+        return result.data or []
+    # 개인 사용자
     result = supabase.table('brand_profiles').select('*').eq(
-        'user_id', current_user.id
-    ).eq('is_default', True).limit(1).execute()
-    if result.data:
-        return result.data[0]
-    # 기본 없으면 첫 번째
-    result2 = supabase.table('brand_profiles').select('*').eq(
-        'user_id', current_user.id
-    ).limit(1).execute()
-    return result2.data[0] if result2.data else None
+        'user_id', user.id
+    ).order('is_default', desc=True).execute()
+    return result.data or []
+
+
+def get_default_brand(supabase):
+    brands = get_accessible_brands(supabase)
+    if not brands:
+        return None
+    default = next((b for b in brands if b.get('is_default')), None)
+    return default or brands[0]
 
 
 def get_brand_by_id(supabase, brand_id: str):
-    result = supabase.table('brand_profiles').select('*').eq(
-        'id', brand_id
-    ).eq('user_id', current_user.id).execute()
+    accessible_ids = {b['id'] for b in get_accessible_brands(supabase)}
+    if brand_id not in accessible_ids:
+        return None
+    result = supabase.table('brand_profiles').select('*').eq('id', brand_id).execute()
     return result.data[0] if result.data else None
 
 
