@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}내 설정 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}내 설정{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">기본 정보</h6></div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('main.settings') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">이메일</label>
+            <input type="text" class="form-control form-control-sm bg-light" value="{{ current_user.email }}" disabled>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">이름</label>
+            <input type="text" name="name" class="form-control form-control-sm" value="{{ current_user.name }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">현재 플랜</label>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-success">{{ PLAN_FEATURES[current_user.plan_type]['label'] }}</span>
+              <a href="{{ url_for('billing.index') }}" class="small text-decoration-none" style="color:#e8355a">플랜 변경 →</a>
+            </div>
+          </div>
+          <button type="submit" class="btn fw-semibold px-4" style="background:#e8355a;color:#fff">저장</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">비밀번호 변경</h6></div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('main.change_password') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">현재 비밀번호</label>
+            <input type="password" name="current_password" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">새 비밀번호</label>
+            <input type="password" name="new_password" class="form-control form-control-sm" placeholder="8자 이상" required>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">새 비밀번호 확인</label>
+            <input type="password" name="confirm_password" class="form-control form-control-sm" required>
+          </div>
+          <button type="submit" class="btn btn-outline-secondary fw-semibold px-4">비밀번호 변경</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}포인트 충전 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('billing.index') }}" class="text-muted text-decoration-none">구독 관리</a> / 포인트 충전{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-body text-center py-4">
+        <div class="text-muted small mb-1">현재 잔액</div>
+        <div class="fs-2 fw-bold" style="color:#e8355a">{{ balance | number }}P</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">충전 패키지 선택</h6></div>
+      <div class="card-body">
+        {% for i, pkg in enumerate(POINT_PACKAGES) %}
+        <div class="border rounded-3 p-3 mb-2 d-flex align-items-center justify-content-between
+                    {% if pkg.get('badge') %}border-success{% endif %}"
+             style="cursor:pointer" onclick="selectPackage({{ i }})">
+          <div>
+            <div class="fw-bold">{{ pkg.label }}</div>
+            <div class="text-muted small">{{ pkg.price | number }}원
+              {% if pkg.get('badge') %}<span class="badge bg-success ms-1">{{ pkg.badge }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="fw-semibold" style="color:#e8355a">
+            {{ (pkg.price / pkg.points * 10) | round(1) }}원/10P
+          </div>
+        </div>
+        {% endfor %}
+        <button id="chargeBtn" class="btn w-100 fw-semibold py-2 mt-2" style="background:#e8355a;color:#fff" disabled>
+          선택 후 충전하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">포인트 내역</h6></div>
+      <div class="card-body p-0">
+        {% if ledger %}
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr><th class="ps-3">내용</th><th>변동</th><th>잔액</th><th>날짜</th></tr>
+            </thead>
+            <tbody>
+              {% for row in ledger %}
+              <tr>
+                <td class="ps-3 small">{{ row.note or row.type }}</td>
+                <td class="small fw-semibold {% if row.amount > 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ '+' if row.amount > 0 else '' }}{{ row.amount | number }}P
+                </td>
+                <td class="small text-muted">{{ row.balance | number }}P</td>
+                <td class="small text-muted">{{ row.created_at | kst('%m/%d %H:%M') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted small">포인트 내역이 없습니다.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.iamport.kr/v1/iamport.js"></script>
+<script>
+const PACKAGES = {{ POINT_PACKAGES | tojson }};
+let selectedIdx = null;
+
+function selectPackage(idx) {
+  selectedIdx = idx;
+  document.querySelectorAll('.border.rounded-3').forEach((el, i) => {
+    el.style.background = i === idx ? '#fdedf1' : '';
+    el.style.borderColor = i === idx ? '#e8355a' : '';
+  });
+  const btn = document.getElementById('chargeBtn');
+  btn.disabled = false;
+  btn.textContent = `${PACKAGES[idx].label} 충전하기 (${PACKAGES[idx].price.toLocaleString()}원)`;
+}
+
+document.getElementById('chargeBtn').addEventListener('click', () => {
+  if (selectedIdx === null) return;
+  const pkg = PACKAGES[selectedIdx];
+  IMP.init('{{ config.get("PORTONE_STORE_ID", "") }}');
+  IMP.request_pay({
+    pg: 'kakaopay',
+    pay_method: 'card',
+    merchant_uid: 'pt_' + Date.now(),
+    name: `매실 크리에이터 포인트 ${pkg.label}`,
+    amount: pkg.price,
+  }, async (rsp) => {
+    if (rsp.success) {
+      const res = await fetch('{{ url_for("billing.payment_complete") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        body: JSON.stringify({ payment_id: rsp.imp_uid, payment_type: 'point_purchase', package_idx: selectedIdx }),
+      });
+      const data = await res.json();
+      alert(data.message);
+      if (data.ok) location.reload();
+    } else {
+      alert('결제 실패: ' + rsp.error_msg);
+    }
+  });
+});
+</script>
+{% endblock %}

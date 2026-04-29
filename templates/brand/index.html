@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}브랜드 관리 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}브랜드 관리{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h5 class="fw-bold mb-0">브랜드 프로필</h5>
+    <p class="text-muted small mb-0">현재 플랜: 최대 {{ max_brands }}개</p>
+  </div>
+  {% if brands | length < max_brands %}
+  <a href="{{ url_for('brand.new') }}" class="btn fw-semibold" style="background:#e8355a;color:#fff">
+    <i class="bi bi-plus-lg me-1"></i>새 브랜드 추가
+  </a>
+  {% else %}
+  <button class="btn btn-outline-secondary" disabled title="플랜 업그레이드 필요">
+    <i class="bi bi-plus-lg me-1"></i>새 브랜드 추가
+  </button>
+  {% endif %}
+</div>
+
+{% if brands %}
+<div class="row g-3">
+  {% for brand in brands %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 {% if brand.is_default %}border-success{% endif %}">
+      <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between mb-2">
+          <h6 class="fw-bold mb-0">{{ brand.name }}</h6>
+          {% if brand.is_default %}
+          <span class="badge bg-success">기본</span>
+          {% endif %}
+        </div>
+        {% if brand.industry %}
+        <p class="text-muted small mb-1"><i class="bi bi-building me-1"></i>{{ brand.industry }}</p>
+        {% endif %}
+        {% if brand.target_customer %}
+        <p class="text-muted small mb-1"><i class="bi bi-people me-1"></i>{{ brand.target_customer }}</p>
+        {% endif %}
+        {% if brand.brand_tone %}
+        <div class="mt-2">
+          {% for tone in brand.brand_tone %}
+          <span class="badge bg-light text-dark me-1">{{ tone }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('brand.edit', brand_id=brand.id) }}" class="btn btn-sm btn-outline-secondary flex-fill">
+            <i class="bi bi-pencil me-1"></i>수정
+          </a>
+          {% if not brand.is_default %}
+          <form method="POST" action="{{ url_for('brand.set_default', brand_id=brand.id) }}" class="flex-fill">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-success w-100">기본 설정</button>
+          </form>
+          <form method="POST" action="{{ url_for('brand.delete', brand_id=brand.id) }}"
+                onsubmit="return confirm('브랜드를 삭제할까요?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-building fs-1 text-muted d-block mb-3" style="opacity:.3"></i>
+    <p class="text-muted">등록된 브랜드 프로필이 없습니다.</p>
+    <a href="{{ url_for('brand.new') }}" class="btn" style="background:#e8355a;color:#fff">
+      첫 브랜드 등록하기
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

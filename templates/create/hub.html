@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}이미지 생성 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}이미지 생성{% endblock %}
+
+{% block content %}
+<div class="text-center mb-4">
+  <h5 class="fw-bold">이미지 생성</h5>
+  <p class="text-muted small">AI로 상품 이미지, 썸네일, 카드뉴스를 생성합니다</p>
+</div>
+
+<div class="row g-3 justify-content-center">
+  {% set image_types = [
+    ('bi-image','#fdedf1','#e8355a','썸네일 이미지','상품/콘텐츠 썸네일','300P','준비 중'),
+    ('bi-layout-three-columns','#e8eeff','#4b5cde','상세페이지 이미지','상품 상세 이미지 1장','400P','준비 중'),
+    ('bi-grid-3x2-gap','#fce8f3','#d63384','인스타 카드뉴스','3장 세트','600P','준비 중'),
+    ('bi-badge-tm','#fff8e8','#e6920a','브랜드 로고 시안','로고 디자인 시안','800P','준비 중'),
+  ] %}
+  {% for icon, bg, color, title, desc, cost, status in image_types %}
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100 text-center p-3" style="opacity:.75">
+      <div class="card-body">
+        <div class="mb-3" style="font-size:2.5rem;color:{{ color }}"><i class="bi {{ icon }}"></i></div>
+        <h6 class="fw-bold">{{ title }}</h6>
+        <p class="text-muted small mb-2">{{ desc }}</p>
+        <span class="badge bg-light text-dark border">{{ cost }}</span>
+        <div class="mt-3">
+          <span class="badge bg-warning text-dark">{{ status }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="alert alert-info mt-4 text-center">
+  <i class="bi bi-info-circle me-2"></i>
+  이미지 생성 기능은 곧 출시됩니다. 텍스트 생성 기능을 먼저 이용해 보세요!
+  <div class="mt-2">
+    <a href="{{ url_for('create.blog') }}" class="btn btn-sm btn-primary me-2">블로그 포스트</a>
+    <a href="{{ url_for('create.instagram') }}" class="btn btn-sm btn-outline-primary">인스타그램</a>
+  </div>
+</div>
+{% endblock %}

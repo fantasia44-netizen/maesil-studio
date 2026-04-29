@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}블로그 포스트 생성 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 블로그 포스트{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- 입력 폼 -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-file-text me-2 text-success"></i>블로그 포스트 생성 <span class="badge bg-success ms-1">80P</span></h6>
+      </div>
+      <div class="card-body p-4">
+        <form id="genForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">브랜드 선택</label>
+            <select name="brand_id" class="form-select form-select-sm">
+              {% for b in brands %}
+              <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>
+                {{ b.name }}{% if b.is_default %} (기본){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">주제 / 키워드 <span class="text-danger">*</span></label>
+            <input type="text" name="topic" class="form-control form-control-sm" placeholder="예: 여름 피부 관리 팁" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">글 목적</label>
+            <select name="purpose" class="form-select form-select-sm">
+              <option>정보제공</option>
+              <option>구매유도</option>
+              <option>브랜드인지</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">분량</label>
+            <select name="length" class="form-select form-select-sm">
+              <option value="1000">1,000자</option>
+              <option value="2000" selected>2,000자</option>
+              <option value="3000">3,000자</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">SEO 키워드 <span class="text-muted">(선택)</span></label>
+            <input type="text" name="seo_keywords" class="form-control form-control-sm" placeholder="쉼표로 구분">
+          </div>
+          <button type="submit" id="genBtn" class="btn w-100 fw-semibold py-2" style="background:#e8355a;color:#fff">
+            <span class="normal-text"><i class="bi bi-magic me-1"></i>생성하기 (80P)</span>
+            <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 결과 -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold">생성 결과</h6>
+        <button id="copyBtn" class="btn btn-sm btn-outline-secondary d-none">
+          <i class="bi bi-clipboard me-1"></i>복사
+        </button>
+      </div>
+      <div class="card-body p-4">
+        <div id="resultBox" class="result-box text-muted" style="min-height:400px">
+          생성 버튼을 클릭하면 여기에 결과가 표시됩니다.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+document.getElementById('genForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('genBtn');
+  const resultBox = document.getElementById('resultBox');
+  const copyBtn = document.getElementById('copyBtn');
+
+  btn.querySelector('.normal-text').classList.add('d-none');
+  btn.querySelector('.loading-text').classList.remove('d-none');
+  btn.disabled = true;
+  resultBox.textContent = 'AI가 콘텐츠를 생성하고 있습니다...';
+  copyBtn.classList.add('d-none');
+
+  try {
+    const fd = new FormData(e.target);
+    const res = await fetch('{{ url_for("create.blog_generate") }}', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      resultBox.textContent = data.text;
+      resultBox.style.color = '#1a2332';
+      copyBtn.classList.remove('d-none');
+    } else {
+      resultBox.textContent = '오류: ' + data.message;
+      resultBox.style.color = '#dc3545';
+    }
+  } catch (err) {
+    resultBox.textContent = '네트워크 오류가 발생했습니다.';
+    resultBox.style.color = '#dc3545';
+  } finally {
+    btn.querySelector('.normal-text').classList.remove('d-none');
+    btn.querySelector('.loading-text').classList.add('d-none');
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('resultBox').textContent);
+  document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
+  setTimeout(() => {
+    document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사';
+  }, 2000);
+});
+</script>
+{% endblock %}

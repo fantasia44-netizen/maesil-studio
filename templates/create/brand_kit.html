@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}브랜드 키트 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 브랜드 키트{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-palette me-2" style="color:#6f42c1"></i>브랜드 정체성 패키지 <span class="badge ms-1" style="background:#6f42c1">1,500P</span></h6>
+      </div>
+      <div class="card-body p-4">
+        <div class="alert alert-light border small mb-3">
+          <i class="bi bi-info-circle me-1"></i>브랜드 프로필 정보를 기반으로 슬로건, 스토리, 톤앤매너 가이드를 한번에 생성합니다.
+        </div>
+        <form id="genForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">브랜드 선택</label>
+            <select name="brand_id" class="form-select form-select-sm">
+              {% for b in brands %}<option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">추가 방향성 메모 <span class="text-muted">(선택)</span></label>
+            <textarea name="extra" class="form-control form-control-sm" rows="3" placeholder="예: 프리미엄 감성 강조, 젊고 활기찬 톤 원함"></textarea>
+          </div>
+          <button type="submit" id="genBtn" class="btn w-100 fw-semibold py-2" style="background:#6f42c1;color:#fff">
+            <span class="normal-text"><i class="bi bi-magic me-1"></i>패키지 생성 (1,500P)</span>
+            <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중... (최대 30초)</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold">생성 결과</h6>
+        <button id="copyBtn" class="btn btn-sm btn-outline-secondary d-none"><i class="bi bi-clipboard me-1"></i>복사</button>
+      </div>
+      <div class="card-body p-4">
+        <div id="resultBox" class="result-box text-muted" style="min-height:450px">생성 버튼을 클릭하면 여기에 결과가 표시됩니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_script %}<script>
+document.getElementById('genForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('genBtn'); const resultBox = document.getElementById('resultBox');
+  btn.querySelector('.normal-text').classList.add('d-none'); btn.querySelector('.loading-text').classList.remove('d-none'); btn.disabled = true;
+  resultBox.textContent = 'AI가 브랜드 정체성 패키지를 생성하고 있습니다... 잠시 기다려 주세요.'; document.getElementById('copyBtn').classList.add('d-none');
+  try {
+    const res = await fetch('{{ url_for("create.brand_kit_generate") }}', { method: 'POST', body: new FormData(e.target) });
+    const data = await res.json();
+    if (data.ok) { resultBox.textContent = data.text; resultBox.style.color = '#1a2332'; document.getElementById('copyBtn').classList.remove('d-none'); }
+    else { resultBox.textContent = '오류: ' + data.message; resultBox.style.color = '#dc3545'; }
+  } catch { resultBox.textContent = '네트워크 오류가 발생했습니다.'; resultBox.style.color = '#dc3545'; }
+  finally { btn.querySelector('.normal-text').classList.remove('d-none'); btn.querySelector('.loading-text').classList.add('d-none'); btn.disabled = false; }
+});
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('resultBox').textContent);
+  document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
+  setTimeout(() => { document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+});
+</script>{% endblock %}

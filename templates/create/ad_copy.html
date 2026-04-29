@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}광고 카피 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 광고 카피{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-megaphone me-2 text-danger"></i>광고 카피 세트 <span class="badge bg-danger ms-1">60P</span></h6>
+      </div>
+      <div class="card-body p-4">
+        <form id="genForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">브랜드 선택</label>
+            <select name="brand_id" class="form-select form-select-sm">
+              {% for b in brands %}<option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">상품/서비스 <span class="text-danger">*</span></label>
+            <input type="text" name="product" class="form-control form-control-sm" placeholder="예: 비타민C 세럼" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">타겟 고객 <span class="text-muted">(선택)</span></label>
+            <input type="text" name="target" class="form-control form-control-sm" placeholder="예: 피부 트러블 고민인 20대">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">광고 목표</label>
+            <select name="goal" class="form-select form-select-sm">
+              <option>구매</option><option>앱 설치</option><option>회원가입</option><option>브랜드 인지</option><option>상담 문의</option>
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">플랫폼</label>
+            <select name="platform" class="form-select form-select-sm">
+              <option>인스타그램</option><option>페이스북</option><option>네이버 GFA</option><option>카카오모먼트</option><option>유튜브</option>
+            </select>
+          </div>
+          <button type="submit" id="genBtn" class="btn w-100 fw-semibold py-2 btn-danger">
+            <span class="normal-text"><i class="bi bi-magic me-1"></i>생성하기 (60P)</span>
+            <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold">생성 결과</h6>
+        <button id="copyBtn" class="btn btn-sm btn-outline-secondary d-none"><i class="bi bi-clipboard me-1"></i>복사</button>
+      </div>
+      <div class="card-body p-4">
+        <div id="resultBox" class="result-box text-muted" style="min-height:400px">생성 버튼을 클릭하면 여기에 결과가 표시됩니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_script %}<script>
+document.getElementById('genForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('genBtn'); const resultBox = document.getElementById('resultBox');
+  btn.querySelector('.normal-text').classList.add('d-none'); btn.querySelector('.loading-text').classList.remove('d-none'); btn.disabled = true;
+  resultBox.textContent = 'AI가 광고 카피를 생성하고 있습니다...'; document.getElementById('copyBtn').classList.add('d-none');
+  try {
+    const res = await fetch('{{ url_for("create.ad_copy_generate") }}', { method: 'POST', body: new FormData(e.target) });
+    const data = await res.json();
+    if (data.ok) { resultBox.textContent = data.text; resultBox.style.color = '#1a2332'; document.getElementById('copyBtn').classList.remove('d-none'); }
+    else { resultBox.textContent = '오류: ' + data.message; resultBox.style.color = '#dc3545'; }
+  } catch { resultBox.textContent = '네트워크 오류가 발생했습니다.'; resultBox.style.color = '#dc3545'; }
+  finally { btn.querySelector('.normal-text').classList.remove('d-none'); btn.querySelector('.loading-text').classList.add('d-none'); btn.disabled = false; }
+});
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('resultBox').textContent);
+  document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
+  setTimeout(() => { document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+});
+</script>{% endblock %}

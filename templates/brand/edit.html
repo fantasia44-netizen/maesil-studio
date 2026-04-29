@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}{{ '브랜드 수정' if brand else '새 브랜드' }} — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('brand.index') }}" class="text-muted text-decoration-none">브랜드 관리</a> / {{ '수정' if brand else '새 브랜드' }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold">{{ '브랜드 프로필 수정' if brand else '새 브랜드 프로필 등록' }}</h6>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('brand.edit', brand_id=brand.id) if brand else url_for('brand.new') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">브랜드명 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" value="{{ brand.name if brand else '' }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">업종</label>
+            <select name="industry" class="form-select">
+              <option value="">선택하세요</option>
+              {% for opt in ['패션/의류','뷰티/화장품','식품/건강','리빙/인테리어','스포츠/레저','디지털/IT','반려동물','교육/콘텐츠','기타'] %}
+              <option {{ 'selected' if brand and brand.industry == opt else '' }}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">타겟 고객</label>
+            <input type="text" name="target_customer" class="form-control" value="{{ brand.target_customer if brand else '' }}" placeholder="예: 20-30대 여성">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">톤앤매너 <span class="text-muted small">(쉼표 구분)</span></label>
+            <input type="text" name="brand_tone" class="form-control"
+              value="{{ (brand.brand_tone | join(', ')) if brand and brand.brand_tone else '' }}"
+              placeholder="친근한, 전문적인, 감성적인">
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">메인 컬러</label>
+              <div class="input-group">
+                <input type="color" name="primary_color" class="form-control form-control-color"
+                  value="{{ brand.primary_color if brand and brand.primary_color else '#e8355a' }}">
+                <input type="text" class="form-control" placeholder="#e8355a"
+                  value="{{ brand.primary_color if brand and brand.primary_color else '' }}">
+              </div>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">서브 컬러</label>
+              <div class="input-group">
+                <input type="color" name="secondary_color" class="form-control form-control-color"
+                  value="{{ brand.secondary_color if brand and brand.secondary_color else '#ffffff' }}">
+                <input type="text" class="form-control" placeholder="#ffffff"
+                  value="{{ brand.secondary_color if brand and brand.secondary_color else '' }}">
+              </div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">핵심 키워드 <span class="text-muted small">(쉼표 구분)</span></label>
+            <input type="text" name="keywords" class="form-control"
+              value="{{ (brand.keywords | join(', ')) if brand and brand.keywords else '' }}"
+              placeholder="천연성분, 가성비, 국내제조">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">금지 표현 <span class="text-muted small">(쉼표 구분)</span></label>
+            <input type="text" name="avoid_words" class="form-control"
+              value="{{ (brand.avoid_words | join(', ')) if brand and brand.avoid_words else '' }}"
+              placeholder="저렴한, 싸구려">
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">추가 브랜드 설명</label>
+            <textarea name="extra_context" class="form-control" rows="3"
+              placeholder="주력 상품, 브랜드 스토리, 특이사항 등">{{ brand.extra_context if brand else '' }}</textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('brand.index') }}" class="btn btn-outline-secondary flex-fill">취소</a>
+            <button type="submit" class="btn flex-fill fw-semibold" style="background:#e8355a;color:#fff">
+              {{ '저장' if brand else '등록' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}{{ user.email }} — 어드민{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admin.users') }}" class="text-muted text-decoration-none">사용자 관리</a> / {{ user.email }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-4">
+    <!-- 사용자 정보 -->
+    <div class="card mb-3">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">사용자 정보</h6></div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">이메일</dt><dd class="col-7">{{ user.email }}</dd>
+          <dt class="col-5 text-muted">이름</dt><dd class="col-7">{{ user.name or '-' }}</dd>
+          <dt class="col-5 text-muted">플랜</dt><dd class="col-7"><span class="badge bg-light text-dark">{{ user.plan_type }}</span></dd>
+          <dt class="col-5 text-muted">포인트</dt><dd class="col-7 fw-bold text-success">{{ balance | number }}P</dd>
+          <dt class="col-5 text-muted">상태</dt><dd class="col-7"><span class="badge {{ 'bg-success' if user.is_active else 'bg-danger' }}">{{ '활성' if user.is_active else '비활성' }}</span></dd>
+          <dt class="col-5 text-muted">가입일</dt><dd class="col-7">{{ user.created_at | kst('%Y-%m-%d') }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- 플랜 변경 -->
+    <div class="card mb-3">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">플랜 변경</h6></div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.set_user_plan', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select name="plan_type" class="form-select form-select-sm mb-2">
+            {% for key, info in PLAN_FEATURES.items() %}
+            <option value="{{ key }}" {{ 'selected' if user.plan_type == key }}>{{ info.label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm btn-outline-primary w-100">플랜 변경</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 포인트 지급 -->
+    <div class="card mb-3">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">포인트 지급</h6></div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.add_user_points', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="number" name="amount" class="form-control form-control-sm mb-2" placeholder="지급할 포인트" min="1" required>
+          <input type="text" name="note" class="form-control form-control-sm mb-2" placeholder="메모 (예: 이벤트 보상)" value="관리자 지급">
+          <button type="submit" class="btn btn-sm btn-outline-success w-100">포인트 지급</button>
+        </form>
+      </div>
+    </div>
+
+    {% if user.is_active %}
+    <div class="card">
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.deactivate_user', user_id=user.id) }}"
+              onsubmit="return confirm('계정을 비활성화할까요?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger w-100">계정 비활성화</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-8">
+    <!-- 포인트 내역 -->
+    <div class="card mb-4">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">포인트 내역</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th class="ps-3">내용</th><th>변동</th><th>잔액</th><th>날짜</th></tr></thead>
+          <tbody>
+            {% for row in ledger %}
+            <tr>
+              <td class="ps-3 small">{{ row.note or row.type }}</td>
+              <td class="small fw-semibold {{ 'text-success' if row.amount > 0 else 'text-danger' }}">
+                {{ '+' if row.amount > 0 else '' }}{{ row.amount | number }}P
+              </td>
+              <td class="small text-muted">{{ row.balance | number }}P</td>
+              <td class="small text-muted">{{ row.created_at | kst('%m/%d %H:%M') }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-3 small">내역 없음</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 최근 생성 -->
+    <div class="card">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">최근 생성 이력</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th class="ps-3">유형</th><th>포인트</th><th>상태</th><th>날짜</th></tr></thead>
+          <tbody>
+            {% for c in creations %}
+            <tr>
+              <td class="ps-3 small">{{ c.creation_type }}</td>
+              <td class="small">{{ c.points_used | number }}P</td>
+              <td><span class="badge {{ 'bg-success' if c.status == 'done' else 'bg-danger' }}">{{ c.status }}</span></td>
+              <td class="small text-muted">{{ c.created_at | kst('%m/%d') }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-3 small">생성 이력 없음</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

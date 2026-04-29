@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}시스템 설정 — 어드민{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admin.dashboard') }}" class="text-muted text-decoration-none">어드민</a> / 시스템 설정{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="alert alert-warning small">
+      <i class="bi bi-shield-lock me-1"></i>
+      이 페이지의 변경사항은 즉시 적용됩니다. API 키는 암호화되어 저장됩니다.
+    </div>
+
+    <form method="POST" action="{{ url_for('admin.save_settings') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {% set groups = {} %}
+      {% for key, label, type_, desc in CONFIG_KEYS %}
+        {% set group = 'Claude/AI' if 'api_key' in key or 'provider' in key else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일') %}
+        {% if group not in groups %}{% set _ = groups.update({group: []}) %}{% endif %}
+      {% endfor %}
+
+      {% set current_group = namespace(val='') %}
+      {% for key, label, type_, desc in CONFIG_KEYS %}
+        {% set group = 'Claude/AI' if 'api_key' in key or 'provider' in key else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일') %}
+        {% if group != current_group.val %}
+          {% if current_group.val %}</div></div>{% endif %}
+          {% set current_group.val = group %}
+          <div class="card mb-3">
+            <div class="card-header py-3"><h6 class="mb-0 fw-bold">{{ group }}</h6></div>
+            <div class="card-body p-4">
+        {% endif %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">{{ label }}
+            {% if desc %}<span class="text-muted fw-normal">— {{ desc }}</span>{% endif %}
+          </label>
+          <input type="{{ 'password' if type_ == 'secret' else 'text' }}"
+                 name="{{ key }}"
+                 class="form-control form-control-sm"
+                 value="{{ configs.get(key, '') }}"
+                 placeholder="{{ '••••••••' if type_ == 'secret' else '' }}"
+                 autocomplete="off">
+        </div>
+      {% endfor %}
+      </div></div>
+
+      <button type="submit" class="btn fw-semibold px-5" style="background:#e8355a;color:#fff">
+        <i class="bi bi-save me-1"></i>설정 저장
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

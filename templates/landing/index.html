@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block public_content %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>매실 크리에이터 — AI 브랜드 콘텐츠 플랫폼</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    :root { --brand-primary: #e8355a; }
+    body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; }
+    .hero { background: linear-gradient(135deg, #1f1020 0%, #4a1535 60%, #1f1020 100%); color: #fff; padding: 5rem 0; }
+    .hero-badge { background: rgba(232,53,90,.2); color: #ffb3c1; border: 1px solid #ffb3c1; border-radius: 20px; padding: .3rem .9rem; font-size: .8rem; display: inline-block; margin-bottom: 1.5rem; }
+    .hero h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.25; }
+    .hero h1 span { color: #ffb3c1; }
+    .btn-green { background: var(--brand-primary); color: #fff; border: none; font-weight: 600; }
+    .btn-green:hover { background: #c42648; color: #fff; }
+    .feature-card { border: 1px solid #e9ecef; border-radius: 12px; padding: 1.5rem; transition: box-shadow .2s; }
+    .feature-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .feature-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 1rem; }
+    .plan-card { border: 1px solid #e9ecef; border-radius: 12px; padding: 2rem; }
+    .plan-card.featured { border-color: var(--brand-primary); border-width: 2px; position: relative; }
+    .plan-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--brand-primary); color: #fff; font-size: .75rem; padding: .2rem .8rem; border-radius: 20px; }
+    .price-num { font-size: 2rem; font-weight: 800; color: #1f1020; }
+    .price-unit { font-size: 1rem; color: #6c757d; }
+    .navbar-brand { font-weight: 800; color: #1f1020 !important; }
+  </style>
+</head>
+<body>
+
+<!-- 네비게이션 -->
+<nav class="navbar navbar-light bg-white border-bottom py-3">
+  <div class="container">
+    <a class="navbar-brand" href="/">매실 <span style="color:#e8355a">크리에이터</span></a>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm">로그인</a>
+      <a href="{{ url_for('auth.register') }}" class="btn btn-sm btn-green">무료로 시작하기</a>
+    </div>
+  </div>
+</nav>
+
+<!-- 히어로 -->
+<section class="hero">
+  <div class="container text-center">
+    <div class="hero-badge">🇰🇷 한국 커머스 특화 AI</div>
+    <h1>브랜딩부터 카피까지<br><span>AI가 한 번에</span> 만들어 드립니다</h1>
+    <p class="lead mt-3 mb-4" style="color:rgba(255,255,255,.75)">
+      스마트스토어·쿠팡 셀러를 위한 AI 콘텐츠 생성 플랫폼<br>
+      블로그 포스트, 인스타 캡션, 상세페이지, 썸네일까지
+    </p>
+    <a href="{{ url_for('auth.register') }}" class="btn btn-green btn-lg px-5">
+      무료로 시작하기 <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+    <p class="mt-3" style="color:rgba(255,255,255,.5);font-size:.85rem">신용카드 불필요 · 즉시 시작</p>
+  </div>
+</section>
+
+<!-- 기능 -->
+<section class="py-5 bg-light">
+  <div class="container">
+    <h2 class="text-center fw-bold mb-4">하나의 플랫폼으로 모든 콘텐츠를</h2>
+    <div class="row g-4">
+      {% set features = [
+        ('bi-file-text','#fdedf1','#e8355a','블로그 포스트','SEO 최적화 제목 3개 + 본문 + 태그 자동 생성'),
+        ('bi-instagram','#fce8f3','#d63384','인스타그램','캡션 3가지 버전 + 해시태그 30개 + 최적 게시 시간'),
+        ('bi-layout-text-sidebar','#e8eeff','#4b5cde','상세페이지 카피','훅 문구 + 기능별 카피 + 후기 포맷 + CTA + FAQ'),
+        ('bi-card-heading','#fff8e8','#e6920a','썸네일 문구','클릭률 최적화 문구 5종 A/B/C/D/E'),
+        ('bi-megaphone','#fce8e8','#dc3545','광고 카피','5가지 소구 유형별 헤드라인 + 본문 + CTA 세트'),
+        ('bi-palette','#f0e8ff','#6f42c1','브랜드 정체성','슬로건 + 브랜드 스토리 + 톤앤매너 가이드 패키지'),
+      ] %}
+      {% for icon, bg, color, title, desc in features %}
+      <div class="col-md-4">
+        <div class="feature-card h-100">
+          <div class="feature-icon" style="background:{{ bg }};color:{{ color }}">
+            <i class="bi {{ icon }}"></i>
+          </div>
+          <h5 class="fw-bold">{{ title }}</h5>
+          <p class="text-muted small mb-0">{{ desc }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- 요금제 -->
+<section class="py-5">
+  <div class="container">
+    <h2 class="text-center fw-bold mb-2">요금제</h2>
+    <p class="text-center text-muted mb-5">구독 포인트 + 충전 포인트 조합으로 유연하게 사용</p>
+    <div class="row g-4 justify-content-center">
+      {% set plans = [
+        ('Starter','9,900','월','3,000','1','블로그·인스타·상세페이지·썸네일·광고 카피',False),
+        ('Growth','24,900','월','10,000','3','+ 이미지 생성 · 브랜드 키트',True),
+        ('Pro','49,900','월','25,000','5','+ 브랜드 프로필 5개',False),
+      ] %}
+      {% for name, price, unit, points, brands, desc, featured in plans %}
+      <div class="col-md-4">
+        <div class="plan-card position-relative {% if featured %}featured{% endif %}">
+          {% if featured %}<span class="plan-badge">인기</span>{% endif %}
+          <h4 class="fw-bold">{{ name }}</h4>
+          <div class="my-3">
+            <span class="price-num">{{ price }}원</span>
+            <span class="price-unit">/{{ unit }}</span>
+          </div>
+          <p class="text-success fw-semibold"><i class="bi bi-coin me-1"></i>{{ points }}P/월 지급</p>
+          <hr>
+          <ul class="list-unstyled small text-muted">
+            <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>브랜드 프로필 {{ brands }}개</li>
+            <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>{{ desc }}</li>
+          </ul>
+          <a href="{{ url_for('auth.register') }}" class="btn w-100 mt-3 {% if featured %}btn-green{% else %}btn-outline-secondary{% endif %}">
+            시작하기
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="text-center text-muted mt-4 small">
+      포인트 충전도 가능 — 1,000P 9,900원 / 3,000P 24,900원 / 10,000P 69,900원
+    </p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="py-5 text-center" style="background:#1f1020;color:#fff">
+  <div class="container">
+    <h2 class="fw-bold">지금 바로 시작하세요</h2>
+    <p style="color:rgba(255,255,255,.65)">무료로 가입하고 AI 콘텐츠 생성을 경험해 보세요</p>
+    <a href="{{ url_for('auth.register') }}" class="btn btn-green btn-lg px-5 mt-2">무료 가입</a>
+  </div>
+</section>
+
+<footer class="py-4 text-center text-muted small border-top">
+  © 2026 매실 크리에이터 | <a href="#" class="text-muted">이용약관</a> | <a href="#" class="text-muted">개인정보처리방침</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+{% endblock %}

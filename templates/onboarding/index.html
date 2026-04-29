@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}브랜드 프로필 등록 — 매실 크리에이터{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="text-center mb-4">
+      <div class="mb-3">
+        <span style="font-size:2.5rem">🌿</span>
+      </div>
+      <h3 class="fw-bold">브랜드 프로필 등록</h3>
+      <p class="text-muted">AI가 브랜드에 맞는 콘텐츠를 만들기 위해 필요한 정보입니다. (나중에 수정 가능)</p>
+    </div>
+
+    <div class="card">
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('main.onboarding') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">브랜드명 / 상호명 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" placeholder="예: 초록마켓, 뷰티랩 등" required autofocus>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">업종</label>
+            <select name="industry" class="form-select">
+              <option value="">선택하세요</option>
+              <option>패션/의류</option>
+              <option>뷰티/화장품</option>
+              <option>식품/건강</option>
+              <option>리빙/인테리어</option>
+              <option>스포츠/레저</option>
+              <option>디지털/IT</option>
+              <option>반려동물</option>
+              <option>교육/콘텐츠</option>
+              <option>기타</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">타겟 고객</label>
+            <input type="text" name="target_customer" class="form-control" placeholder="예: 20-30대 여성, 건강에 관심 있는 직장인">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">브랜드 톤앤매너</label>
+            <input type="text" name="brand_tone" class="form-control" placeholder="쉼표로 구분: 친근한, 전문적인, 감성적인">
+            <div class="form-text">쉼표로 여러 개 입력</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">핵심 키워드</label>
+            <input type="text" name="keywords" class="form-control" placeholder="예: 천연성분, 가성비, 국내제조">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">추가 브랜드 설명</label>
+            <textarea name="extra_context" class="form-control" rows="3" placeholder="브랜드 스토리, 주력 상품, 특이사항 등 자유롭게 입력"></textarea>
+          </div>
+
+          <button type="submit" class="btn w-100 py-2 fw-semibold" style="background:#e8355a;color:#fff">
+            <i class="bi bi-check-circle me-2"></i>등록하고 시작하기
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <p class="text-center text-muted small mt-3">
+      <a href="{{ url_for('main.dashboard') }}" class="text-muted">나중에 등록하기</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

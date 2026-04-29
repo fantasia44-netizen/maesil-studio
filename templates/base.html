@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    :root {
+      --brand-primary: #e8355a;
+      --brand-primary-light: #fdedf1;
+      --brand-dark: #1f1428;
+      --sidebar-width: 240px;
+    }
+    body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; background: #f5f7fa; }
+
+    /* ── 사이드바 ── */
+    #sidebar {
+      width: var(--sidebar-width);
+      min-height: 100vh;
+      background: var(--brand-dark);
+      position: fixed;
+      top: 0; left: 0;
+      display: flex; flex-direction: column;
+      z-index: 100;
+    }
+    .sidebar-brand {
+      padding: 1.25rem 1.5rem;
+      color: #fff;
+      font-size: 1.15rem;
+      font-weight: 700;
+      border-bottom: 1px solid rgba(255,255,255,.1);
+      text-decoration: none;
+    }
+    .sidebar-brand span { color: var(--brand-primary); }
+    .sidebar-group-label {
+      font-size: .65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.35);
+      padding: .75rem 1.25rem .25rem;
+      letter-spacing: .08em;
+    }
+    .sidebar-nav .nav-link {
+      color: rgba(255,255,255,.7);
+      padding: .5rem 1.25rem;
+      border-radius: 6px;
+      margin: 1px .5rem;
+      font-size: .875rem;
+      display: flex; align-items: center; gap: .6rem;
+      transition: all .15s;
+    }
+    .sidebar-nav .nav-link:hover,
+    .sidebar-nav .nav-link.active {
+      background: rgba(255,255,255,.08);
+      color: #fff;
+    }
+    .sidebar-nav .nav-link.active { background: var(--brand-primary); color: #fff; }
+    .sidebar-bottom {
+      margin-top: auto;
+      border-top: 1px solid rgba(255,255,255,.1);
+      padding: 1rem .5rem;
+    }
+
+    /* ── 메인 콘텐츠 ── */
+    #main-content {
+      margin-left: var(--sidebar-width);
+      min-height: 100vh;
+    }
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #e9ecef;
+      padding: .75rem 1.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .content-area { padding: 1.75rem; }
+
+    /* ── 포인트 뱃지 ── */
+    .point-badge {
+      background: var(--brand-primary-light);
+      color: var(--brand-primary);
+      font-weight: 600;
+      font-size: .85rem;
+      padding: .3rem .75rem;
+      border-radius: 20px;
+    }
+
+    /* ── 카드 ── */
+    .card { border: 1px solid #e9ecef; border-radius: 10px; }
+    .card-header { background: #fff; border-bottom: 1px solid #f0f0f0; font-weight: 600; }
+
+    /* ── 생성 결과 박스 ── */
+    .result-box {
+      background: #fff;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      padding: 1.5rem;
+      white-space: pre-wrap;
+      font-size: .9rem;
+      line-height: 1.7;
+      min-height: 200px;
+    }
+
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(-100%); transition: transform .3s; }
+      #sidebar.show { transform: translateX(0); }
+      #main-content { margin-left: 0; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<!-- ── 사이드바 ── -->
+<nav id="sidebar">
+  <a class="sidebar-brand" href="{{ url_for('main.dashboard') }}">
+    매실 <span>크리에이터</span>
+  </a>
+
+  <div class="sidebar-nav flex-grow-1 overflow-auto py-2">
+    {% set menu = current_user.get_menu_items() %}
+    {% set current_group = namespace(val='') %}
+    {% for item in menu %}
+      {% if item.group != current_group.val %}
+        {% set current_group.val = item.group %}
+        <div class="sidebar-group-label">{{ item.group }}</div>
+      {% endif %}
+      <a href="{{ url_for(item.endpoint) }}"
+         class="nav-link {% if request.endpoint == item.endpoint %}active{% endif %}">
+        <i class="bi {{ item.icon }}"></i> {{ item.label }}
+      </a>
+    {% endfor %}
+  </div>
+
+  <div class="sidebar-bottom">
+    {% if current_user.is_superadmin %}
+    <a href="{{ url_for('admin.dashboard') }}" class="nav-link text-warning mb-1">
+      <i class="bi bi-shield-lock"></i> 관리자
+    </a>
+    {% endif %}
+    <a href="{{ url_for('main.settings') }}" class="nav-link">
+      <i class="bi bi-person-circle"></i> 내 설정
+    </a>
+    <a href="{{ url_for('auth.logout') }}" class="nav-link text-danger">
+      <i class="bi bi-box-arrow-left"></i> 로그아웃
+    </a>
+  </div>
+</nav>
+
+<!-- ── 메인 ── -->
+<div id="main-content">
+  <div class="topbar">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-light d-md-none" id="sidebarToggle">
+        <i class="bi bi-list"></i>
+      </button>
+      <span class="text-muted small">{% block breadcrumb %}{% endblock %}</span>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <span class="point-badge">
+        <i class="bi bi-coin me-1"></i>
+        <span id="point-balance">{{ session.get('balance', '') }}</span>P
+      </span>
+      <span class="text-muted small">{{ current_user.name }}</span>
+    </div>
+  </div>
+
+  <div class="content-area">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ 'danger' if cat == 'error' else cat }} alert-dismissible fade show" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+{% else %}
+<!-- 비로그인 상태 -->
+{% block public_content %}{% endblock %}
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.getElementById('sidebarToggle')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('show');
+  });
+</script>
+{% block extra_script %}{% endblock %}
+</body>
+</html>

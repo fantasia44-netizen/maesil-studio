@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}대시보드 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}대시보드{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+  <!-- 포인트 잔액 -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="text-muted small">포인트 잔액</span>
+          <span class="badge rounded-pill" style="background:#fdedf1;color:#e8355a">{{ current_user.plan_type | upper }}</span>
+        </div>
+        <div class="fs-3 fw-bold">{{ balance | number }}P</div>
+        <a href="{{ url_for('billing.points') }}" class="text-decoration-none small" style="color:#e8355a">충전하기 →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 브랜드 프로필 -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-2">브랜드 프로필</div>
+        <div class="fs-3 fw-bold">{{ brand_count }}개</div>
+        <a href="{{ url_for('brand.index') }}" class="text-decoration-none small" style="color:#e8355a">관리하기 →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 빠른 생성 -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100" style="background:linear-gradient(135deg,#e8355a,#a01e3a);color:#fff">
+      <div class="card-body">
+        <div class="small mb-2" style="opacity:.8">빠른 생성</div>
+        <div class="fs-5 fw-bold mb-2">블로그 포스트</div>
+        <a href="{{ url_for('create.blog') }}" class="btn btn-sm btn-light fw-semibold">지금 생성 →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 구독 플랜 -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-2">현재 플랜</div>
+        <div class="fs-4 fw-bold">{{ PLAN_FEATURES[current_user.plan_type]['label'] }}</div>
+        <a href="{{ url_for('billing.index') }}" class="text-decoration-none small" style="color:#e8355a">플랜 변경 →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 콘텐츠 생성 메뉴 -->
+<div class="card mb-4">
+  <div class="card-header py-3">콘텐츠 생성</div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% set items = [
+        ('create.blog',        'bi-file-text',              '#fdedf1','#e8355a','블로그 포스트','80P'),
+        ('create.instagram',   'bi-instagram',              '#fce8f3','#d63384','인스타그램','30P'),
+        ('create.detail_page', 'bi-layout-text-sidebar',   '#e8eeff','#4b5cde','상세페이지 카피','150P'),
+        ('create.thumbnail',   'bi-card-heading',           '#fff8e8','#e6920a','썸네일 문구','40P'),
+        ('create.ad_copy',     'bi-megaphone',              '#fce8e8','#dc3545','광고 카피','60P'),
+        ('create.brand_kit',   'bi-palette',                '#f0e8ff','#6f42c1','브랜드 키트','1,500P'),
+      ] %}
+      {% for endpoint, icon, bg, color, label, cost in items %}
+      <div class="col-6 col-md-4 col-xl-2">
+        <a href="{{ url_for(endpoint) }}" class="text-decoration-none">
+          <div class="text-center p-3 rounded-3 h-100" style="background:{{ bg }};transition:opacity .15s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+            <div style="font-size:1.75rem;color:{{ color }}"><i class="bi {{ icon }}"></i></div>
+            <div class="fw-semibold small mt-1" style="color:#1a2332">{{ label }}</div>
+            <div class="text-muted" style="font-size:.75rem">{{ cost }}</div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- 최근 생성 이력 -->
+<div class="card">
+  <div class="card-header py-3 d-flex align-items-center justify-content-between">
+    <span>최근 생성물</span>
+    <a href="{{ url_for('main.history') }}" class="btn btn-sm btn-outline-secondary">전체 보기</a>
+  </div>
+  <div class="card-body p-0">
+    {% if recent_creations %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">유형</th>
+            <th>사용 포인트</th>
+            <th>상태</th>
+            <th>생성일</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in recent_creations %}
+          <tr>
+            <td class="ps-3 fw-semibold small">{{ CREATION_LABELS.get(c.creation_type, c.creation_type) }}</td>
+            <td class="small text-muted">{{ c.points_used | number }}P</td>
+            <td>
+              <span class="badge {% if c.status == 'done' %}bg-success{% elif c.status == 'failed' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                {{ '완료' if c.status == 'done' else ('실패' if c.status == 'failed' else '생성 중') }}
+              </span>
+            </td>
+            <td class="small text-muted">{{ c.created_at | kst }}</td>
+            <td><a href="{{ url_for('main.history_detail', creation_id=c.id) }}" class="btn btn-sm btn-outline-secondary">보기</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-magic fs-1 d-block mb-2" style="opacity:.3"></i>
+      아직 생성한 콘텐츠가 없습니다.<br>
+      <a href="{{ url_for('create.blog') }}" class="btn btn-sm mt-3" style="background:#e8355a;color:#fff">첫 콘텐츠 만들기</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

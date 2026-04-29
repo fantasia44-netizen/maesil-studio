@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}생성물 상세 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.history') }}" class="text-muted text-decoration-none">생성 이력</a> / 상세{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card mb-3">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <div>
+          <h6 class="fw-bold mb-0">{{ CREATION_LABELS.get(creation.creation_type, creation.creation_type) }}</h6>
+          <small class="text-muted">{{ creation.created_at | kst }} · {{ creation.points_used | number }}P 사용</small>
+        </div>
+        <div class="d-flex gap-2">
+          <span class="badge {% if creation.status == 'done' %}bg-success{% elif creation.status == 'failed' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+            {{ '완료' if creation.status == 'done' else ('실패' if creation.status == 'failed' else '생성 중') }}
+          </span>
+          <button id="copyBtn" class="btn btn-sm btn-outline-secondary" onclick="copyResult()">
+            <i class="bi bi-clipboard me-1"></i>복사
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-4">
+        {% if creation.output_data and creation.output_data.text %}
+          <div id="resultContent" class="result-box">{{ creation.output_data.text }}</div>
+        {% elif creation.output_data and creation.output_data.image_url %}
+          <img src="{{ creation.output_data.image_url }}" class="img-fluid rounded" alt="생성된 이미지">
+        {% else %}
+          <div class="text-muted text-center py-4">
+            <i class="bi bi-exclamation-circle fs-1 d-block mb-2" style="opacity:.3"></i>
+            생성 결과가 없습니다.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if creation.input_data %}
+    <div class="card">
+      <div class="card-header py-2">
+        <small class="fw-semibold text-muted">입력 정보</small>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-2">
+          {% for key, val in creation.input_data.items() %}
+          {% if val %}
+          <div class="col-sm-6">
+            <div class="small">
+              <span class="text-muted">{{ key }}:</span>
+              <span class="fw-semibold ms-1">{{ val }}</span>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mt-3">
+      <a href="{{ url_for('main.history') }}" class="btn btn-outline-secondary">← 이력으로</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_script %}
+<script>
+function copyResult() {
+  const text = document.getElementById('resultContent')?.textContent || '';
+  navigator.clipboard.writeText(text);
+  document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
+  setTimeout(() => { document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+}
+</script>
+{% endblock %}
