@@ -260,9 +260,12 @@ def import_apply():
             sb.table('products').insert(row).execute()
             inserted += 1
         except Exception as e:
-            logger.warning(f'[Integrations] insert 실패 sid={sid}: {e}')
+            # 진단을 위해 실제 메시지를 화면에 노출 — 마이그레이션 미적용 등 진짜 원인이
+            # '상품 저장 중 오류'로 뭉개지지 않도록.
+            err_str = str(e).strip()[:300] or e.__class__.__name__
+            logger.warning(f'[Integrations] insert 실패 sid={sid}: {err_str}')
             failed += 1
-            last_err = '상품 저장 중 오류'
+            last_err = err_str
 
     mark_used(current_user.id)
 
