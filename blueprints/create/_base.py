@@ -19,10 +19,20 @@ def get_accessible_brands(supabase) -> list:
     user = current_user
     if user.operator_id:
         if user.is_operator_admin:
-            result = supabase.table('brand_profiles').select('*').eq(
+            # operator 브랜드 + 본인이 직접 만든 브랜드 모두 포함
+            r1 = supabase.table('brand_profiles').select('*').eq(
                 'operator_id', user.operator_id
-            ).order('is_default', desc=True).execute()
-            return result.data or []
+            ).execute()
+            r2 = supabase.table('brand_profiles').select('*').eq(
+                'user_id', user.id
+            ).is_('operator_id', 'null').execute()
+            seen, brands = set(), []
+            for b in (r1.data or []) + (r2.data or []):
+                if b['id'] not in seen:
+                    seen.add(b['id'])
+                    brands.append(b)
+            brands.sort(key=lambda b: (not b.get('is_default'), b.get('created_at', '')))
+            return brands
         # 일반 직원: 배정된 브랜드 확인
         access = supabase.table('user_brand_access').select('brand_id').eq(
             'user_id', user.id
