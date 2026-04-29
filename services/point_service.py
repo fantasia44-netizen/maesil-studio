@@ -29,9 +29,15 @@ def get_balance(user_id: str) -> int:
         return 0
 
 
-def use_points(user_id: str, creation_type: str, ref_id: str) -> int:
-    """포인트 차감 — 잔액 반환"""
-    cost = POINT_COSTS.get(creation_type)
+def use_points(user_id: str, creation_type: str, ref_id: str,
+               cost_override: int | None = None,
+               note_override: str | None = None) -> int:
+    """포인트 차감 — 잔액 반환.
+
+    cost_override: POINT_COSTS 기본값 대신 사용 (예: 분량별 블로그 비용).
+    note_override: ledger 메모 문구 직접 지정 (예: '블로그 (1,000자)').
+    """
+    cost = cost_override if cost_override is not None else POINT_COSTS.get(creation_type)
     if cost is None:
         raise ValueError(f'Unknown creation_type: {creation_type}')
 
@@ -47,7 +53,7 @@ def use_points(user_id: str, creation_type: str, ref_id: str) -> int:
         'amount': -cost,
         'balance': new_balance,
         'ref_id': ref_id,
-        'note': CREATION_LABELS.get(creation_type, creation_type),
+        'note': note_override or CREATION_LABELS.get(creation_type, creation_type),
         'created_at': now_kst().isoformat(),
     }).execute()
     return new_balance

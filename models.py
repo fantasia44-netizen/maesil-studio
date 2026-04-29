@@ -48,7 +48,7 @@ PLAN_FEATURES = {
 # ──────────────────────────────────────────
 POINT_COSTS = {
     # 텍스트 생성 (Claude)
-    'blog':            80,
+    'blog':            40,   # 1,000자 기준 (분량별 차등 — get_blog_cost 참조)
     'instagram':       30,
     'detail_page':    150,
     'thumbnail_text':  40,
@@ -64,6 +64,57 @@ POINT_COSTS = {
     'img_card_news':  800,   # FLUX + PIL 합성 카드뉴스
     'logo':           800,   # Ideogram 로고 시안
 }
+
+# ──────────────────────────────────────────
+# 블로그 — 분량별 포인트 + 변형 모드 할인
+# ──────────────────────────────────────────
+BLOG_LENGTH_COSTS = {
+    500:  20,    # 짧은 정보형 / 요약
+    1000: 40,    # 기본 SEO 블로그
+    2000: 80,    # 롱폼 SEO / 심층 가이드
+}
+
+# 이전 글과의 관계 모드
+RELATION_MODE_OPTIONS = [
+    ('new',     '새 주제 — 이전 글과 다르게'),
+    ('series',  '시리즈 후속편 — 이전 글 이어서'),
+    ('variant', '변형 / 재가공 — 같은 주제 다른 각도 (50% 할인)'),
+    ('ignore',  '이력 무시 — 독립적으로 작성'),
+]
+
+# 블로그 앵글 (글 각도 — 다양성 축)
+BLOG_ANGLE_OPTIONS = [
+    ('information', '정보형 — 가이드/설명'),
+    ('review',      '후기형 — 사용자 경험'),
+    ('timeline',    '시기별 — 월령/계절/단계별'),
+    ('comparison',  '비교형 — vs 대안'),
+    ('qna',         'Q&A — 자주 묻는 질문'),
+    ('trend',       '트렌드 — 최신 이슈/유행'),
+]
+
+# 상품 카테고리 (시스템 금지어/디스클레이머 매칭 키)
+PRODUCT_CATEGORY_OPTIONS = [
+    ('general',           '일반'),
+    ('food',              '식품'),
+    ('baby_food',         '이유식 / 영유아식품'),
+    ('health_supplement', '건강기능식품'),
+    ('cosmetics',         '화장품'),
+    ('medical_device',    '의료기기'),
+    ('lifestyle',         '생활/가전'),
+    ('fashion',           '의류/패션'),
+]
+
+
+def get_blog_cost(length: int, relation_mode: str = 'new') -> int:
+    """블로그 분량 + 관계 모드별 포인트 비용.
+
+    - 분량 매핑이 없으면 가장 가까운 옵션으로 폴백 (1,000자 기준).
+    - relation_mode='variant' 면 50% 할인 (변형/재가공 격려).
+    """
+    base = BLOG_LENGTH_COSTS.get(int(length) if length else 1000, 40)
+    if relation_mode == 'variant':
+        return max(1, base // 2)
+    return base
 
 CREATION_LABELS = {
     'blog':            '블로그 포스트',
