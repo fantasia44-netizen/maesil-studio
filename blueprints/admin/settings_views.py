@@ -173,19 +173,22 @@ def _test_ideogram(api_key: str):
     if not api_key:
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
-        import httpx
-        r = httpx.get(
-            'https://api.ideogram.ai/manage/api/subscription',
-            headers={'Api-Key': api_key},
-            timeout=10,
+        import requests as req_lib
+        r = req_lib.post(
+            'https://api.ideogram.ai/generate',
+            headers={'Api-Key': api_key, 'Content-Type': 'application/json'},
+            json={'image_request': {'prompt': 'test', 'model': 'V_2', 'aspect_ratio': 'ASPECT_1_1'}},
+            timeout=15,
         )
-        if r.status_code == 200:
-            data = r.json()
-            tier = data.get('tier_id', '알 수 없음')
-            return jsonify(ok=True, message=f'연결 성공 — 플랜: {tier}')
+        if r.status_code in (200, 201):
+            return jsonify(ok=True, message='연결 성공 — 이미지 생성 가능')
+        elif r.status_code in (400, 422):
+            return jsonify(ok=True, message='인증 성공 — 키 유효')
         elif r.status_code == 401:
             return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
+        elif r.status_code == 402:
+            return jsonify(ok=True, message='키 유효 — 크레딧 부족 (충전 필요)')
         else:
-            return jsonify(ok=False, message=f'HTTP {r.status_code}')
+            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')
