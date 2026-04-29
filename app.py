@@ -155,6 +155,9 @@ def _register_blueprints(app):
     from blueprints.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
+    from blueprints.integrations import integrations_bp
+    app.register_blueprint(integrations_bp)
+
 
 def _register_hooks(app):
     @app.before_request

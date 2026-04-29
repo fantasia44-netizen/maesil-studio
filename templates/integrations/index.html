@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}외부 연동 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.settings') }}">내 설정</a> / 외부 연동{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+
+    <!-- ── 인사이트 연동 카드 ── -->
+    <div class="card mb-4">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold">
+          <i class="bi bi-plug me-1" style="color:#e8355a;"></i>
+          매실 인사이트 연동
+        </h6>
+        {% if connection %}
+          <span class="badge bg-success">연결됨</span>
+        {% else %}
+          <span class="badge bg-secondary">미연결</span>
+        {% endif %}
+      </div>
+
+      <div class="card-body p-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }} py-2 mb-3 small">{{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if connection %}
+          <!-- 현재 연결 상태 -->
+          <dl class="row mb-3 small">
+            <dt class="col-sm-4 text-muted fw-normal">연결된 운영사</dt>
+            <dd class="col-sm-8 fw-semibold">{{ connection.insight_operator_name or '-' }}</dd>
+
+            <dt class="col-sm-4 text-muted fw-normal">플랜</dt>
+            <dd class="col-sm-8">
+              <span class="badge bg-light text-dark">{{ connection.insight_plan or 'free' }}</span>
+            </dd>
+
+            <dt class="col-sm-4 text-muted fw-normal">토큰</dt>
+            <dd class="col-sm-8"><code>{{ connection.token_prefix }}****</code></dd>
+
+            <dt class="col-sm-4 text-muted fw-normal">권한</dt>
+            <dd class="col-sm-8">
+              {% for s in (connection.scopes or []) %}
+              <code class="small me-1">{{ s }}</code>
+              {% endfor %}
+            </dd>
+
+            <dt class="col-sm-4 text-muted fw-normal">연결일</dt>
+            <dd class="col-sm-8 text-muted">{{ (connection.connected_at or '')[:10] }}</dd>
+
+            {% if connection.expires_at %}
+            <dt class="col-sm-4 text-muted fw-normal">만료일</dt>
+            <dd class="col-sm-8 text-muted">{{ connection.expires_at[:10] }}</dd>
+            {% endif %}
+
+            {% if connection.last_used_at %}
+            <dt class="col-sm-4 text-muted fw-normal">마지막 사용</dt>
+            <dd class="col-sm-8 text-muted">{{ connection.last_used_at[:16]|replace('T', ' ') }}</dd>
+            {% endif %}
+
+            {% if connection.last_error %}
+            <dt class="col-sm-4 text-danger fw-normal">최근 오류</dt>
+            <dd class="col-sm-8 text-danger small">{{ connection.last_error }}</dd>
+            {% endif %}
+          </dl>
+
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('integrations.import_list') }}"
+               class="btn fw-semibold px-4" style="background:#e8355a;color:#fff">
+              <i class="bi bi-download me-1"></i>인사이트 상품 가져오기
+            </a>
+            <form method="POST" action="{{ url_for('integrations.disconnect') }}"
+                  class="ms-auto"
+                  onsubmit="return confirm('연결을 해제하시겠습니까?\n저장된 토큰이 삭제되고 가져오기 기능이 비활성화됩니다.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger px-4">연결 해제</button>
+            </form>
+          </div>
+
+        {% else %}
+          <!-- 토큰 입력 -->
+          <p class="small text-muted mb-3">
+            매실 인사이트의 상품 데이터를 가져와 콘텐츠 자동 생성에 활용할 수 있습니다.
+          </p>
+
+          <div class="alert alert-light border small mb-3">
+            <strong>토큰 발급 방법</strong>
+            <ol class="mb-0 ps-3 mt-1">
+              <li><a href="https://maesil-insight.com/app/settings/integrations" target="_blank" rel="noopener">매실 인사이트 [설정 → 외부 API 연동]</a> 진입</li>
+              <li>"새 토큰 발급" 클릭 → 라벨 입력 ("매실 스튜디오") → 발급</li>
+              <li>1회 노출되는 토큰 (<code>mi_...</code>)을 복사해 아래에 붙여넣기</li>
+            </ol>
+          </div>
+
+          <form method="POST" action="{{ url_for('integrations.connect') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">인사이트 토큰</label>
+              <input type="text" name="token" class="form-control font-monospace small"
+                     placeholder="mi_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                     autocomplete="off" spellcheck="false" required autofocus>
+              <div class="form-text text-muted small">
+                토큰은 Fernet 암호화로 저장되며, 화면에는 prefix(<code>mi_xxxxxxxx</code>)만 표시됩니다.
+              </div>
+            </div>
+            <button type="submit" class="btn fw-semibold px-4" style="background:#e8355a;color:#fff">
+              <i class="bi bi-check-lg me-1"></i>연결 확인
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

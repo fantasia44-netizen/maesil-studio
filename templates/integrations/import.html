@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}인사이트 상품 가져오기 — 매실 크리에이터{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('integrations.index') }}">외부 연동</a> / 상품 가져오기{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <div class="card mb-3">
+      <div class="card-header py-3 d-flex align-items-center">
+        <h6 class="mb-0 fw-bold">
+          <i class="bi bi-download me-1" style="color:#e8355a;"></i>
+          매실 인사이트에서 상품 가져오기
+        </h6>
+        <a href="{{ url_for('integrations.index') }}"
+           class="btn btn-link btn-sm ms-auto text-decoration-none small">
+          ← 연동 설정
+        </a>
+      </div>
+
+      <div class="card-body">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }} py-2 mb-3 small">{{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if error_msg %}
+          <div class="alert alert-danger small">{{ error_msg }}</div>
+        {% endif %}
+
+        <!-- 검색 -->
+        <form method="GET" class="row g-2 mb-3">
+          <div class="col-md-6">
+            <input type="text" name="keyword" class="form-control form-control-sm"
+                   value="{{ keyword }}" placeholder="상품명 검색">
+          </div>
+          <div class="col-md-3">
+            <input type="text" name="category" class="form-control form-control-sm"
+                   value="{{ category }}" placeholder="카테고리">
+          </div>
+          <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-outline-secondary btn-sm flex-grow-1">검색</button>
+            {% if keyword or category %}
+            <a href="{{ url_for('integrations.import_list') }}"
+               class="btn btn-link btn-sm text-decoration-none">초기화</a>
+            {% endif %}
+          </div>
+        </form>
+
+        {% if not products and not error_msg %}
+          <div class="text-center text-muted small py-5">
+            가져올 수 있는 상품이 없습니다.
+          </div>
+        {% elif products %}
+        <!-- 가져오기 폼 -->
+        <form method="POST" action="{{ url_for('integrations.import_apply') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <!-- 브랜드 선택 -->
+          {% if brands %}
+          <div class="mb-3 d-flex align-items-center gap-2">
+            <label class="form-label fw-semibold small mb-0">브랜드 매핑</label>
+            <select name="brand_id" class="form-select form-select-sm" style="max-width: 280px;">
+              <option value="">기본 브랜드 사용</option>
+              {% for b in brands %}
+              <option value="{{ b.id }}"{% if b.is_default %} selected{% endif %}>
+                {{ b.name }}{% if b.is_default %} ★{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <span class="text-muted small">— 가져온 상품들에 일괄 적용됩니다.</span>
+          </div>
+          {% endif %}
+
+          <!-- 상품 표 -->
+          <div class="table-responsive">
+            <table class="table table-sm align-middle small">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:32px;">
+                    <input type="checkbox" id="check-all" onclick="toggleAll(this)">
+                  </th>
+                  <th>상품명</th>
+                  <th>카테고리</th>
+                  <th class="text-end">가격</th>
+                  <th>채널</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in products %}
+                {% set is_dup = p.seller_product_id in already %}
+                <tr class="{{ 'text-muted' if is_dup else '' }}">
+                  <td>
+                    <input type="checkbox" name="seller_product_id"
+                           value="{{ p.seller_product_id }}"
+                           class="row-check"
+                           {% if is_dup %}disabled title="이미 가져온 상품"{% endif %}>
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ p.display_name }}</div>
+                    <code class="small text-muted">{{ p.seller_product_id }}</code>
+                  </td>
+                  <td>{{ p.category or '-' }}</td>
+                  <td class="text-end">{{ '{:,}'.format(p.sale_price) if p.sale_price else '-' }}</td>
+                  <td>
+                    {% for ch in (p.channels or []) %}
+                    <span class="badge bg-light text-dark border">{{ ch }}</span>
+                    {% endfor %}
+                  </td>
+                  <td>
+                    {% if is_dup %}
+                      <span class="badge bg-secondary">가져옴</span>
+                    {% elif p.status == 'active' %}
+                      <span class="badge bg-success-subtle text-success">활성</span>
+                    {% else %}
+                      <span class="badge bg-light text-muted">{{ p.status }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 페이지네이션 -->
+          {% if pagination and pagination.total_pages and pagination.total_pages > 1 %}
+          <nav class="d-flex align-items-center gap-2 small mb-3">
+            <span class="text-muted">전체 {{ pagination.total }}건 — {{ pagination.page }} / {{ pagination.total_pages }} 페이지</span>
+            <div class="ms-auto">
+              {% if pagination.page > 1 %}
+              <a href="?{{ {'page': pagination.page - 1, 'keyword': keyword, 'category': category}|urlencode }}"
+                 class="btn btn-outline-secondary btn-sm">← 이전</a>
+              {% endif %}
+              {% if pagination.page < pagination.total_pages %}
+              <a href="?{{ {'page': pagination.page + 1, 'keyword': keyword, 'category': category}|urlencode }}"
+                 class="btn btn-outline-secondary btn-sm">다음 →</a>
+              {% endif %}
+            </div>
+          </nav>
+          {% endif %}
+
+          <div class="d-flex align-items-center gap-2 mt-3">
+            <button type="submit" class="btn fw-semibold px-4" style="background:#e8355a;color:#fff">
+              <i class="bi bi-download me-1"></i>선택한 상품 가져오기
+            </button>
+            <span class="text-muted small">— 가져온 상품은 이후 자유롭게 편집/삭제 가능합니다.</span>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleAll(master) {
+  document.querySelectorAll('.row-check:not(:disabled)').forEach(c => {
+    c.checked = master.checked;
+  });
+}
+</script>
+{% endblock %}
