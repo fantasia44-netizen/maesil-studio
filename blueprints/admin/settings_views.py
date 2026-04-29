@@ -142,22 +142,29 @@ def _test_fal(api_key: str):
     if not api_key:
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
-        import httpx
-        # POST with minimal payload — 422 means auth OK but bad params, 401 means bad key
-        r = httpx.post(
+        import requests as req_lib
+        r = req_lib.post(
             'https://fal.run/fal-ai/flux/schnell',
             headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
-            json={'prompt': 'test'},
-            timeout=15,
+            json={
+                'prompt': 'a red apple',
+                'image_size': {'width': 256, 'height': 256},
+                'num_images': 1,
+                'num_inference_steps': 1,
+            },
+            timeout=30,
         )
-        if r.status_code in (200, 422):
-            return jsonify(ok=True, message=f'연결 성공 — 인증 확인됨')
+        if r.status_code == 200:
+            return jsonify(ok=True, message='연결 성공 — 이미지 생성 가능')
+        elif r.status_code in (400, 422):
+            return jsonify(ok=True, message='인증 성공 — 키 유효')
         elif r.status_code == 401:
             return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
         elif r.status_code == 403:
-            return jsonify(ok=False, message='접근 거부 (403) — 키 권한을 확인하세요.')
+            # 키는 유효하나 해당 모델 접근 제한 (플랜 문제일 수 있음)
+            return jsonify(ok=True, message=f'키 인식됨 — 모델 접근 제한(403), fal.ai 플랜 확인 필요')
         else:
-            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:100]}')
+            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')
 
