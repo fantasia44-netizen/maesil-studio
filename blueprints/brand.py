@@ -72,14 +72,34 @@ def edit(brand_id):
 
 
 def _get_owned_brand(supabase, brand_id: str):
-    """수정/삭제 권한 있는 브랜드 조회 (operator 소속 확인)"""
-    q = supabase.table('brand_profiles').select('*').eq('id', brand_id)
-    if current_user.operator_id:
-        q = q.eq('operator_id', current_user.operator_id)
-    else:
-        q = q.eq('user_id', current_user.id)
-    result = q.execute()
-    return result.data[0] if result.data else None
+    """수정/삭제 권한 있는 브랜드 조회.
+
+    OR 매칭 — 다음 중 하나라도 본인이면 허용:
+      - 슈퍼어드민
+      - operator_id 매칭 (현재 operator 모드 + brand 의 operator_id 매칭)
+      - user_id 매칭 (본인이 만든 것)
+
+    회귀 방지: _save_brand 는 user_id 항상 채우고 operator_id 는 있을 때만
+    채우는데, 기존 _get_owned_brand 는 operator_id 만 매칭해서 사용자가
+    operator_id 없을 때 만든 브랜드는 영원히 수정 불가가 됨. OR 매칭으로
+    INSERT 정책과 일치시켜 정합성 유지.
+    """
+    result = supabase.table('brand_profiles') \
+        .select('*').eq('id', brand_id).execute()
+    if not result.data:
+        return None
+    brand = result.data[0]
+
+    if current_user.is_superadmin:
+        return brand
+    # operator 매칭 (둘 다 채워져 있고 일치)
+    if (current_user.operator_id
+            and brand.get('operator_id') == current_user.operator_id):
+        return brand
+    # 본인 user_id 매칭 (operator_id 가 NULL 인 brand 도 커버)
+    if brand.get('user_id') == str(current_user.id):
+        return brand
+    return None
 
 
 def _save_brand(supabase, brand_id):

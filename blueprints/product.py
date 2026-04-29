@@ -10,14 +10,23 @@ product_bp = Blueprint('product', __name__)
 
 
 def _get_accessible_products(supabase):
-    if current_user.operator_id:
-        result = supabase.table('products').select('*, brand_profiles(name)').eq(
-            'operator_id', current_user.operator_id
-        ).eq('is_active', True).order('created_at', desc=True).execute()
+    """OR 매칭 — operator_id 또는 user_id 둘 중 하나라도 본인이면 노출.
+
+    INSERT 시 user_id 는 항상 채우고 operator_id 는 있을 때만 채우는 정책과
+    일치. operator 모드에서 operator_id 만 필터하면 본인 user_id 명의의
+    legacy row 가 누락됨.
+    """
+    base = supabase.table('products').select('*, brand_profiles(name)') \
+        .eq('is_active', True)
+    op_id = current_user.operator_id
+    if op_id:
+        # operator_id 매칭 OR user_id 매칭 (PostgREST .or_ 절)
+        result = base.or_(
+            f'operator_id.eq.{op_id},user_id.eq.{current_user.id}'
+        ).order('created_at', desc=True).execute()
     else:
-        result = supabase.table('products').select('*, brand_profiles(name)').eq(
-            'user_id', current_user.id
-        ).eq('is_active', True).order('created_at', desc=True).execute()
+        result = base.eq('user_id', current_user.id) \
+            .order('created_at', desc=True).execute()
     return result.data or []
 
 
@@ -26,12 +35,16 @@ def _get_product(supabase, product_id: str):
     if not result.data:
         return None
     p = result.data[0]
-    # 접근 권한 확인
-    if current_user.operator_id and p.get('operator_id') != current_user.operator_id:
-        return None
-    if not current_user.operator_id and p.get('user_id') != current_user.id:
-        return None
-    return p
+    # 슈퍼어드민은 운영자 지원/정정용으로 모든 상품 접근 가능
+    if current_user.is_superadmin:
+        return p
+    # OR 매칭: operator 매칭 OR 본인 user_id 매칭 (_save_product INSERT 정책과 일치)
+    if (current_user.operator_id
+            and p.get('operator_id') == current_user.operator_id):
+        return p
+    if p.get('user_id') == str(current_user.id):
+        return p
+    return None
 
 
 def _parse_features(text: str) -> list:
