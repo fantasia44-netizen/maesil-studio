@@ -174,20 +174,29 @@ def _test_ideogram(api_key: str):
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
         import requests as req_lib
-        r = req_lib.post(
-            'https://api.ideogram.ai/generate',
-            headers={'Api-Key': api_key, 'Content-Type': 'application/json'},
-            json={'image_request': {'prompt': 'test', 'model': 'V_2', 'aspect_ratio': 'ASPECT_1_1'}},
-            timeout=15,
+        # GET /user — 인증만 확인, 이미지 생성 없음
+        r = req_lib.get(
+            'https://api.ideogram.ai/user',
+            headers={'Api-Key': api_key},
+            timeout=10,
         )
-        if r.status_code in (200, 201):
-            return jsonify(ok=True, message='연결 성공 — 이미지 생성 가능')
-        elif r.status_code in (400, 422):
-            return jsonify(ok=True, message='인증 성공 — 키 유효')
+        if r.status_code == 200:
+            data = r.json()
+            balance = data.get('credits', {}).get('available', '?')
+            return jsonify(ok=True, message=f'연결 성공 — 잔액: {balance} 크레딧')
         elif r.status_code == 401:
             return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
-        elif r.status_code == 402:
-            return jsonify(ok=True, message='키 유효 — 크레딧 부족 (충전 필요)')
+        elif r.status_code == 404:
+            # /user 없으면 빈 POST로 401 여부만 확인
+            r2 = req_lib.post(
+                'https://api.ideogram.ai/generate',
+                headers={'Api-Key': api_key, 'Content-Type': 'application/json'},
+                json={},
+                timeout=10,
+            )
+            if r2.status_code == 401:
+                return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
+            return jsonify(ok=True, message=f'키 유효 (HTTP {r2.status_code})')
         else:
             return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
     except Exception as e:
