@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{{ '상품 수정' if product else '상품 등록' }} — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('product.index') }}">상품 관리</a> / {{ '수정' if product else '등록' }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header fw-bold">
+        {{ '상품 수정' if product else '새 상품 등록' }}
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">브랜드</label>
+            <select name="brand_id" class="form-select">
+              <option value="">브랜드 선택 (없으면 기본 브랜드 사용)</option>
+              {% for b in brands %}
+              <option value="{{ b.id }}"
+                {% if product and product.brand_id == b.id %}selected
+                {% elif b.is_default and not product %}selected{% endif %}>
+                {{ b.name }}{% if b.is_default %} ★{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">상품명 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control"
+                   placeholder="예: 국내산 사과 5kg 선물세트"
+                   value="{{ product.name if product else '' }}" required autofocus>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold small">카테고리</label>
+              <input type="text" name="category" class="form-control"
+                     placeholder="예: 과일, 건강식품, 의류"
+                     value="{{ product.category if product else '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold small">가격 (원)</label>
+              <input type="number" name="price" class="form-control"
+                     placeholder="39900"
+                     value="{{ product.price if product else '' }}">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">핵심 특징 <span class="text-muted fw-normal">(쉼표 또는 줄바꿈으로 구분)</span></label>
+            <textarea name="features" class="form-control" rows="4"
+                      placeholder="당도 높은 꿀사과&#10;산지 직송 24시간 내 출고&#10;선물용 박스 포함&#10;농약 안전성 검사 완료">{{ (product.features | join('\n')) if product and product.features else '' }}</textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">상품 설명 <span class="text-muted fw-normal">(선택)</span></label>
+            <textarea name="description" class="form-control" rows="3"
+                      placeholder="AI 생성 시 추가로 반영할 상품 설명">{{ product.description if product else '' }}</textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">상품 URL <span class="text-muted fw-normal">(스마트스토어/쿠팡 등)</span></label>
+            <input type="url" name="product_url" class="form-control"
+                   placeholder="https://smartstore.naver.com/..."
+                   value="{{ product.product_url if product else '' }}">
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn fw-semibold px-4" style="background:#e8355a;color:#fff">
+              {{ '수정 저장' if product else '등록하기' }}
+            </button>
+            <a href="{{ url_for('product.index') }}" class="btn btn-outline-secondary px-4">취소</a>
+            {% if product %}
+            <form method="POST" action="{{ url_for('product.delete', product_id=product.id) }}"
+                  class="ms-auto" onsubmit="return confirm('상품을 삭제하시겠습니까?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger">삭제</button>
+            </form>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

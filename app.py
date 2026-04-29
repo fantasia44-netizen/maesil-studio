@@ -146,6 +146,9 @@ def _register_blueprints(app):
     from blueprints.billing import billing_bp
     app.register_blueprint(billing_bp, url_prefix='/billing')
 
+    from blueprints.product import product_bp
+    app.register_blueprint(product_bp, url_prefix='/product')
+
     from blueprints.create import create_bp
     app.register_blueprint(create_bp, url_prefix='/create')
 

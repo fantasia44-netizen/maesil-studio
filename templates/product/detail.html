@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+{% block title %}{{ product.name }} — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('product.index') }}">상품 관리</a> / {{ product.name }}{% endblock %}
+
+{% block content %}
+<!-- 상품 헤더 -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        {% if product.category %}
+        <span class="badge bg-light text-muted mb-1">{{ product.category }}</span>
+        {% endif %}
+        <h4 class="fw-bold mb-1">{{ product.name }}</h4>
+        <div class="text-muted small">
+          {% if product.price %}{{ product.price | number }}원{% endif %}
+          {% if brand %} · 브랜드: <strong>{{ brand.name }}</strong>{% endif %}
+        </div>
+        {% if product.features %}
+        <div class="d-flex flex-wrap gap-1 mt-2">
+          {% for f in product.features %}
+          <span class="badge bg-light text-dark" style="font-size:.75rem">{{ f }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('product.edit', product_id=product.id) }}" class="btn btn-sm btn-outline-secondary">편집</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 일괄 생성 -->
+<div class="card mb-4" style="border:2px solid #e8355a">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h5 class="fw-bold mb-0"><i class="bi bi-lightning-charge-fill me-2" style="color:#e8355a"></i>전체 콘텐츠 생성</h5>
+        <p class="text-muted small mb-0">선택한 콘텐츠를 한 번에 생성합니다</p>
+      </div>
+      <button id="generateAllBtn" class="btn fw-bold px-4" style="background:#e8355a;color:#fff" onclick="generateAll()">
+        <i class="bi bi-play-fill me-1"></i> 생성 시작
+      </button>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for type_id, label, cost in [
+        ('blog','블로그 포스트','80P'),
+        ('instagram','인스타그램','30P'),
+        ('detail_page','상세페이지','150P'),
+        ('ad_copy','광고 카피','60P'),
+        ('thumbnail_text','썸네일 문구','40P'),
+      ] %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input gen-type" type="checkbox" value="{{ type_id }}"
+               id="type_{{ type_id }}" checked>
+        <label class="form-check-label small" for="type_{{ type_id }}">
+          {{ label }} <span class="text-muted">({{ cost }})</span>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- 생성 진행 상태 -->
+<div id="progressArea" class="d-none mb-4">
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="spinner-border spinner-border-sm" style="color:#e8355a"></div>
+        <span class="fw-semibold" id="progressText">생성 중...</span>
+      </div>
+      <div class="progress" style="height:6px">
+        <div id="progressBar" class="progress-bar" style="background:#e8355a;width:0%;transition:width .5s"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 생성 결과 -->
+<div id="resultsArea"></div>
+
+<!-- 개별 생성 -->
+<div class="card mt-4">
+  <div class="card-header fw-semibold">개별 생성</div>
+  <div class="card-body">
+    <div class="row g-2">
+      {% for type_id, label, icon, cost in [
+        ('blog','블로그 포스트','bi-file-text','80P'),
+        ('instagram','인스타그램','bi-instagram','30P'),
+        ('detail_page','상세페이지','bi-layout-text-sidebar','150P'),
+        ('ad_copy','광고 카피','bi-megaphone','60P'),
+        ('thumbnail_text','썸네일 문구','bi-card-heading','40P'),
+      ] %}
+      <div class="col-6 col-md-4 col-lg-auto">
+        <button class="btn btn-outline-secondary btn-sm w-100" onclick="generateOne('{{ type_id }}', this)">
+          <i class="bi {{ icon }} me-1"></i>{{ label }}
+          <span class="text-muted">({{ cost }})</span>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- 이전 생성 이력 -->
+{% if creations %}
+<div class="card mt-4">
+  <div class="card-header fw-semibold">이전 생성 이력</div>
+  <div class="list-group list-group-flush">
+    {% for c in creations %}
+    <a href="{{ url_for('main.history_detail', creation_id=c.id) }}"
+       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2">
+      <div>
+        <span class="badge bg-light text-dark me-2">{{ CREATION_LABELS.get(c.creation_type, c.creation_type) }}</span>
+        <span class="text-muted small">{{ c.created_at | kst }}</span>
+      </div>
+      <span class="badge {% if c.status == 'done' %}bg-success{% else %}bg-secondary{% endif %}">
+        {{ c.status }}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const PRODUCT_ID = '{{ product.id }}';
+const CSRF_TOKEN = '{{ csrf_token() }}';
+
+const LABELS = {
+  blog: '블로그 포스트', instagram: '인스타그램',
+  detail_page: '상세페이지', ad_copy: '광고 카피', thumbnail_text: '썸네일 문구'
+};
+
+async function generateAll() {
+  const types = [...document.querySelectorAll('.gen-type:checked')].map(el => el.value);
+  if (!types.length) { alert('생성할 콘텐츠를 선택하세요.'); return; }
+
+  const btn = document.getElementById('generateAllBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>생성 중...';
+
+  document.getElementById('progressArea').classList.remove('d-none');
+  document.getElementById('resultsArea').innerHTML = '';
+
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/generate-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ types })
+    });
+    const data = await res.json();
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressText').textContent = '생성 완료!';
+    setTimeout(() => document.getElementById('progressArea').classList.add('d-none'), 1000);
+
+    renderResults(data.results || {});
+  } catch(e) {
+    alert('생성 중 오류가 발생했습니다.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> 생성 시작';
+  }
+}
+
+async function generateOne(type, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ type })
+    });
+    const data = await res.json();
+    const partial = {};
+    partial[type] = data;
+    renderResults(partial);
+  } catch(e) {
+    alert('오류가 발생했습니다.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+function renderResults(results) {
+  const area = document.getElementById('resultsArea');
+  for (const [type, data] of Object.entries(results)) {
+    const existing = document.getElementById(`result_${type}`);
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.id = `result_${type}`;
+    card.className = 'card mb-3';
+
+    if (!data.ok) {
+      card.innerHTML = `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">${LABELS[type] || type}</span>
+          <span class="badge bg-danger">실패</span>
+        </div>
+        <div class="card-body text-danger small">${data.message || '생성 실패'}</div>`;
+    } else {
+      const text = data.text || '';
+      card.innerHTML = `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">${LABELS[type] || type}</span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="copyText('txt_${type}')">
+              <i class="bi bi-clipboard"></i> 복사
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="downloadText('txt_${type}', '${type}')">
+              <i class="bi bi-download"></i>
+            </button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <textarea id="txt_${type}" class="form-control border-0 rounded-0"
+                    rows="12" style="font-size:.85rem;line-height:1.7;resize:vertical">${text}</textarea>
+        </div>`;
+    }
+    area.prepend(card);
+  }
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el.value);
+  const btn = el.closest('.card').querySelector('[onclick*="copyText"]');
+  btn.innerHTML = '<i class="bi bi-check2"></i> 복사됨';
+  setTimeout(() => btn.innerHTML = '<i class="bi bi-clipboard"></i> 복사', 2000);
+}
+
+function downloadText(id, type) {
+  const text = document.getElementById(id).value;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${PRODUCT_ID}_${type}.txt`;
+  a.click();
+}
+</script>
+{% endblock %}

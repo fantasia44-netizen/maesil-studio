@@ -86,17 +86,18 @@ CREATION_LABELS = {
 # ──────────────────────────────────────────
 MENU_REGISTRY = [
     # (label, icon, endpoint, required_plan_feature, group)
-    ('대시보드',    'bi-speedometer2',   'main.dashboard',        None,          '홈'),
-    ('브랜드 관리', 'bi-building',       'brand.index',           None,          '홈'),
-    ('블로그',      'bi-file-text',      'create.blog',           None,          '콘텐츠 생성'),
-    ('인스타그램',  'bi-instagram',      'create.instagram',      None,          '콘텐츠 생성'),
+    ('대시보드',    'bi-speedometer2',        'main.dashboard',     None,        '홈'),
+    ('브랜드 관리', 'bi-building',            'brand.index',        None,        '홈'),
+    ('상품 관리',   'bi-box-seam',            'product.index',      None,        '상품'),
+    ('블로그',      'bi-file-text',           'create.blog',        None,        '콘텐츠 생성'),
+    ('인스타그램',  'bi-instagram',           'create.instagram',   None,        '콘텐츠 생성'),
     ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page', None,        '콘텐츠 생성'),
-    ('썸네일 문구', 'bi-card-heading',   'create.thumbnail',      None,          '콘텐츠 생성'),
-    ('광고 카피',   'bi-megaphone',      'create.ad_copy',        None,          '콘텐츠 생성'),
-    ('이미지 생성', 'bi-image',          'create.hub',            'image_gen',   '콘텐츠 생성'),
-    ('브랜드 키트', 'bi-palette',        'create.brand_kit',      'brand_kit',   '콘텐츠 생성'),
-    ('생성 이력',   'bi-clock-history',  'main.history',          None,          '관리'),
-    ('구독 관리',   'bi-credit-card',    'billing.index',         None,          '관리'),
+    ('썸네일 문구', 'bi-card-heading',        'create.thumbnail',   None,        '콘텐츠 생성'),
+    ('광고 카피',   'bi-megaphone',           'create.ad_copy',     None,        '콘텐츠 생성'),
+    ('이미지 생성', 'bi-image',               'create.hub',         'image_gen', '콘텐츠 생성'),
+    ('브랜드 키트', 'bi-palette',             'create.brand_kit',   'brand_kit', '콘텐츠 생성'),
+    ('생성 이력',   'bi-clock-history',       'main.history',       None,        '관리'),
+    ('구독 관리',   'bi-credit-card',         'billing.index',      None,        '관리'),
 ]
 
 
