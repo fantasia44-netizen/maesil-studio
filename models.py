@@ -111,12 +111,16 @@ class User(UserMixin):
         self.email = row.get('email', '')
         self.name = row.get('name', self.email.split('@')[0])
         self.plan_type = row.get('plan_type', 'free')
-        self.is_active = row.get('is_active', True)
+        self._is_active = row.get('is_active', True)
         self.site_role = row.get('site_role', 'user')  # 'user' | 'superadmin'
         self.subscription_status = row.get('subscription_status', 'trial')
         self.trial_ends_at = row.get('trial_ends_at')
         self.current_period_end = row.get('current_period_end')
         self.created_at = row.get('created_at', '')
+
+    @property
+    def is_active(self):
+        return self._is_active
 
     @property
     def is_superadmin(self):
