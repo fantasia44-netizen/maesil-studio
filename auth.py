@@ -1,4 +1,4 @@
-"""매실 크리에이터 - 인증 (로그인/가입/로그아웃/비밀번호 재설정)"""
+"""매실 스튜디오 - 인증 (로그인/가입/로그아웃/비밀번호 재설정)"""
 import bcrypt
 import logging
 from datetime import datetime, timedelta

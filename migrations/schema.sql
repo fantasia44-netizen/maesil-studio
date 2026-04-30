@@ -1,4 +1,4 @@
--- 매실 크리에이터 DB 스키마 (Supabase PostgreSQL)
+-- 매실 스튜디오 DB 스키마 (Supabase PostgreSQL)
 -- Supabase SQL Editor에서 순서대로 실행하세요.
 
 -- ── 확장 ────────────────────────────────────────────────

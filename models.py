@@ -1,4 +1,4 @@
-"""매실 크리에이터 - 사용자 모델 + 요금제 + 포인트 비용"""
+"""매실 스튜디오 - 사용자 모델 + 요금제 + 포인트 비용"""
 from flask_login import UserMixin
 from functools import wraps
 from flask import flash, redirect, url_for

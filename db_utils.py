@@ -1,4 +1,4 @@
-"""매실 크리에이터 - Supabase 헬퍼"""
+"""매실 스튜디오 - Supabase 헬퍼"""
 from flask import current_app
 
 

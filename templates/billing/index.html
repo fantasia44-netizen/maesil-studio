@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}구독 관리 — 매실 크리에이터{% endblock %}
+{% block title %}구독 관리 — 매실 스튜디오{% endblock %}
 {% block breadcrumb %}구독 관리{% endblock %}
 
 {% block content %}
@@ -108,7 +108,7 @@ function startSubscription(planType, amount) {
     pg: 'kakaopay',
     pay_method: 'card',
     merchant_uid: 'sub_' + Date.now(),
-    name: '매실 크리에이터 ' + planType + ' 구독',
+    name: '매실 스튜디오 ' + planType + ' 구독',
     amount: amount,
   }, async (rsp) => {
     if (rsp.success) {

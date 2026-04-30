@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}포인트 충전 — 매실 크리에이터{% endblock %}
+{% block title %}포인트 충전 — 매실 스튜디오{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('billing.index') }}" class="text-muted text-decoration-none">구독 관리</a> / 포인트 충전{% endblock %}
 
 {% block content %}
@@ -93,7 +93,7 @@ document.getElementById('chargeBtn').addEventListener('click', () => {
     pg: 'kakaopay',
     pay_method: 'card',
     merchant_uid: 'pt_' + Date.now(),
-    name: `매실 크리에이터 포인트 ${pkg.label}`,
+    name: `매실 스튜디오 포인트 ${pkg.label}`,
     amount: pkg.price,
   }, async (rsp) => {
     if (rsp.success) {

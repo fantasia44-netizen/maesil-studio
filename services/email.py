@@ -44,7 +44,7 @@ def send_email(to: str, subject: str, html_body: str) -> bool:
 
 
 def send_password_reset_email(to: str, reset_url: str) -> bool:
-    subject = '[매실 크리에이터] 비밀번호 재설정 링크'
+    subject = '[매실 스튜디오] 비밀번호 재설정 링크'
     html = f"""
     <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
       <h2 style="color:#e8355a">비밀번호 재설정</h2>

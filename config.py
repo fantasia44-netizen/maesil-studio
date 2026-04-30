@@ -1,4 +1,4 @@
-"""매실 크리에이터 - 환경별 설정"""
+"""매실 스튜디오 - 환경별 설정"""
 import os
 
 
@@ -44,7 +44,7 @@ class Config:
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB
 
     # 앱 정보
-    APP_NAME = os.environ.get('APP_NAME', '매실 크리에이터')
+    APP_NAME = os.environ.get('APP_NAME', '매실 스튜디오')
     APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
 
     JSON_AS_ASCII = False

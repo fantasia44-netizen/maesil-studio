@@ -1,4 +1,4 @@
-"""매실 크리에이터 - Flask 앱 팩토리"""
+"""매실 스튜디오 - Flask 앱 팩토리"""
 import os
 import logging
 from dotenv import load_dotenv
@@ -71,7 +71,7 @@ def _init_jinja_filters(app):
     def inject_globals():
         from models import PLAN_FEATURES, POINT_COSTS, CREATION_LABELS
         return {
-            'app_name': app.config.get('APP_NAME', '매실 크리에이터'),
+            'app_name': app.config.get('APP_NAME', '매실 스튜디오'),
             'PLAN_FEATURES': PLAN_FEATURES,
             'POINT_COSTS': POINT_COSTS,
             'CREATION_LABELS': CREATION_LABELS,
