@@ -718,6 +718,26 @@ function _applyTypeBtn(activeBtn) {
 (function() {
   const first = document.querySelector('.studio-type-btn.active');
   if (first) _applyTypeBtn(first);
+
+  // URL ?studio=1 이면 자동으로 스튜디오 모달 열기
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('studio') === '1') {
+    // ?type=blog|instagram|detail_page|ad_copy 로 초기 타입 설정 가능
+    const urlType = params.get('type');
+    if (urlType) {
+      const targetRadio = document.getElementById('stype_' + urlType);
+      const targetBtn   = document.querySelector(`label[for="stype_${urlType}"]`);
+      if (targetRadio && targetBtn) {
+        targetRadio.checked = true;
+        _applyTypeBtn(targetBtn);
+        studioContentType = urlType;
+      }
+    }
+    // URL 파라미터 제거 (뒤로가기 시 재오픈 방지)
+    history.replaceState({}, '', window.location.pathname);
+    // 페이지 로드 직후 모달 오픈
+    setTimeout(() => openStudio(), 400);
+  }
 })();
 
 // 콘텐츠 유형 버튼 토글

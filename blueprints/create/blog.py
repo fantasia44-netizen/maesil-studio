@@ -1,4 +1,5 @@
-"""블로그 포스트 생성 — 4축 입력 + 분량별 요금 + 이력 관계 모드."""
+"""블로그 포스트 생성 — 5단계 위자드 (소구포인트→글→이미지→완성본)."""
+import json
 import logging
 import re
 from flask import render_template, request, jsonify, redirect, url_for, flash, current_app
@@ -310,3 +311,185 @@ def blog_generate():
         result['cost_charged'] = cost
         result['category'] = category
     return jsonify(result)
+
+
+# ─────────────────────────────────────────────────────────────
+# Step 2 — 소구포인트 3개 AI 생성
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/blog/angles', methods=['POST'])
+@login_required
+def blog_angles():
+    """브랜드·상품·방향성을 받아 소구포인트 시안 3개를 생성."""
+    supabase = current_app.supabase
+    data = request.get_json(force=True) or {}
+
+    brand_id   = (data.get('brand_id')   or '').strip()
+    product_id = (data.get('product_id') or '').strip()
+    direction  = (data.get('direction')  or '').strip()
+
+    brand = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+
+    product = _get_product(supabase, product_id) if product_id else None
+
+    # ── 브랜드·상품 컨텍스트 ──
+    from services.claude_service import build_brand_context, generate_text
+    brand_ctx = build_brand_context(brand, product)
+
+    system_prompt = (
+        '당신은 한국 온라인 커머스 전문 마케터입니다. '
+        '브랜드와 상품 정보를 분석해 블로그 포스트에 적합한 소구포인트(핵심 메시지 방향) 시안을 제안합니다. '
+        '결과는 반드시 JSON 배열만 출력하세요. 마크다운이나 설명 텍스트 없이 순수 JSON만 출력합니다.'
+    )
+
+    direction_line = f'\n- 작성자 방향성: {direction}' if direction else ''
+    user_prompt = f"""다음 브랜드·상품 정보를 바탕으로 블로그 포스트 소구포인트 시안 3개를 JSON 배열로 생성하세요.
+
+[브랜드·상품 정보]
+{brand_ctx}{direction_line}
+
+각 시안은 아래 필드를 가져야 합니다:
+- id: "angle_1", "angle_2", "angle_3"
+- title: 소구포인트 제목 (10자 이내, 핵심 키워드)
+- hook: 독자 관심을 끄는 한 줄 문구 (30자 이내)
+- target: 타겟 독자 설명 (20자 이내)
+- tone: 글의 톤 (예: 정보형, 감성형, 경험담형, 비교분석형)
+- approach: 이 방향으로 글을 쓸 때의 접근 전략 (2~3문장)
+- key_points: 본문에 반드시 포함할 핵심 포인트 3개 (문자열 배열)
+
+JSON 배열 형식 예시:
+[
+  {{
+    "id": "angle_1",
+    "title": "...",
+    "hook": "...",
+    "target": "...",
+    "tone": "...",
+    "approach": "...",
+    "key_points": ["...", "...", "..."]
+  }},
+  ...
+]
+
+순수 JSON만 출력하세요."""
+
+    try:
+        raw = generate_text(system_prompt, user_prompt, max_tokens=1500)
+        # JSON 파싱 — 마크다운 코드블록 제거 후 파싱
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
+        # 배열 부분만 추출
+        arr_start = clean.find('[')
+        arr_end   = clean.rfind(']') + 1
+        if arr_start >= 0 and arr_end > arr_start:
+            clean = clean[arr_start:arr_end]
+        angles = json.loads(clean)
+        if not isinstance(angles, list) or not angles:
+            raise ValueError('angles 배열이 비어있음')
+        return jsonify(ok=True, angles=angles[:3])
+    except Exception as e:
+        logger.error(f'[blog/angles] 소구포인트 생성 실패: {e}')
+        return jsonify(ok=False, message=f'소구포인트 생성 중 오류가 발생했습니다: {e}')
+
+
+# ─────────────────────────────────────────────────────────────
+# Step 4 — 이미지 프롬프트 3개 AI 생성
+# ─────────────────────────────────────────────────────────────
+
+_STYLE_CONTEXT = {
+    'realistic':    '실사 사진 스타일 — 프로페셔널 제품 사진, 자연광 또는 스튜디오 조명, DSLR 고해상도',
+    'illustration': '한국 일러스트 스타일 — 부드러운 파스텔 색감, 따뜻하고 귀여운 디지털 아트',
+    'webtoon':      '한국 웹툰 스타일 — 깔끔한 선화, 선명한 색상, 귀여운 캐릭터, 만화적 표현',
+    'minimal':      '미니멀 플랫 디자인 — 단순한 기하학적 형태, 흰 배경, 군더더기 없는 현대적 레이아웃',
+}
+
+
+@create_bp.route('/blog/image-prompts', methods=['POST'])
+@login_required
+def blog_image_prompts():
+    """선택된 소구포인트·이미지 스타일·블로그 글을 받아 이미지 프롬프트 3개를 생성."""
+    supabase = current_app.supabase
+    data = request.get_json(force=True) or {}
+
+    brand_id   = (data.get('brand_id')   or '').strip()
+    product_id = (data.get('product_id') or '').strip()
+    style      = (data.get('style')      or 'realistic').strip()
+    angle      = data.get('angle') or {}        # 선택된 소구포인트 객체
+    content    = (data.get('content')    or '').strip()  # 생성된 블로그 글 (앞 500자)
+    direction  = (data.get('direction')  or '').strip()
+
+    brand = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+
+    product = _get_product(supabase, product_id) if product_id else None
+
+    from services.claude_service import build_brand_context, generate_text
+    brand_ctx = build_brand_context(brand, product)
+
+    style_desc = _STYLE_CONTEXT.get(style, _STYLE_CONTEXT['realistic'])
+    angle_title = angle.get('title', '') if isinstance(angle, dict) else str(angle)
+    angle_hook  = angle.get('hook', '')  if isinstance(angle, dict) else ''
+    content_excerpt = content[:600] if content else ''
+
+    system_prompt = (
+        '당신은 AI 이미지 생성 전문 프롬프트 엔지니어입니다. '
+        '블로그 포스트의 소구포인트와 이미지 스타일에 맞는 영문 이미지 프롬프트를 작성합니다. '
+        '결과는 반드시 JSON 배열만 출력하세요. 마크다운이나 설명 텍스트 없이 순수 JSON만 출력합니다.'
+    )
+
+    user_prompt = f"""아래 정보를 바탕으로 블로그 포스트에 사용할 이미지 프롬프트 3개를 JSON 배열로 생성하세요.
+
+[브랜드·상품 정보]
+{brand_ctx}
+
+[소구포인트]
+- 제목: {angle_title}
+- 핵심 문구: {angle_hook}
+{f'- 방향성: {direction}' if direction else ''}
+
+[이미지 스타일]
+{style_desc}
+
+[블로그 글 발췌 (참고용)]
+{content_excerpt if content_excerpt else '(아직 생성 전)'}
+
+이미지 3장의 역할:
+1. 인트로 이미지 — 독자의 시선을 잡는 메인 비주얼
+2. 본문 이미지 — 핵심 내용을 시각적으로 보완하는 이미지
+3. 아웃트로 이미지 — 구매/행동 유도를 위한 마무리 비주얼
+
+각 프롬프트는 아래 필드를 가져야 합니다:
+- role: 이미지 역할 (인트로/본문/아웃트로 등 한국어)
+- prompt: 영문 이미지 생성 프롬프트 (구체적이고 상세하게, 50~80 단어)
+- aspect: 이미지 비율 ("16:9" 또는 "1:1" 또는 "4:3")
+- style_note: 이 이미지에 특별히 강조할 스타일 요소 (한국어, 1문장)
+
+JSON 배열 형식:
+[
+  {{
+    "role": "...",
+    "prompt": "...",
+    "aspect": "...",
+    "style_note": "..."
+  }},
+  ...
+]
+
+순수 JSON만 출력하세요."""
+
+    try:
+        raw = generate_text(system_prompt, user_prompt, max_tokens=1200)
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
+        arr_start = clean.find('[')
+        arr_end   = clean.rfind(']') + 1
+        if arr_start >= 0 and arr_end > arr_start:
+            clean = clean[arr_start:arr_end]
+        prompts = json.loads(clean)
+        if not isinstance(prompts, list) or not prompts:
+            raise ValueError('prompts 배열이 비어있음')
+        return jsonify(ok=True, prompts=prompts[:3])
+    except Exception as e:
+        logger.error(f'[blog/image-prompts] 이미지 프롬프트 생성 실패: {e}')
+        return jsonify(ok=False, message=f'이미지 프롬프트 생성 중 오류가 발생했습니다: {e}')
