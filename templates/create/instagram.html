@@ -66,6 +66,7 @@
           <span class="btn-normal-text"><i class="bi bi-cpu me-2"></i>소구포인트 분석</span>
           <span class="btn-loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>분석 중...</span>
         </button>
+        <div id="step1Error" class="alert alert-danger mt-3 d-none"></div>
       </form>
     </div>
   </div>
@@ -257,10 +258,15 @@
             <div class="spinner-border" style="color:#d63384;width:2rem;height:2rem"></div>
             <p class="mt-2 text-muted small">이미지 생성 중...</p>
           </div>
-          <a id="downloadBtn" href="#" target="_blank" download
-             class="btn btn-sm btn-outline-secondary mt-2 d-none">
-            <i class="bi bi-download me-1"></i>이미지 저장
-          </a>
+          <div id="step5ImgActions" class="d-none mt-2 flex-column gap-2" style="display:none">
+            <a id="downloadBtn" href="#" target="_blank" download
+               class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-download me-1"></i>이미지 저장
+            </a>
+            <button class="btn btn-sm btn-outline-primary" onclick="goStep(4)">
+              <i class="bi bi-arrow-repeat me-1"></i>이미지 재생성
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -291,6 +297,19 @@
       </div>
     </div>
   </div>
+
+  <!-- 하단 액션 -->
+  <div class="mt-3 d-flex gap-2 flex-wrap">
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(3)">
+      <i class="bi bi-chat-text me-1"></i>캡션 수정
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(2)">
+      <i class="bi bi-arrow-left-circle me-1"></i>소구포인트 재선택
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(1)">
+      <i class="bi bi-house me-1"></i>처음부터
+    </button>
+  </div>
 </div>
 
 {% endblock %}
@@ -298,17 +317,19 @@
 {% block extra_script %}
 <script>
 // ── 전역 상태 ────────────────────────────────────────────────
-const CSRF   = document.getElementById('csrfToken').value;
+const CSRF           = document.getElementById('csrfToken').value;
 const PRODUCT_IMAGES = {{ products_images_map | tojson }};
+const BRANDS_DATA    = {{ brands | tojson }};
 
-let currentStep   = 1;
-let selectedAngle = null;
-let selectedRatio = '1:1';
-let selectedStyle = null;
-let captionData   = { short: '', medium: '', long: '' };
-let hashtagText   = '';
-let generatedImageUrl = '';
-let productImageUrl   = '';
+let currentStep        = 1;
+let selectedAngle      = null;
+let selectedRatio      = '1:1';
+let selectedStyle      = null;
+let captionData        = { short: '', medium: '', long: '' };
+let hashtagText        = '';
+let generatedImageUrl  = '';
+let productImageUrl    = '';
+let selectedBrandColor = '{{ (default_brand.primary_color if default_brand and default_brand.primary_color else "#e8355a") }}';
 
 // ── 스텝 UI ──────────────────────────────────────────────────
 function updateStepIndicator(step) {
@@ -372,6 +393,10 @@ updateProductImage();
 
 // 브랜드 변경
 document.getElementById('brandSelect').addEventListener('change', async function() {
+  // 브랜드 컬러 업데이트
+  const brand = BRANDS_DATA.find(b => b.id === this.value);
+  if (brand) selectedBrandColor = brand.primary_color || '#e8355a';
+
   const url = '{{ url_for("create.instagram_products") }}?brand_id=' + encodeURIComponent(this.value);
   const data = await fetch(url).then(r=>r.json());
   if (!data.ok) return;
@@ -407,9 +432,9 @@ document.getElementById('step1Form').addEventListener('submit', async (e) => {
     renderAngleCards(data.angles);
     goStep(2);
   } catch (err) {
-    document.getElementById('step2Error').textContent = '소구포인트 분석 실패: ' + err.message;
-    document.getElementById('step2Error').classList.remove('d-none');
-    goStep(2);
+    const errEl = document.getElementById('step1Error');
+    errEl.textContent = '소구포인트 분석 실패: ' + err.message;
+    errEl.classList.remove('d-none');
   } finally {
     btn.querySelector('.btn-normal-text').classList.remove('d-none');
     btn.querySelector('.btn-loading-text').classList.add('d-none');
@@ -495,24 +520,45 @@ async function generateCaption() {
 }
 
 function parseCaptionText(text) {
-  // 짧은/보통/긴 캡션 및 해시태그 파싱
-  const shortMatch  = text.match(/##\s*캡션.*?짧은\s*버전[^\n]*\n([\s\S]*?)(?=##\s*캡션|$)/i);
-  const mediumMatch = text.match(/##\s*캡션.*?보통\s*버전[^\n]*\n([\s\S]*?)(?=##\s*캡션|##\s*해시태그|$)/i);
-  const longMatch   = text.match(/##\s*캡션.*?긴\s*버전[^\n]*\n([\s\S]*?)(?=##\s*해시태그|$)/i);
-  const hashMatch   = text.match(/##\s*해시태그[^\n]*\n([\s\S]*?)(?=##\s*최적|$)/i);
+  // ## 헤더 기준 섹션 분리 (가장 견고한 방식)
+  const parts    = text.split(/(?=^##\s)/m);
+  const sections = {};
 
-  captionData.short  = (shortMatch?.[1]  || '').trim();
-  captionData.medium = (mediumMatch?.[1] || '').trim();
-  captionData.long   = (longMatch?.[1]   || '').trim();
-  hashtagText        = (hashMatch?.[1]   || '').trim();
+  for (const part of parts) {
+    const m = part.match(/^##\s*([^\n]+)\n?([\s\S]*)/);
+    if (!m) continue;
+    const header  = m[1].trim().toLowerCase();
+    const content = m[2].trim();
+    if      (header.includes('짧은'))    sections.short   = content;
+    else if (header.includes('보통'))    sections.medium  = content;
+    else if (header.includes('긴'))      sections.long    = content;
+    else if (header.includes('해시태그')) sections.hashtag = content;
+  }
 
-  if (!captionData.short && !captionData.medium) {
-    // 폴백: 전체 텍스트를 medium으로
+  // 1차 파싱 실패 시 정규식 재시도
+  if (!sections.short && !sections.medium) {
+    const sM = text.match(/##\s*캡션[^#\n]*짧은[^\n]*\n([\s\S]*?)(?=##|$)/i);
+    const mM = text.match(/##\s*캡션[^#\n]*보통[^\n]*\n([\s\S]*?)(?=##|$)/i);
+    const lM = text.match(/##\s*캡션[^#\n]*긴[^\n]*\n([\s\S]*?)(?=##|$)/i);
+    const hM = text.match(/##\s*해시태그[^\n]*\n([\s\S]*?)(?=##|$)/i);
+    if (sM) sections.short   = sM[1].trim();
+    if (mM) sections.medium  = mM[1].trim();
+    if (lM) sections.long    = lM[1].trim();
+    if (hM) sections.hashtag = hM[1].trim();
+  }
+
+  captionData.short  = sections.short   || '';
+  captionData.medium = sections.medium  || '';
+  captionData.long   = sections.long    || '';
+  hashtagText        = sections.hashtag || '';
+
+  // 최종 폴백: 전체 텍스트를 medium으로
+  if (!captionData.short && !captionData.medium && !captionData.long) {
     captionData.medium = text;
   }
 
   switchCaption('short');
-  document.getElementById('hashtagBox').textContent = hashtagText;
+  document.getElementById('hashtagBox').textContent    = hashtagText;
   document.getElementById('finalHashtags').textContent = hashtagText;
 }
 
@@ -634,7 +680,7 @@ async function generateImage() {
     style:       selectedStyle,
     flux_prompt: prompt,
     size:        selectedRatio,
-    brand_color: '#d63384',
+    brand_color: selectedBrandColor || '#e8355a',
     title:       document.getElementById('imgTitle')?.value.trim()    || '',
     subtitle:    document.getElementById('imgSubtitle')?.value.trim() || '',
     dialogue1:   document.getElementById('dialogue1')?.value.trim()   || '',
@@ -655,7 +701,9 @@ async function generateImage() {
     document.getElementById('finalImage').style.display = '';
     document.getElementById('finalImgLoading').classList.add('d-none');
     document.getElementById('downloadBtn').href = generatedImageUrl;
-    document.getElementById('downloadBtn').classList.remove('d-none');
+    const actEl = document.getElementById('step5ImgActions');
+    actEl.style.display = 'flex';
+    actEl.style.flexDirection = 'column';
 
   } catch (err) {
     document.getElementById('finalImgLoading').classList.add('d-none');

@@ -2,7 +2,7 @@ services:
   - type: web
     name: maesil-creator
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: apt-get install -y fonts-nanum fonts-noto-cjk 2>/dev/null; pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 2 --timeout 120
     envVars:
       - key: FLASK_ENV

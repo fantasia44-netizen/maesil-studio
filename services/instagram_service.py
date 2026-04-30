@@ -26,17 +26,29 @@ SIZE_MAP = {
 
 def _font(bold: bool = False) -> str:
     candidates = [
+        # Windows
         'C:/Windows/Fonts/malgunbd.ttf' if bold else 'C:/Windows/Fonts/malgun.ttf',
+        'C:/Windows/Fonts/NanumGothicBold.ttf' if bold else 'C:/Windows/Fonts/NanumGothic.ttf',
+        # Linux / Render (Nanum)
         '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf' if bold
             else '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-        '/System/Library/Fonts/AppleSDGothicNeo.ttc',
+        '/usr/share/fonts/truetype/nanum/NanumBarunGothicBold.ttf' if bold
+            else '/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf',
+        # Linux / Render (Noto CJK)
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc' if bold
+            else '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/noto-cjk/NotoSansCJKkr-Bold.otf' if bold
+            else '/usr/share/fonts/noto-cjk/NotoSansCJKkr-Regular.otf',
         '/usr/share/fonts/noto/NotoSansCJK-Bold.ttc' if bold
             else '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc',
+        # macOS
+        '/System/Library/Fonts/AppleSDGothicNeo.ttc',
+        '/Library/Fonts/NanumGothic.ttf',
     ]
     for p in candidates:
         if os.path.exists(p):
             return p
-    raise FileNotFoundError('한국어 폰트를 찾을 수 없습니다.')
+    raise FileNotFoundError('한국어 폰트를 찾을 수 없습니다. apt-get install fonts-nanum 을 실행하세요.')
 
 
 def _hex_rgb(hex_color: str) -> tuple:
