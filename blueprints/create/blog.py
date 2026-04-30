@@ -189,10 +189,20 @@ def blog():
     products = _accessible_products(supabase, brand_id=default_brand['id'] if default_brand else None)
     recent = _recent_blog_creations(supabase, current_user.id,
                                     default_brand['id'] if default_brand else None)
+
+    # 제품별 이미지 목록 맵 (JS에서 이미지 피커에 사용)
+    products_images_map = {}
+    for p in products:
+        imgs = list(p.get('images') or [])
+        if p.get('image_url') and p['image_url'] not in imgs:
+            imgs.insert(0, p['image_url'])
+        products_images_map[p['id']] = [u for u in imgs if u]
+
     return render_template('create/blog.html',
                            brands=brands,
                            default_brand=default_brand,
                            products=products,
+                           products_images_map=products_images_map,
                            recent_blogs=recent,
                            length_costs=BLOG_LENGTH_COSTS,
                            angle_options=BLOG_ANGLE_OPTIONS,
@@ -207,11 +217,18 @@ def blog_products():
     brand_id = request.args.get('brand_id', '').strip()
     products = _accessible_products(supabase, brand_id=brand_id or None)
     recent = _recent_blog_creations(supabase, current_user.id, brand_id or None)
+    def _product_images(p):
+        imgs = list(p.get('images') or [])
+        if p.get('image_url') and p['image_url'] not in imgs:
+            imgs.insert(0, p['image_url'])
+        return [u for u in imgs if u]
+
     return jsonify({
         'ok': True,
         'products': [{'id': p['id'], 'name': p['name'],
                       'category': p.get('category', ''),
-                      'image_url': p.get('image_url') or ''}
+                      'image_url': p.get('image_url') or '',
+                      'images': _product_images(p)}
                      for p in products],
         'recent_blogs': [{'id': r['id'], 'title': r['title'][:80],
                           'angle': r.get('angle', ''),
@@ -440,7 +457,24 @@ def blog_image_prompts():
         '결과는 반드시 JSON 배열만 출력하세요. 마크다운이나 설명 텍스트 없이 순수 JSON만 출력합니다.'
     )
 
-    user_prompt = f"""아래 정보를 바탕으로 블로그 포스트에 사용할 이미지 프롬프트 3개를 JSON 배열로 생성하세요.
+    has_product_image = bool(data.get('has_product_image'))
+
+    # 제품 이미지 있으면 슬롯1은 원본사진 그대로 → AI 프롬프트는 스토리 씬 2개만
+    if has_product_image:
+        image_plan = """이미지 2장의 역할 (제품 사진은 별도 원본으로 사용하므로 AI 이미지에 제품을 직접 등장시키지 마세요):
+1. 스토리 이미지 — 블로그 주제와 어울리는 라이프스타일/감성 배경 씬 (제품 없음)
+2. 마무리 이미지 — 타겟 독자의 일상을 담은 공감 가는 장면 (제품 없음)
+
+중요: 두 이미지 모두 제품 패키지나 제품 자체가 등장하면 안 됩니다. 제품이 사용되는 상황, 감성, 라이프스타일만 표현하세요."""
+        slot_count = '2개'
+    else:
+        image_plan = """이미지 3장의 역할:
+1. 인트로 이미지 — 독자의 시선을 잡는 메인 비주얼 (제품 또는 관련 씬)
+2. 본문 이미지 — 핵심 내용을 시각적으로 보완하는 라이프스타일 씬
+3. 아웃트로 이미지 — 구매/행동 유도를 위한 마무리 비주얼"""
+        slot_count = '3개'
+
+    user_prompt = f"""아래 정보를 바탕으로 블로그 포스트에 사용할 이미지 프롬프트 {slot_count}를 JSON 배열로 생성하세요.
 
 [브랜드·상품 정보]
 {brand_ctx}
@@ -456,10 +490,7 @@ def blog_image_prompts():
 [블로그 글 발췌 (참고용)]
 {content_excerpt if content_excerpt else '(아직 생성 전)'}
 
-이미지 3장의 역할:
-1. 인트로 이미지 — 독자의 시선을 잡는 메인 비주얼
-2. 본문 이미지 — 핵심 내용을 시각적으로 보완하는 이미지
-3. 아웃트로 이미지 — 구매/행동 유도를 위한 마무리 비주얼
+{image_plan}
 
 각 프롬프트는 아래 필드를 가져야 합니다:
 - role: 이미지 역할 (인트로/본문/아웃트로 등 한국어)
@@ -490,7 +521,8 @@ JSON 배열 형식:
         prompts = json.loads(clean)
         if not isinstance(prompts, list) or not prompts:
             raise ValueError('prompts 배열이 비어있음')
-        return jsonify(ok=True, prompts=prompts[:3])
+        max_slots = 2 if has_product_image else 3
+        return jsonify(ok=True, prompts=prompts[:max_slots])
     except Exception as e:
         logger.error(f'[blog/image-prompts] 이미지 프롬프트 생성 실패: {e}')
         return jsonify(ok=False, message=f'이미지 프롬프트 생성 중 오류가 발생했습니다: {e}')

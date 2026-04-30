@@ -89,12 +89,20 @@ def _generate_flux_img2img(prompt: str, image_url: str,
 
     fal.ai 엔드포인트: fal-ai/flux/dev/image-to-image
     strength 0.0 = 원본 그대로, 1.0 = 완전 재생성.
-    블로그 제품컷 권장값: 0.70~0.85 (제품 인식 가능 + 씬 변환)
+    제품 패키지 한글 보존 권장값: 0.45~0.60
     """
     from services.config_service import get_config
     api_key = get_config('fal_api_key')
     if not api_key:
         raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    # 제품 텍스트/패키지 보존 지시어 자동 추가
+    # FLUX는 한글 텍스트를 멋대로 변형하므로 원본 보존을 강제
+    preserve_hint = (
+        'preserve original product label and packaging exactly as shown, '
+        'do not alter any text or logo on the product'
+    )
+    enhanced_prompt = f'{prompt}, {preserve_hint}'
 
     w, h = size.split('x')
     resp = requests.post(
@@ -104,7 +112,7 @@ def _generate_flux_img2img(prompt: str, image_url: str,
             'Content-Type': 'application/json',
         },
         json={
-            'prompt': prompt,
+            'prompt': enhanced_prompt,
             'image_url': image_url,
             'strength': max(0.0, min(1.0, float(strength))),
             'image_size': {'width': int(w), 'height': int(h)},

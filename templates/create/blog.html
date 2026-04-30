@@ -53,11 +53,12 @@
               </option>
               {% endfor %}
             </select>
-            <!-- 상품 이미지 미리보기 -->
-            <div id="productImgPreview" class="mt-2 d-none">
-              <img id="productImgThumb" src="" alt="상품 이미지"
-                   style="height:72px;width:72px;object-fit:cover;border-radius:8px;border:1px solid #eee">
-              <span class="text-muted small ms-2" style="font-size:.72rem">이미지 생성 시 이 이미지를 기반으로 합니다</span>
+            <!-- 상품 이미지 피커 -->
+            <div id="productImgPicker" class="mt-2 d-none">
+              <div class="text-muted mb-1" style="font-size:.72rem">
+                <i class="bi bi-hand-index me-1"></i>이미지 생성 시 기반이 될 사진을 선택하세요
+              </div>
+              <div id="productImgList" class="d-flex flex-wrap gap-2"></div>
             </div>
           </div>
         </div>
@@ -213,52 +214,20 @@
     </div>
   </div>
 
-  <!-- 제품 이미지 기반 생성 옵션 -->
-  <div class="card mb-3" id="img2imgCard" style="display:none">
-    <div class="card-body p-3">
-      <div class="d-flex align-items-center gap-3">
-        <div id="img2imgThumbWrap" class="flex-shrink-0 d-none">
-          <img id="img2imgThumb" src="" alt="제품 이미지"
-               style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #ddd">
-        </div>
-        <div class="flex-fill">
-          <div class="form-check form-switch mb-1">
-            <input class="form-check-input" type="checkbox" id="useImg2Img" checked
-                   onchange="onImg2ImgToggle()">
-            <label class="form-check-label fw-semibold small" for="useImg2Img">
-              제품 이미지 기반으로 생성 <span class="badge bg-success" style="font-size:.65rem">권장</span>
-            </label>
-          </div>
-          <div class="text-muted" style="font-size:.75rem">
-            실제 제품 사진을 바탕으로 배경·연출만 AI가 변환합니다. 엉뚱한 제품 이미지가 나오지 않습니다.
-          </div>
-          <div id="strengthRow" class="d-flex align-items-center gap-2 mt-2">
-            <span class="small text-muted">변형 강도</span>
-            <input type="range" id="strengthSlider" min="50" max="95" value="78" step="5"
-                   style="width:130px" oninput="document.getElementById('strengthVal').textContent=this.value+'%'">
-            <span id="strengthVal" class="small fw-semibold" style="min-width:36px">78%</span>
-            <span class="text-muted small">← 제품 유지 / 씬 변환 →</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 이미지 프롬프트 3개 (AI 생성) -->
+  <!-- 이미지 구성 계획 -->
   <div class="card mb-3" id="promptSection" style="display:none">
     <div class="card-header py-3 d-flex align-items-center justify-content-between">
       <h6 class="mb-0 fw-bold"><i class="bi bi-image me-2" style="color:#e8355a"></i>이미지 구성 계획</h6>
-      <span class="badge bg-warning text-dark" id="totalImgCost">150P (3장)</span>
+      <span class="badge bg-warning text-dark" id="totalImgCost"></span>
     </div>
     <div class="card-body p-3">
       <p class="text-muted small mb-3">프롬프트를 직접 수정할 수 있습니다</p>
       <div id="promptCards" class="d-flex flex-column gap-3"></div>
-
       <div class="mt-4">
         <button id="imgGenBtn" class="btn fw-semibold px-5 py-2"
                 style="background:#e8355a;color:#fff;border-radius:10px"
                 onclick="generateAllImages()">
-          <i class="bi bi-image me-2"></i>이미지 3장 생성하기
+          <i class="bi bi-image me-2"></i><span id="genBtnLabel">이미지 생성하기</span>
         </button>
       </div>
     </div>
@@ -317,7 +286,10 @@ let selectedAngle = null;
 let selectedStyle = null;
 let generatedImages = [];   // [{role, url}]
 let blogText = '';
-let productImageUrl = '';   // 선택된 상품의 대표 이미지 URL (img2img 레퍼런스)
+let productImageUrl = '';   // img2img 레퍼런스로 선택된 이미지 URL
+
+// 제품별 이미지 목록 (서버에서 주입)
+const PRODUCT_IMAGES = {{ products_images_map | tojson }};
 
 // 스타일별 프롬프트 수식어
 const STYLE_MODIFIERS = {
@@ -542,12 +514,6 @@ function copyBlogText() {
   setTimeout(() => btn.innerHTML = orig, 2000);
 }
 
-// ── Step 4: img2img 토글 ─────────────────────────────────────
-function onImg2ImgToggle() {
-  const on = document.getElementById('useImg2Img').checked;
-  document.getElementById('strengthRow').style.display = on ? '' : 'none';
-}
-
 // ── Step 4: 이미지 스타일 선택 ───────────────────────────────
 function selectImageStyle(styleId, el) {
   selectedStyle = styleId;
@@ -559,20 +525,6 @@ function selectImageStyle(styleId, el) {
   el.style.borderColor = '#e8355a';
   el.style.background  = '#fff8f9';
   el.querySelector('i').style.color = '#e8355a';
-
-  // 제품 이미지 있으면 img2img 카드 표시
-  const img2imgCard = document.getElementById('img2imgCard');
-  if (productImageUrl) {
-    const t = document.getElementById('img2imgThumb');
-    const w = document.getElementById('img2imgThumbWrap');
-    t.src = productImageUrl;
-    w.classList.remove('d-none');
-    img2imgCard.style.display = '';
-  } else {
-    img2imgCard.style.display = 'none';
-  }
-
-  // 프롬프트 생성 시작
   generateImagePrompts();
 }
 
@@ -581,6 +533,7 @@ async function generateImagePrompts() {
   document.getElementById('promptLoading').classList.remove('d-none');
   document.getElementById('step4Error').classList.add('d-none');
 
+  const brandId   = document.getElementById('brandSelect').value;
   const productId = document.getElementById('productSelect').value;
   const direction = document.getElementById('directionInput').value.trim();
   const content   = document.getElementById('blogTextArea').value.slice(0, 800);
@@ -590,11 +543,13 @@ async function generateImagePrompts() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({
+        brand_id: brandId,
         product_id: productId,
         direction,
         content,
         style: selectedStyle,
         angle: selectedAngle,
+        has_product_image: !!productImageUrl,  // 제품 이미지 여부 백엔드에 알림
       })
     });
     if (!res.ok) throw new Error(`서버 오류 ${res.status}`);
@@ -611,36 +566,71 @@ async function generateImagePrompts() {
   }
 }
 
+// ── Step 4: 프롬프트 카드 렌더 ───────────────────────────────
+// 전략: 제품 이미지 있으면 슬롯1 = 원본사진 그대로 / 나머지 = FLUX 생성
 function renderPromptCards(prompts) {
   const container = document.getElementById('promptCards');
   container.innerHTML = '';
   window._prompts = prompts;
-  const roles = ['블로그 대표 이미지', '본문 삽입 이미지 1', '본문 삽입 이미지 2'];
+
+  // 비용·버튼 라벨 업데이트
+  const aiSlots = productImageUrl ? prompts.length - 1 : prompts.length;
+  const cost    = aiSlots * 50;
+  document.getElementById('totalImgCost').textContent =
+    productImageUrl
+      ? `원본 1장 + AI ${aiSlots}장 생성 (${cost}P)`
+      : `AI ${aiSlots}장 생성 (${cost}P)`;
+  document.getElementById('genBtnLabel').textContent =
+    productImageUrl ? `AI 이미지 ${aiSlots}장 생성하기` : `이미지 ${aiSlots}장 생성하기`;
 
   prompts.forEach((item, i) => {
+    const isProductSlot = (i === 0 && !!productImageUrl);
     const card = document.createElement('div');
     card.className = 'p-3 rounded';
-    card.style.background = '#f8f9fa';
-    card.innerHTML = `
-      <div class="d-flex gap-3 align-items-start">
-        <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-             style="width:32px;height:32px;background:#e8355a;color:#fff;font-size:.85rem">${i+1}</div>
-        <div class="flex-fill">
-          <div class="d-flex align-items-center gap-2 mb-1">
-            <span class="fw-semibold small">${item.role || roles[i]}</span>
-            <span class="badge bg-light text-muted">${item.aspect || '16:9'}</span>
-            <span class="text-muted small">${item.style_note || ''}</span>
+    card.style.background = isProductSlot ? '#f0fdf4' : '#f8f9fa';
+
+    if (isProductSlot) {
+      // 슬롯 1: 원본 제품 이미지 그대로 사용 (AI 생성 X)
+      card.innerHTML = `
+        <div class="d-flex gap-3 align-items-center">
+          <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+               style="width:32px;height:32px;background:#198754;color:#fff;font-size:.85rem">1</div>
+          <img src="${productImageUrl}" alt="제품 이미지"
+               style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #198754;flex-shrink:0">
+          <div>
+            <div class="fw-semibold small mb-1">
+              메인 제품 이미지 <span class="badge bg-success ms-1">원본 사용</span>
+            </div>
+            <div class="text-muted" style="font-size:.75rem">
+              실제 제품 사진을 그대로 삽입합니다.<br>
+              AI 생성 없음 — 패키지 글자·로고 원본 유지
+            </div>
           </div>
-          <textarea class="form-control form-control-sm prompt-input" rows="3"
-                    data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
-                    style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
-        </div>
-      </div>`;
+        </div>`;
+    } else {
+      // 나머지 슬롯: FLUX 텍스트→이미지 생성
+      const num = productImageUrl ? i + 1 : i + 1;
+      card.innerHTML = `
+        <div class="d-flex gap-3 align-items-start">
+          <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+               style="width:32px;height:32px;background:#e8355a;color:#fff;font-size:.85rem">${num}</div>
+          <div class="flex-fill">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="fw-semibold small">${item.role || '라이프스타일 이미지'}</span>
+              <span class="badge bg-light text-muted">${item.aspect || '16:9'}</span>
+              <span class="text-muted small">${item.style_note || ''}</span>
+            </div>
+            <textarea class="form-control form-control-sm prompt-input" rows="3"
+                      data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
+                      style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
+          </div>
+        </div>`;
+    }
     container.appendChild(card);
   });
 }
 
-// ── Step 4: 이미지 3장 생성 ──────────────────────────────────
+// ── Step 4: 이미지 생성 ──────────────────────────────────────
 const ASPECT_SIZE = { '1:1':'1024x1024', '16:9':'1920x1080', '4:5':'1080x1350', '9:16':'1080x1920', '4:3':'1024x768' };
 
 async function generateAllImages() {
@@ -652,46 +642,48 @@ async function generateAllImages() {
   document.getElementById('imgGenLoading').classList.remove('d-none');
   document.getElementById('step4Error').classList.add('d-none');
 
-  const styleMod   = STYLE_MODIFIERS[selectedStyle] || '';
-  const useImg2Img = document.getElementById('useImg2Img')?.checked && !!productImageUrl;
-  const strength   = useImg2Img
-    ? parseInt(document.getElementById('strengthSlider').value, 10) / 100
-    : 0.80;
+  // 슬롯 1이 원본 제품 이미지면 바로 추가 (AI 생성 안 함)
+  let aiInputOffset = 0;
+  if (productImageUrl && window._prompts?.length) {
+    generatedImages.push({
+      role: '메인 제품 이미지',
+      url:  productImageUrl,
+      isOriginal: true,
+    });
+    aiInputOffset = 1;  // prompt-input은 index 0부터지만 generatedImages는 이미 1개
+  }
 
-  for (let i = 0; i < inputs.length; i++) {
+  const styleMod = STYLE_MODIFIERS[selectedStyle] || '';
+  const total    = inputs.length;
+
+  for (let i = 0; i < total; i++) {
+    const genIdx = i + 1;  // 사용자에게 보이는 번호
     document.getElementById('imgLoadingText').textContent =
-      `이미지 생성 중... (${i+1}/${inputs.length})${useImg2Img ? ' — 제품 이미지 기반' : ' — FLUX AI'}`;
+      `라이프스타일 이미지 생성 중... (${genIdx}/${total}) — FLUX AI`;
+
     const prompt = inputs[i].value.trim() + (styleMod ? ', ' + styleMod : '');
     const aspect = inputs[i].dataset.aspect || '16:9';
     const size   = ASPECT_SIZE[aspect] || '1920x1080';
-
-    const body = {
-      engine: 'flux_preview',
-      prompt,
-      size,
-      ...(useImg2Img ? { reference_image_url: productImageUrl, strength } : {}),
-    };
 
     try {
       const res  = await fetch('/create/image/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ engine: 'flux_preview', prompt, size })
       });
       const data = await res.json();
       generatedImages.push({
-        role: window._prompts?.[i]?.role || `이미지 ${i+1}`,
-        url:  data.ok ? data.image_url : null,
+        role:  window._prompts?.[i + aiInputOffset]?.role || `이미지 ${genIdx}`,
+        url:   data.ok ? data.image_url : null,
         error: data.ok ? null : data.message,
       });
     } catch (err) {
-      generatedImages.push({ role: `이미지 ${i+1}`, url: null, error: err.message });
+      generatedImages.push({ role: `이미지 ${genIdx}`, url: null, error: err.message });
     }
   }
 
   document.getElementById('imgGenLoading').classList.add('d-none');
 
-  // 이미지가 하나라도 성공하면 완성본으로
   if (generatedImages.some(g => g.url)) {
     document.getElementById('goFinalBtn').style.display = '';
     renderFinalContent();
