@@ -187,12 +187,40 @@
     </button>
   </div>
 
-  <!-- 이미지 스타일 선택 -->
+  <!-- 이미지 수 + 스타일 선택 -->
   <div class="card mb-3">
     <div class="card-header py-3">
-      <h6 class="mb-0 fw-bold"><i class="bi bi-palette me-2" style="color:#e8355a"></i>이미지 스타일 선택</h6>
+      <h6 class="mb-0 fw-bold"><i class="bi bi-palette me-2" style="color:#e8355a"></i>이미지 설정</h6>
     </div>
     <div class="card-body p-3">
+
+      <!-- 이미지 수 선택 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-2">총 이미지 수</label>
+        <div class="d-flex flex-wrap gap-2" id="imgCountBtns">
+          {% for n, label in [(3,'3장'),(5,'5장'),(7,'7장'),(10,'10장')] %}
+          <button type="button"
+                  class="btn btn-sm img-count-btn {% if n==5 %}active{% endif %}"
+                  data-count="{{ n }}"
+                  style="border:2px solid {% if n==5 %}#e8355a{% else %}#dee2e6{% endif %};
+                         background:{% if n==5 %}#fff8f9{% else %}#fff{% endif %};
+                         color:{% if n==5 %}#e8355a{% else %}#555{% endif %};
+                         border-radius:8px;font-weight:600;min-width:56px"
+                  onclick="selectImgCount({{ n }}, this)">
+            {{ label }}
+            <div style="font-size:.65rem;font-weight:400;color:inherit;opacity:.8">
+              {% if n==3 %}기본{% elif n==5 %}권장{% elif n==7 %}많음{% else %}풍부{% endif %}
+            </div>
+          </button>
+          {% endfor %}
+        </div>
+        <div class="text-muted mt-1" id="imgCountHint" style="font-size:.75rem"></div>
+      </div>
+
+      <hr class="my-3">
+
+      <!-- 이미지 스타일 -->
+      <label class="form-label fw-semibold small mb-2">이미지 스타일</label>
       <div class="row g-2" id="styleCards">
         {% for sid, slabel, sdesc, sicon in [
           ('realistic','실사 사진','제품 촬영 스타일, 자연스러운 배경','bi-camera'),
@@ -215,6 +243,7 @@
   </div>
 
   <!-- 이미지 구성 계획 -->
+
   <div class="card mb-3" id="promptSection" style="display:none">
     <div class="card-header py-3 d-flex align-items-center justify-content-between">
       <h6 class="mb-0 fw-bold"><i class="bi bi-image me-2" style="color:#e8355a"></i>이미지 구성 계획</h6>
@@ -286,7 +315,8 @@ let selectedAngle = null;
 let selectedStyle = null;
 let generatedImages = [];   // [{role, url}]
 let blogText = '';
-let productImageUrl = '';   // img2img 레퍼런스로 선택된 이미지 URL
+let productImageUrl  = '';   // 선택된 제품 이미지 URL
+let selectedImgCount = 5;    // 총 이미지 수 (기본 5)
 
 // 제품별 이미지 목록 (서버에서 주입)
 const PRODUCT_IMAGES = {{ products_images_map | tojson }};
@@ -514,6 +544,25 @@ function copyBlogText() {
   setTimeout(() => btn.innerHTML = orig, 2000);
 }
 
+// ── Step 4: 이미지 수 선택 ───────────────────────────────────
+function selectImgCount(n, el) {
+  selectedImgCount = n;
+  document.querySelectorAll('.img-count-btn').forEach(b => {
+    const active = b === el;
+    b.style.borderColor = active ? '#e8355a' : '#dee2e6';
+    b.style.background  = active ? '#fff8f9' : '#fff';
+    b.style.color       = active ? '#e8355a' : '#555';
+  });
+  // 힌트 업데이트
+  const aiCount = productImageUrl ? n - 1 : n;
+  const cost    = aiCount * 50;
+  const hints   = { 3:'짧은 정보성 포스트', 5:'일반 블로그 포스트', 7:'상세 리뷰형 포스트', 10:'긴 스토리텔링 포스트' };
+  document.getElementById('imgCountHint').textContent =
+    `${hints[n] || ''} · AI 생성 ${aiCount}장 · 약 ${cost}P`;
+}
+// 초기 힌트
+document.addEventListener('DOMContentLoaded', () => selectImgCount(5, document.querySelector('[data-count="5"]')));
+
 // ── Step 4: 이미지 스타일 선택 ───────────────────────────────
 function selectImageStyle(styleId, el) {
   selectedStyle = styleId;
@@ -549,7 +598,8 @@ async function generateImagePrompts() {
         content,
         style: selectedStyle,
         angle: selectedAngle,
-        has_product_image: !!productImageUrl,  // 제품 이미지 여부 백엔드에 알림
+        has_product_image: !!productImageUrl,
+        image_count: selectedImgCount,
       })
     });
     if (!res.ok) throw new Error(`서버 오류 ${res.status}`);

@@ -458,21 +458,34 @@ def blog_image_prompts():
     )
 
     has_product_image = bool(data.get('has_product_image'))
+    total_count = max(1, min(15, int(data.get('image_count') or 5)))
+    # 제품 원본이 슬롯1을 차지하므로 AI 생성 수 = total - 1
+    ai_count = (total_count - 1) if has_product_image else total_count
+    ai_count = max(1, ai_count)
 
-    # 제품 이미지 있으면 슬롯1은 원본사진 그대로 → AI 프롬프트는 스토리 씬 2개만
     if has_product_image:
-        image_plan = """이미지 2장의 역할 (제품 사진은 별도 원본으로 사용하므로 AI 이미지에 제품을 직접 등장시키지 마세요):
-1. 스토리 이미지 — 블로그 주제와 어울리는 라이프스타일/감성 배경 씬 (제품 없음)
-2. 마무리 이미지 — 타겟 독자의 일상을 담은 공감 가는 장면 (제품 없음)
+        slots_desc = '\n'.join(
+            f'{i+1}. 스토리/라이프스타일 이미지 {i+1} — 제품 없이 타겟 독자의 일상·감성·사용 맥락을 담은 장면'
+            for i in range(ai_count)
+        )
+        image_plan = f"""이미지 {ai_count}장의 역할
+(슬롯1은 실제 제품 원본 사진으로 이미 확정되어 있으니, AI 이미지에는 제품 패키지·제품 자체를 넣지 마세요)
 
-중요: 두 이미지 모두 제품 패키지나 제품 자체가 등장하면 안 됩니다. 제품이 사용되는 상황, 감성, 라이프스타일만 표현하세요."""
-        slot_count = '2개'
+{slots_desc}
+
+중요: 모든 AI 이미지는 제품이 사용되는 상황, 감성, 라이프스타일만 표현합니다. 서로 중복되지 않게 각각 다른 씬/각도/분위기로 구성하세요."""
+        slot_count = f'{ai_count}개'
     else:
-        image_plan = """이미지 3장의 역할:
-1. 인트로 이미지 — 독자의 시선을 잡는 메인 비주얼 (제품 또는 관련 씬)
-2. 본문 이미지 — 핵심 내용을 시각적으로 보완하는 라이프스타일 씬
-3. 아웃트로 이미지 — 구매/행동 유도를 위한 마무리 비주얼"""
-        slot_count = '3개'
+        slots_desc = '\n'.join(
+            f'{i+1}. {"인트로 — 시선을 잡는 메인 비주얼" if i==0 else "아웃트로 — 구매 유도 마무리 비주얼" if i==total_count-1 else f"본문 {i} — 핵심 내용 보완 라이프스타일 씬"}'
+            for i in range(total_count)
+        )
+        image_plan = f"""이미지 {total_count}장의 역할:
+
+{slots_desc}
+
+서로 중복되지 않게 각각 다른 씬·각도·분위기로 구성하세요."""
+        slot_count = f'{total_count}개'
 
     user_prompt = f"""아래 정보를 바탕으로 블로그 포스트에 사용할 이미지 프롬프트 {slot_count}를 JSON 배열로 생성하세요.
 
@@ -521,8 +534,7 @@ JSON 배열 형식:
         prompts = json.loads(clean)
         if not isinstance(prompts, list) or not prompts:
             raise ValueError('prompts 배열이 비어있음')
-        max_slots = 2 if has_product_image else 3
-        return jsonify(ok=True, prompts=prompts[:max_slots])
+        return jsonify(ok=True, prompts=prompts[:ai_count])
     except Exception as e:
         logger.error(f'[blog/image-prompts] 이미지 프롬프트 생성 실패: {e}')
         return jsonify(ok=False, message=f'이미지 프롬프트 생성 중 오류가 발생했습니다: {e}')
