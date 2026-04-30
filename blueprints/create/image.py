@@ -95,3 +95,47 @@ def image_generate():
         logger.error(f'[IMAGE] generate error: {e}')
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message=f'이미지 생성 실패: {str(e)}')
+
+
+# ──────────────────────────────────────────
+# 배경 제거
+# ──────────────────────────────────────────
+@create_bp.route('/image/remove-bg', methods=['POST'])
+@login_required
+def remove_bg():
+    """배경 제거
+    - mode=basic  : rembg (무료)
+    - mode=advanced: fal.ai BiRefNet (20P)
+    multipart/form-data: file=<image>, mode=<basic|advanced>
+    """
+    mode = request.form.get('mode', 'basic')
+    file = request.files.get('file')
+    if not file:
+        return jsonify(ok=False, message='이미지를 업로드하세요.')
+
+    image_bytes = file.read()
+
+    try:
+        from services.bg_service import (
+            remove_bg_basic, remove_bg_advanced, image_bytes_to_data_url
+        )
+
+        if mode == 'advanced':
+            # 포인트 차감
+            from services.point_service import get_balance, use_points, InsufficientPoints
+            cost = POINT_COSTS.get('bg_remove_adv', 20)
+            balance = get_balance(current_user.id)
+            if balance < cost:
+                return jsonify(ok=False, message=f'포인트 부족 (필요: {cost}P, 잔액: {balance}P)')
+            result_bytes = remove_bg_advanced(image_bytes)
+            import uuid
+            use_points(current_user.id, 'bg_remove_adv', str(uuid.uuid4()))
+        else:
+            result_bytes = remove_bg_basic(image_bytes)
+
+        data_url = image_bytes_to_data_url(result_bytes, 'image/png')
+        return jsonify(ok=True, image=data_url, mode=mode)
+
+    except Exception as e:
+        logger.error(f'[BG] remove_bg error: {e}')
+        return jsonify(ok=False, message=str(e))

@@ -63,6 +63,7 @@ POINT_COSTS = {
     'img_ideogram':   400,   # Ideogram 3.0 — 한글 타이포
     'img_card_news':  800,   # FLUX + PIL 합성 카드뉴스
     'logo':           800,   # Ideogram 로고 시안
+    'bg_remove_adv':   20,   # fal.ai BiRefNet 고급 배경 제거
 }
 
 # ──────────────────────────────────────────
