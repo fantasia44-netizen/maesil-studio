@@ -29,11 +29,11 @@ def _accessible_products(supabase, brand_id: str | None = None) -> list:
     try:
         if user.operator_id:
             q = supabase.table('products').select(
-                'id,name,category,price,avoid_words,brand_id'
+                'id,name,category,price,avoid_words,brand_id,image_url,images'
             ).eq('operator_id', user.operator_id)
         else:
             q = supabase.table('products').select(
-                'id,name,category,price,avoid_words,brand_id'
+                'id,name,category,price,avoid_words,brand_id,image_url,images'
             ).eq('user_id', user.id)
         if brand_id:
             q = q.eq('brand_id', brand_id)
@@ -210,7 +210,8 @@ def blog_products():
     return jsonify({
         'ok': True,
         'products': [{'id': p['id'], 'name': p['name'],
-                      'category': p.get('category', '')}
+                      'category': p.get('category', ''),
+                      'image_url': p.get('image_url') or ''}
                      for p in products],
         'recent_blogs': [{'id': r['id'], 'title': r['title'][:80],
                           'angle': r.get('angle', ''),

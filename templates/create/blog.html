@@ -46,11 +46,19 @@
           <div class="col-sm-6">
             <label class="form-label fw-semibold small">상품 <span class="text-muted fw-normal">(선택)</span></label>
             <select id="productSelect" class="form-select form-select-sm">
-              <option value="">— 상품 미지정 —</option>
+              <option value="" data-image="">— 상품 미지정 —</option>
               {% for p in products %}
-              <option value="{{ p.id }}">{{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}</option>
+              <option value="{{ p.id }}" data-image="{{ p.image_url or '' }}">
+                {{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}
+              </option>
               {% endfor %}
             </select>
+            <!-- 상품 이미지 미리보기 -->
+            <div id="productImgPreview" class="mt-2 d-none">
+              <img id="productImgThumb" src="" alt="상품 이미지"
+                   style="height:72px;width:72px;object-fit:cover;border-radius:8px;border:1px solid #eee">
+              <span class="text-muted small ms-2" style="font-size:.72rem">이미지 생성 시 이 이미지를 기반으로 합니다</span>
+            </div>
           </div>
         </div>
 
@@ -205,6 +213,37 @@
     </div>
   </div>
 
+  <!-- 제품 이미지 기반 생성 옵션 -->
+  <div class="card mb-3" id="img2imgCard" style="display:none">
+    <div class="card-body p-3">
+      <div class="d-flex align-items-center gap-3">
+        <div id="img2imgThumbWrap" class="flex-shrink-0 d-none">
+          <img id="img2imgThumb" src="" alt="제품 이미지"
+               style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #ddd">
+        </div>
+        <div class="flex-fill">
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" id="useImg2Img" checked
+                   onchange="onImg2ImgToggle()">
+            <label class="form-check-label fw-semibold small" for="useImg2Img">
+              제품 이미지 기반으로 생성 <span class="badge bg-success" style="font-size:.65rem">권장</span>
+            </label>
+          </div>
+          <div class="text-muted" style="font-size:.75rem">
+            실제 제품 사진을 바탕으로 배경·연출만 AI가 변환합니다. 엉뚱한 제품 이미지가 나오지 않습니다.
+          </div>
+          <div id="strengthRow" class="d-flex align-items-center gap-2 mt-2">
+            <span class="small text-muted">변형 강도</span>
+            <input type="range" id="strengthSlider" min="50" max="95" value="78" step="5"
+                   style="width:130px" oninput="document.getElementById('strengthVal').textContent=this.value+'%'">
+            <span id="strengthVal" class="small fw-semibold" style="min-width:36px">78%</span>
+            <span class="text-muted small">← 제품 유지 / 씬 변환 →</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 이미지 프롬프트 3개 (AI 생성) -->
   <div class="card mb-3" id="promptSection" style="display:none">
     <div class="card-header py-3 d-flex align-items-center justify-content-between">
@@ -278,6 +317,7 @@ let selectedAngle = null;
 let selectedStyle = null;
 let generatedImages = [];   // [{role, url}]
 let blogText = '';
+let productImageUrl = '';   // 선택된 상품의 대표 이미지 URL (img2img 레퍼런스)
 
 // 스타일별 프롬프트 수식어
 const STYLE_MODIFIERS = {
@@ -328,6 +368,23 @@ document.getElementById('relationMode').addEventListener('change', function() {
     !(this.value === 'series' || this.value === 'variant'));
 });
 
+// 상품 선택 시 이미지 미리보기 업데이트
+function updateProductImage() {
+  const sel = document.getElementById('productSelect');
+  const opt = sel.options[sel.selectedIndex];
+  productImageUrl = (opt && opt.dataset.image) ? opt.dataset.image : '';
+  const preview = document.getElementById('productImgPreview');
+  const thumb   = document.getElementById('productImgThumb');
+  if (productImageUrl) {
+    thumb.src = productImageUrl;
+    preview.classList.remove('d-none');
+  } else {
+    preview.classList.add('d-none');
+  }
+}
+document.getElementById('productSelect').addEventListener('change', updateProductImage);
+updateProductImage();  // 초기 실행
+
 // 브랜드 변경
 document.getElementById('brandSelect').addEventListener('change', async function() {
   try {
@@ -335,10 +392,13 @@ document.getElementById('brandSelect').addEventListener('change', async function
     const data = await fetch(url).then(r => r.json());
     if (!data.ok) return;
     const ps = document.getElementById('productSelect');
-    ps.innerHTML = '<option value="">— 상품 미지정 —</option>' +
-      data.products.map(p => `<option value="${p.id}">${p.name}${p.category ? ' · ' + p.category : ''}</option>`).join('');
+    ps.innerHTML = '<option value="" data-image="">— 상품 미지정 —</option>' +
+      data.products.map(p =>
+        `<option value="${p.id}" data-image="${p.image_url || ''}">${p.name}${p.category ? ' · ' + p.category : ''}</option>`
+      ).join('');
     document.getElementById('refSelect').innerHTML = '<option value="">— 선택 —</option>' +
       data.recent_blogs.map(r => `<option value="${r.id}">${r.created_at} · ${r.title}</option>`).join('');
+    updateProductImage();
   } catch {}
 });
 
@@ -482,6 +542,12 @@ function copyBlogText() {
   setTimeout(() => btn.innerHTML = orig, 2000);
 }
 
+// ── Step 4: img2img 토글 ─────────────────────────────────────
+function onImg2ImgToggle() {
+  const on = document.getElementById('useImg2Img').checked;
+  document.getElementById('strengthRow').style.display = on ? '' : 'none';
+}
+
 // ── Step 4: 이미지 스타일 선택 ───────────────────────────────
 function selectImageStyle(styleId, el) {
   selectedStyle = styleId;
@@ -493,6 +559,18 @@ function selectImageStyle(styleId, el) {
   el.style.borderColor = '#e8355a';
   el.style.background  = '#fff8f9';
   el.querySelector('i').style.color = '#e8355a';
+
+  // 제품 이미지 있으면 img2img 카드 표시
+  const img2imgCard = document.getElementById('img2imgCard');
+  if (productImageUrl) {
+    const t = document.getElementById('img2imgThumb');
+    const w = document.getElementById('img2imgThumbWrap');
+    t.src = productImageUrl;
+    w.classList.remove('d-none');
+    img2imgCard.style.display = '';
+  } else {
+    img2imgCard.style.display = 'none';
+  }
 
   // 프롬프트 생성 시작
   generateImagePrompts();
@@ -574,19 +652,31 @@ async function generateAllImages() {
   document.getElementById('imgGenLoading').classList.remove('d-none');
   document.getElementById('step4Error').classList.add('d-none');
 
-  const styleMod = STYLE_MODIFIERS[selectedStyle] || '';
+  const styleMod   = STYLE_MODIFIERS[selectedStyle] || '';
+  const useImg2Img = document.getElementById('useImg2Img')?.checked && !!productImageUrl;
+  const strength   = useImg2Img
+    ? parseInt(document.getElementById('strengthSlider').value, 10) / 100
+    : 0.80;
 
   for (let i = 0; i < inputs.length; i++) {
-    document.getElementById('imgLoadingText').textContent = `이미지 생성 중... (${i+1}/${inputs.length}) — FLUX AI`;
+    document.getElementById('imgLoadingText').textContent =
+      `이미지 생성 중... (${i+1}/${inputs.length})${useImg2Img ? ' — 제품 이미지 기반' : ' — FLUX AI'}`;
     const prompt = inputs[i].value.trim() + (styleMod ? ', ' + styleMod : '');
     const aspect = inputs[i].dataset.aspect || '16:9';
     const size   = ASPECT_SIZE[aspect] || '1920x1080';
+
+    const body = {
+      engine: 'flux_preview',
+      prompt,
+      size,
+      ...(useImg2Img ? { reference_image_url: productImageUrl, strength } : {}),
+    };
 
     try {
       const res  = await fetch('/create/image/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ engine: 'flux_preview', prompt, size })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       generatedImages.push({

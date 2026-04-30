@@ -39,10 +39,22 @@ STYLE_PRESETS = {
 
 def generate_image(prompt: str, engine: str = 'flux_standard',
                    style_preset: str = None, size: str = '1024x1024',
-                   brand_color: str = None) -> str:
-    """이미지 생성 — base64 data URL 또는 https URL 반환"""
+                   brand_color: str = None,
+                   reference_image_url: str = None,
+                   strength: float = 0.80) -> str:
+    """이미지 생성 — base64 data URL 또는 https URL 반환
+
+    Args:
+      reference_image_url: 제품 원본 이미지 URL — 지정 시 img2img 모드로 전환.
+                           (FLUX Dev img2img: 제품을 유지하면서 배경/씬 변환)
+      strength: 변형 강도 0.0(원본 그대로)~1.0(완전 재생성). 기본 0.80.
+    """
     if style_preset and style_preset in STYLE_PRESETS:
         prompt = f'{prompt}, {STYLE_PRESETS[style_preset]}'
+
+    # 제품 레퍼런스 이미지가 있으면 img2img 우선
+    if reference_image_url:
+        return _generate_flux_img2img(prompt, reference_image_url, strength, size)
 
     if engine in ('flux_preview', 'flux_standard', 'flux_hq'):
         return _generate_flux(prompt, engine, size)
@@ -69,6 +81,42 @@ _FAL_MODELS = {
     'flux_standard': 'fal-ai/flux-pro',           # Pro — 브랜드 에셋
     'flux_hq':       'fal-ai/flux-pro/v1.1-ultra',# Max — 최고화질
 }
+
+
+def _generate_flux_img2img(prompt: str, image_url: str,
+                           strength: float, size: str) -> str:
+    """FLUX Dev img2img — 제품 이미지를 레퍼런스로 유지하며 씬/배경 변환.
+
+    fal.ai 엔드포인트: fal-ai/flux/dev/image-to-image
+    strength 0.0 = 원본 그대로, 1.0 = 완전 재생성.
+    블로그 제품컷 권장값: 0.70~0.85 (제품 인식 가능 + 씬 변환)
+    """
+    from services.config_service import get_config
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    w, h = size.split('x')
+    resp = requests.post(
+        'https://fal.run/fal-ai/flux/dev/image-to-image',
+        headers={
+            'Authorization': f'Key {api_key}',
+            'Content-Type': 'application/json',
+        },
+        json={
+            'prompt': prompt,
+            'image_url': image_url,
+            'strength': max(0.0, min(1.0, float(strength))),
+            'image_size': {'width': int(w), 'height': int(h)},
+            'num_inference_steps': 28,
+            'num_images': 1,
+            'enable_safety_checker': True,
+        },
+        timeout=120,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data['images'][0]['url']
 
 
 def _generate_flux(prompt: str, engine: str, size: str) -> str:
