@@ -314,12 +314,17 @@ def insight_images(product_id):
         detail = client.get_product(source_ref)
 
         raw_images = detail.get('images') or []
-        images = [i for i in raw_images if isinstance(i, str) and i]
-        if detail.get('image_url') and detail['image_url'] not in images:
-            images.insert(0, detail['image_url'])
+        ext_images = [i for i in raw_images if isinstance(i, str) and i]
+        if detail.get('image_url') and detail['image_url'] not in ext_images:
+            ext_images.insert(0, detail['image_url'])
 
-        if not images:
+        if not ext_images:
             return jsonify(ok=False, message='인사이트에서 이미지를 찾을 수 없습니다.')
+
+        # Supabase Storage에 다운로드 후 저장
+        from blueprints.integrations import _download_and_store_images
+        source_ref = product.get('source_ref', product_id[:8])
+        images = _download_and_store_images(supabase, current_user.id, source_ref, ext_images)
 
         # 기존 이미지와 합치기
         existing = product.get('images') or []

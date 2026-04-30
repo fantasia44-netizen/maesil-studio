@@ -32,6 +32,33 @@ from services.tz_utils import now_kst
 
 logger = logging.getLogger(__name__)
 
+
+def _download_and_store_images(supabase, user_id: str, product_ref: str, urls: list) -> list:
+    """외부 이미지 URL 목록 → Supabase Storage 업로드 → 공개 URL 목록 반환.
+    실패한 이미지는 원본 URL로 폴백.
+    """
+    import uuid, requests as req_lib
+    stored = []
+    for idx, url in enumerate(urls[:10]):  # 최대 10장
+        try:
+            r = req_lib.get(url, timeout=15, headers={
+                'User-Agent': 'Mozilla/5.0',
+                'Referer': url,
+            })
+            r.raise_for_status()
+            mime = r.headers.get('Content-Type', 'image/jpeg').split(';')[0]
+            ext = 'jpg' if 'jpeg' in mime else mime.split('/')[-1]
+            path = f'{user_id}/products/insight_{product_ref[:8]}_{idx}_{uuid.uuid4().hex[:6]}.{ext}'
+            supabase.storage.from_('creations').upload(
+                path, r.content, {'content-type': mime}
+            )
+            public_url = supabase.storage.from_('creations').get_public_url(path)
+            stored.append(public_url)
+        except Exception as e:
+            logger.warning(f'[Integrations] image download failed ({url[:60]}): {e}')
+            stored.append(url)  # 실패 시 원본 URL 유지
+    return stored
+
 integrations_bp = Blueprint('integrations', __name__, url_prefix='/integrations')
 
 
@@ -233,14 +260,16 @@ def import_apply():
             failed += 1
             continue
 
-        # 이미지 목록 수집 (image_url + images 배열)
+        # 이미지 목록 수집 → Supabase Storage 다운로드
         raw_images = detail.get('images') or []
         if isinstance(raw_images, list):
-            images = [i for i in raw_images if isinstance(i, str) and i]
+            ext_images = [i for i in raw_images if isinstance(i, str) and i]
         else:
-            images = []
-        if detail.get('image_url') and detail['image_url'] not in images:
-            images.insert(0, detail['image_url'])
+            ext_images = []
+        if detail.get('image_url') and detail['image_url'] not in ext_images:
+            ext_images.insert(0, detail['image_url'])
+
+        images = _download_and_store_images(sb, str(current_user.id), sid, ext_images)
 
         row = {
             'user_id':     str(current_user.id),
