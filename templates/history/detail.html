@@ -3,50 +3,120 @@
 {% block breadcrumb %}<a href="{{ url_for('main.history') }}" class="text-muted text-decoration-none">생성 이력</a> / 상세{% endblock %}
 
 {% block content %}
+{% set od = creation.output_data or {} %}
+{% set has_text      = od.text %}
+{% set has_image_url = od.image_url %}
+{% set has_images    = od.images and od.images | length > 0 %}
+{% set is_done       = creation.status == 'done' %}
+
 <div class="row justify-content-center">
   <div class="col-lg-9">
+
+    <!-- 헤더 -->
     <div class="card mb-3">
       <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <div>
           <h6 class="fw-bold mb-0">{{ CREATION_LABELS.get(creation.creation_type, creation.creation_type) }}</h6>
           <small class="text-muted">{{ creation.created_at | kst }} · {{ creation.points_used | number }}P 사용</small>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-center">
           <span class="badge {% if creation.status == 'done' %}bg-success{% elif creation.status == 'failed' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
             {{ '완료' if creation.status == 'done' else ('실패' if creation.status == 'failed' else '생성 중') }}
           </span>
+          {% if has_text %}
           <button id="copyBtn" class="btn btn-sm btn-outline-secondary" onclick="copyResult()">
             <i class="bi bi-clipboard me-1"></i>복사
           </button>
+          {% endif %}
         </div>
       </div>
+
       <div class="card-body p-4">
-        {% if creation.output_data and creation.output_data.text %}
-          <div id="resultContent" class="result-box">{{ creation.output_data.text }}</div>
-        {% elif creation.output_data and creation.output_data.image_url %}
-          <img src="{{ creation.output_data.image_url }}" class="img-fluid rounded" alt="생성된 이미지">
-        {% else %}
-          <div class="text-muted text-center py-4">
-            <i class="bi bi-exclamation-circle fs-1 d-block mb-2" style="opacity:.3"></i>
-            생성 결과가 없습니다.
+
+        {% if not is_done and creation.status != 'failed' %}
+          <!-- 생성 중 -->
+          <div class="text-center py-5 text-muted">
+            <div class="spinner-border mb-3" style="width:2rem;height:2rem;color:#e8355a"></div>
+            <p class="mb-0">생성 중입니다...</p>
           </div>
+
+        {% elif creation.status == 'failed' %}
+          <!-- 실패 -->
+          <div class="text-center py-4 text-muted">
+            <i class="bi bi-exclamation-triangle fs-1 d-block mb-2 text-danger" style="opacity:.6"></i>
+            <p class="mb-0">생성에 실패했습니다.</p>
+          </div>
+
+        {% elif not has_text and not has_image_url and not has_images %}
+          <!-- output_data 비어있음 -->
+          <div class="text-center py-4 text-muted">
+            <i class="bi bi-exclamation-circle fs-1 d-block mb-2" style="opacity:.3"></i>
+            <p class="mb-0">저장된 결과물이 없습니다.</p>
+          </div>
+
+        {% else %}
+
+          <!-- ① 이미지 (단일) -->
+          {% if has_image_url %}
+          <div class="text-center mb-4">
+            <img src="{{ od.image_url }}" class="img-fluid rounded shadow-sm" alt="생성 이미지"
+                 style="max-height:600px;object-fit:contain">
+            <div class="mt-2">
+              <a href="{{ od.image_url }}" target="_blank" download
+                 class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-download me-1"></i>이미지 저장
+              </a>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- ② 이미지 배열 (블로그 본문 삽입 이미지 등) -->
+          {% if has_images %}
+          <div class="mb-4">
+            <div class="d-flex flex-wrap gap-2">
+              {% for img_url in od.images %}
+              {% if img_url and img_url is string %}
+              <div class="position-relative">
+                <img src="{{ img_url }}" alt="이미지"
+                     style="height:160px;width:auto;object-fit:cover;border-radius:8px;border:1px solid #eee;cursor:pointer"
+                     onclick="openImg('{{ img_url }}')">
+              </div>
+              {% endif %}
+              {% endfor %}
+            </div>
+            <div class="mt-2 text-muted" style="font-size:.78rem">
+              <i class="bi bi-images me-1"></i>이미지 {{ od.images | length }}장
+              · 클릭하면 원본 크기로 열림
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- ③ 텍스트 -->
+          {% if has_text %}
+          <div id="resultContent" class="result-box" style="white-space:pre-wrap;line-height:1.9;font-size:.91rem">{{ od.text }}</div>
+          {% endif %}
+
         {% endif %}
       </div>
     </div>
 
+    <!-- 입력 정보 -->
     {% if creation.input_data %}
-    <div class="card">
+    <div class="card mb-3">
       <div class="card-header py-2">
         <small class="fw-semibold text-muted">입력 정보</small>
       </div>
       <div class="card-body p-3">
         <div class="row g-2">
           {% for key, val in creation.input_data.items() %}
-          {% if val %}
+          {% if val and val != '' and val != [] and val != {} %}
           <div class="col-sm-6">
             <div class="small">
               <span class="text-muted">{{ key }}:</span>
-              <span class="fw-semibold ms-1">{{ val }}</span>
+              <span class="fw-semibold ms-1">
+                {% if val is iterable and val is not string %}{{ val | join(', ') }}
+                {% else %}{{ val }}{% endif %}
+              </span>
             </div>
           </div>
           {% endif %}
@@ -61,14 +131,43 @@
     </div>
   </div>
 </div>
+
+<!-- 이미지 라이트박스 -->
+<div id="imgModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2 border-0">
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center pb-3">
+        <img id="modalImg" src="" class="img-fluid rounded" alt="이미지">
+        <div class="mt-2">
+          <a id="modalDownload" href="#" download target="_blank"
+             class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-download me-1"></i>저장
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
+
 {% block extra_script %}
 <script>
 function copyResult() {
   const text = document.getElementById('resultContent')?.textContent || '';
-  navigator.clipboard.writeText(text);
-  document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
-  setTimeout(() => { document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+  });
+}
+
+function openImg(url) {
+  document.getElementById('modalImg').src = url;
+  document.getElementById('modalDownload').href = url;
+  new bootstrap.Modal(document.getElementById('imgModal')).show();
 }
 </script>
 {% endblock %}

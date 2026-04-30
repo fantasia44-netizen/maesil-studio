@@ -120,18 +120,28 @@ def get_blog_cost(length: int, relation_mode: str = 'new') -> int:
     return base
 
 CREATION_LABELS = {
+    # 텍스트
     'blog':            '블로그 포스트',
     'instagram':       '인스타 캡션',
     'detail_page':     '상세페이지 카피',
     'thumbnail_text':  '썸네일 문구',
     'ad_copy':         '광고 카피',
     'press_release':   '보도자료',
+    'brand_package':   '브랜드 정체성 패키지',
+    'product_launch':  '상품 런칭 패키지',
+    # 이미지
+    'img_preview':     '이미지 생성',
+    'img_standard':    '이미지 생성 (표준)',
+    'img_hq':          '이미지 생성 (고화질)',
+    'img_ideogram':    '이미지 생성 (한글)',
+    'bg_replace':      '배경 교체',
+    'bg_remove_adv':   '배경 제거',
+    'img_card_news':   '인스타 카드뉴스',
+    'image_generation':'이미지 생성',
     'thumbnail_image': '썸네일 이미지',
     'detail_image':    '상세페이지 이미지',
     'card_news':       '인스타 카드뉴스',
     'logo':            '브랜드 로고',
-    'brand_package':   '브랜드 정체성 패키지',
-    'product_launch':  '상품 런칭 패키지',
 }
 
 
