@@ -1,79 +1,672 @@
 {% extends 'base.html' %}
-{% block title %}인스타그램 캡션 — 매실 크리에이터{% endblock %}
+{% block title %}인스타그램 콘텐츠 생성 — 매실 크리에이터{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 인스타그램{% endblock %}
 
 {% block content %}
-<div class="row g-4">
-  <div class="col-lg-5">
-    <div class="card">
-      <div class="card-header py-3">
-        <h6 class="mb-0 fw-bold"><i class="bi bi-instagram me-2" style="color:#d63384"></i>인스타그램 캡션 <span class="badge bg-danger ms-1">30P</span></h6>
-      </div>
-      <div class="card-body p-4">
-        <form id="genForm">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-3">
-            <label class="form-label fw-semibold small">브랜드 선택</label>
-            <select name="brand_id" class="form-select form-select-sm">
+
+<!-- 스텝 인디케이터 -->
+<div class="d-flex align-items-center mb-4" style="max-width:800px">
+  {% for n, label in [(1,'기본 설정'),(2,'소구포인트'),(3,'캡션 초안'),(4,'이미지 생성'),(5,'완성본')] %}
+  <div class="d-flex align-items-center {% if not loop.last %}flex-fill{% endif %}">
+    <div class="d-flex align-items-center gap-1">
+      <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+           id="sc{{ n }}" style="width:26px;height:26px;font-size:.75rem;background:#ddd;color:#888;flex-shrink:0;transition:all .3s">{{ n }}</div>
+      <span class="small fw-semibold d-none d-md-inline" id="sl{{ n }}" style="color:#aaa;white-space:nowrap">{{ label }}</span>
+    </div>
+    {% if not loop.last %}
+    <div class="flex-fill mx-1" id="sline{{ n }}" style="height:2px;background:#ddd;transition:all .3s;min-width:12px"></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ══════ Step 1 ══════ -->
+<div id="step1" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-instagram me-2" style="color:#d63384"></i>어떤 내용을 어떤 감성으로 올릴까요?</h6>
+    </div>
+    <div class="card-body p-4">
+      <form id="step1Form">
+        <input type="hidden" id="csrfToken" value="{{ csrf_token() }}">
+        <div class="row g-3 mb-4">
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold small">브랜드</label>
+            <select id="brandSelect" class="form-select form-select-sm">
               {% for b in brands %}
               <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>
               {% endfor %}
             </select>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold small">게시 목적/내용 <span class="text-danger">*</span></label>
-            <textarea name="content" class="form-control form-control-sm" rows="3" placeholder="예: 신제품 출시, 여름 세일 이벤트" required></textarea>
+          <div class="col-sm-6">
+            <label class="form-label fw-semibold small">상품 <span class="text-muted fw-normal">(선택)</span></label>
+            <select id="productSelect" class="form-select form-select-sm">
+              <option value="">— 상품 미지정 —</option>
+              {% for p in products %}
+              <option value="{{ p.id }}">{{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}</option>
+              {% endfor %}
+            </select>
+            <!-- 이미지 피커 -->
+            <div id="productImgPicker" class="mt-2 d-none">
+              <div class="text-muted mb-1" style="font-size:.72rem"><i class="bi bi-hand-index me-1"></i>이미지 기반으로 사용할 사진 선택</div>
+              <div id="productImgList" class="d-flex flex-wrap gap-2"></div>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold small">이미지 설명 <span class="text-muted">(선택)</span></label>
-            <input type="text" name="image_desc" class="form-control form-control-sm" placeholder="예: 모델이 제품을 들고 웃는 사진">
-          </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold small">이벤트/할인 <span class="text-muted">(선택)</span></label>
-            <input type="text" name="event" class="form-control form-control-sm" placeholder="예: 7월 한정 20% 할인">
-          </div>
-          <button type="submit" id="genBtn" class="btn w-100 fw-semibold py-2" style="background:#d63384;color:#fff">
-            <span class="normal-text"><i class="bi bi-magic me-1"></i>생성하기 (30P)</span>
-            <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
-          </button>
-        </form>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">게시 방향 / 소구포인트 <span class="text-danger">*</span></label>
+          <div class="text-muted small mb-2">어떤 내용을, 어떤 톤으로, 누구에게 전달할지 자유롭게 적어주세요</div>
+          <textarea id="directionInput" class="form-control" rows="5" style="font-size:.9rem;line-height:1.8;resize:vertical"
+                    placeholder="예시:&#10;• 야채큐브 이유식 신제품 출시&#10;• 초기 이유식 시작하는 6~8개월 아기 맘 타겟&#10;• 간편하고 영양 챙길 수 있다는 점 강조&#10;• 따뜻하고 공감하는 톤, 광고스럽지 않게"></textarea>
+        </div>
+
+        <button type="submit" id="step1Btn" class="btn w-100 fw-semibold py-2"
+                style="background:#d63384;color:#fff;border-radius:10px;font-size:1rem">
+          <span class="btn-normal-text"><i class="bi bi-cpu me-2"></i>소구포인트 분석</span>
+          <span class="btn-loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>분석 중...</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 2 ══════ -->
+<div id="step2" class="d-none" style="max-width:900px">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(1)"><i class="bi bi-arrow-left me-1"></i>방향 수정</button>
+    <span class="text-muted small">원하는 인스타 방향을 선택하세요</span>
+  </div>
+  <div class="row g-3" id="angleCards"></div>
+  <div id="step2Error" class="alert alert-danger mt-3 d-none"></div>
+</div>
+
+<!-- ══════ Step 3 ══════ -->
+<div id="step3" class="d-none" style="max-width:860px">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>소구포인트 재선택</button>
+    <div class="d-flex gap-2">
+      <span id="step3AngleBadge" class="badge rounded-pill px-3 py-2" style="background:#fff0f8;color:#d63384;font-size:.8rem"></span>
+      <button class="btn btn-sm fw-semibold" style="background:#d63384;color:#fff" onclick="goStep(4)">
+        이미지 만들기 <i class="bi bi-arrow-right ms-1"></i>
+      </button>
+    </div>
+  </div>
+
+  <div id="step3Loading" class="card">
+    <div class="card-body text-center py-5">
+      <div class="spinner-border" style="color:#d63384;width:2.5rem;height:2.5rem"></div>
+      <p class="mt-3 fw-semibold">AI가 캡션을 작성하고 있어요...</p>
+      <p class="text-muted small">선택한 소구포인트로 캡션 3가지 버전 + 해시태그 생성 중</p>
+    </div>
+  </div>
+
+  <div id="step3Content" class="d-none">
+    <!-- 캡션 탭 -->
+    <div class="card mb-3">
+      <div class="card-header py-2 d-flex align-items-center justify-content-between">
+        <ul class="nav nav-tabs card-header-tabs" id="captionTabs">
+          <li class="nav-item"><button class="nav-link active" data-tab="short" onclick="switchCaption('short',this)">짧은 버전</button></li>
+          <li class="nav-item"><button class="nav-link" data-tab="medium" onclick="switchCaption('medium',this)">보통 버전</button></li>
+          <li class="nav-item"><button class="nav-link" data-tab="long" onclick="switchCaption('long',this)">긴 버전</button></li>
+        </ul>
+        <button class="btn btn-sm btn-outline-secondary" onclick="copyCaption()"><i class="bi bi-clipboard me-1"></i>복사</button>
+      </div>
+      <div class="card-body p-0">
+        <textarea id="captionTextArea" class="form-control border-0 rounded-0" rows="12"
+                  style="font-size:.87rem;line-height:1.9;resize:vertical;font-family:inherit;padding:1.5rem"></textarea>
+      </div>
+    </div>
+    <!-- 해시태그 -->
+    <div class="card mb-3">
+      <div class="card-header py-2 d-flex align-items-center justify-content-between">
+        <span class="small fw-semibold">해시태그</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="copyHashtags()"><i class="bi bi-clipboard me-1"></i>복사</button>
+      </div>
+      <div class="card-body p-3">
+        <div id="hashtagBox" class="text-muted small" style="line-height:2;word-break:break-all"></div>
       </div>
     </div>
   </div>
-  <div class="col-lg-7">
-    <div class="card h-100">
-      <div class="card-header py-3 d-flex align-items-center justify-content-between">
-        <h6 class="mb-0 fw-bold">생성 결과</h6>
-        <button id="copyBtn" class="btn btn-sm btn-outline-secondary d-none"><i class="bi bi-clipboard me-1"></i>복사</button>
+  <div id="step3Error" class="alert alert-danger mt-3 d-none"></div>
+</div>
+
+<!-- ══════ Step 4 ══════ -->
+<div id="step4" class="d-none" style="max-width:860px">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>캡션으로</button>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-image me-2" style="color:#d63384"></i>이미지 설정</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 비율 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">이미지 비율</label>
+        <div class="d-flex gap-3">
+          {% for ratio, icon, desc in [('1:1','bi-square','정사각형'),('4:5','bi-phone','세로형'),('9:16','bi-phone-fill','스토리/릴스')] %}
+          <div class="ratio-card border rounded p-3 text-center flex-fill"
+               style="cursor:pointer;transition:all .2s{% if ratio=='1:1' %};border-color:#d63384!important;background:#fff0f8{% endif %}"
+               data-ratio="{{ ratio }}" onclick="selectRatio('{{ ratio }}',this)">
+            <i class="bi {{ icon }}" style="font-size:1.6rem;color:{% if ratio=='1:1' %}#d63384{% else %}#aaa{% endif %}"></i>
+            <div class="fw-semibold small mt-1">{{ ratio }}</div>
+            <div class="text-muted" style="font-size:.7rem">{{ desc }}</div>
+          </div>
+          {% endfor %}
+        </div>
       </div>
-      <div class="card-body p-4">
-        <div id="resultBox" class="result-box text-muted" style="min-height:400px">생성 버튼을 클릭하면 여기에 결과가 표시됩니다.</div>
+
+      <!-- 스타일 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">이미지 스타일</label>
+        <div class="row g-3" id="styleCards">
+          {% for sid, sicon, slabel, sdesc, scost in [
+            ('realistic_banner','bi-camera','실사 배너','라이프스타일 사진 + 하단 한글 텍스트 배너','50P'),
+            ('webtoon','bi-emoji-smile','웹툰 컷','웹툰 스타일 씬 + 한글 말풍선 대사','50P'),
+            ('typography','bi-fonts','타이포 카드','한글 텍스트를 이미지에 직접 렌더링','400P'),
+          ] %}
+          <div class="col-12 col-md-4">
+            <div class="style-card border rounded p-3 h-100"
+                 style="cursor:pointer;transition:all .2s" data-style="{{ sid }}"
+                 onclick="selectStyle('{{ sid }}',this)">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="bi {{ sicon }}" style="font-size:1.4rem;color:#aaa"></i>
+                <span class="fw-semibold small">{{ slabel }}</span>
+                <span class="badge ms-auto" style="background:#f8f0fb;color:#d63384;font-size:.7rem">{{ scost }}</span>
+              </div>
+              <div class="text-muted" style="font-size:.76rem">{{ sdesc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 텍스트 입력 (스타일별 조건부) -->
+      <div id="textInputSection" class="d-none">
+        <hr class="my-3">
+        <label class="form-label fw-semibold small mb-2" id="textInputLabel">이미지에 들어갈 텍스트</label>
+        <div id="bannerTextFields">
+          <input type="text" id="imgTitle" class="form-control form-control-sm mb-2" placeholder="메인 문구 (15자 이내)" maxlength="20">
+          <input type="text" id="imgSubtitle" class="form-control form-control-sm" placeholder="서브 문구 (20자 이내, 선택)" maxlength="25">
+        </div>
+        <div id="webtoonTextFields" class="d-none">
+          <input type="text" id="dialogue1" class="form-control form-control-sm mb-2" placeholder="첫 번째 말풍선 대사 (20자 이내)" maxlength="25">
+          <input type="text" id="dialogue2" class="form-control form-control-sm" placeholder="두 번째 말풍선 대사 (선택)" maxlength="25">
+        </div>
+        <div id="typoTextFields" class="d-none">
+          <div class="alert alert-info py-2 mb-2" style="font-size:.8rem">
+            <i class="bi bi-info-circle me-1"></i>타이포 카드는 아래 프롬프트에 한글 텍스트를 직접 포함해 주세요
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 이미지 프롬프트 -->
+      <div id="promptSection" class="d-none mt-3">
+        <hr class="my-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <label class="form-label fw-semibold small mb-0">AI 이미지 프롬프트 <span class="text-muted fw-normal">(영문, 직접 수정 가능)</span></label>
+          <button class="btn btn-sm btn-outline-secondary" onclick="refreshImagePrompt()">
+            <i class="bi bi-arrow-clockwise me-1"></i>재생성
+          </button>
+        </div>
+        <textarea id="fluxPrompt" class="form-control form-control-sm" rows="4"
+                  style="font-size:.8rem;font-family:monospace;resize:vertical"
+                  placeholder="이미지 생성 프롬프트..."></textarea>
+        <div id="promptLoading" class="text-center py-2 d-none">
+          <span class="spinner-border spinner-border-sm me-1" style="color:#d63384"></span>
+          <span class="text-muted small">프롬프트 생성 중...</span>
+        </div>
+      </div>
+
+      <!-- 생성 버튼 -->
+      <div id="genBtnSection" class="mt-4 d-none">
+        <button id="imgGenBtn" class="btn fw-semibold px-5 py-2 w-100"
+                style="background:#d63384;color:#fff;border-radius:10px"
+                onclick="generateImage()">
+          <span id="genBtnNormal"><i class="bi bi-image me-2"></i>이미지 생성하기</span>
+          <span id="genBtnLoading" class="d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
+        </button>
+        <div class="text-center text-muted mt-2" id="genCostHint" style="font-size:.78rem"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="step4Error" class="alert alert-danger d-none"></div>
+</div>
+
+<!-- ══════ Step 5 ══════ -->
+<div id="step5" class="d-none" style="max-width:780px">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>이미지 수정</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="copyCaption()"><i class="bi bi-clipboard me-1"></i>캡션 복사</button>
+  </div>
+
+  <div class="row g-3">
+    <!-- 이미지 -->
+    <div class="col-md-5">
+      <div class="card h-100">
+        <div class="card-header py-2">
+          <span class="small fw-semibold">생성된 이미지</span>
+        </div>
+        <div class="card-body p-2 text-center">
+          <img id="finalImage" src="" alt="인스타 이미지" style="max-width:100%;border-radius:8px;display:none">
+          <div id="finalImgLoading" class="py-5">
+            <div class="spinner-border" style="color:#d63384;width:2rem;height:2rem"></div>
+            <p class="mt-2 text-muted small">이미지 생성 중...</p>
+          </div>
+          <a id="downloadBtn" href="#" target="_blank" download
+             class="btn btn-sm btn-outline-secondary mt-2 d-none">
+            <i class="bi bi-download me-1"></i>이미지 저장
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 캡션 + 해시태그 -->
+    <div class="col-md-7">
+      <div class="card mb-2">
+        <div class="card-header py-2 d-flex align-items-center justify-content-between">
+          <ul class="nav nav-tabs card-header-tabs">
+            <li class="nav-item"><button class="nav-link active" onclick="switchCaption('short',this)">짧게</button></li>
+            <li class="nav-item"><button class="nav-link" onclick="switchCaption('medium',this)">보통</button></li>
+            <li class="nav-item"><button class="nav-link" onclick="switchCaption('long',this)">길게</button></li>
+          </ul>
+          <button class="btn btn-sm btn-outline-secondary" onclick="copyCaption()"><i class="bi bi-clipboard me-1"></i></button>
+        </div>
+        <div class="card-body p-3">
+          <div id="finalCaption" style="white-space:pre-wrap;font-size:.87rem;line-height:1.8;max-height:280px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header py-2 d-flex align-items-center justify-content-between">
+          <span class="small fw-semibold">해시태그</span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="copyHashtags()"><i class="bi bi-clipboard me-1"></i></button>
+        </div>
+        <div class="card-body p-3">
+          <div id="finalHashtags" style="font-size:.8rem;line-height:2;word-break:break-all;color:#555"></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
+
 {% endblock %}
-{% block extra_script %}<script>
-document.getElementById('genForm').addEventListener('submit', async (e) => {
+
+{% block extra_script %}
+<script>
+// ── 전역 상태 ────────────────────────────────────────────────
+const CSRF   = document.getElementById('csrfToken').value;
+const PRODUCT_IMAGES = {{ products_images_map | tojson }};
+
+let currentStep   = 1;
+let selectedAngle = null;
+let selectedRatio = '1:1';
+let selectedStyle = null;
+let captionData   = { short: '', medium: '', long: '' };
+let hashtagText   = '';
+let generatedImageUrl = '';
+let productImageUrl   = '';
+
+// ── 스텝 UI ──────────────────────────────────────────────────
+function updateStepIndicator(step) {
+  for (let i = 1; i <= 5; i++) {
+    const c = document.getElementById('sc' + i);
+    const l = document.getElementById('sl' + i);
+    const ln= document.getElementById('sline' + i);
+    if (!c) continue;
+    if (i < step) {
+      c.style.background='#198754'; c.style.color='#fff';
+      c.innerHTML='<i class="bi bi-check2" style="font-size:.7rem"></i>';
+      if(l) l.style.color='#198754'; if(ln) ln.style.background='#198754';
+    } else if (i === step) {
+      c.style.background='#d63384'; c.style.color='#fff';
+      c.textContent=i;
+      if(l) l.style.color='#d63384'; if(ln) ln.style.background='#ddd';
+    } else {
+      c.style.background='#ddd'; c.style.color='#888';
+      c.textContent=i;
+      if(l) l.style.color='#aaa'; if(ln) ln.style.background='#ddd';
+    }
+  }
+}
+function goStep(n) {
+  currentStep = n;
+  for (let i=1;i<=5;i++) document.getElementById('step'+i).classList.toggle('d-none', i!==n);
+  updateStepIndicator(n);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+updateStepIndicator(1);
+
+// ── 상품 이미지 피커 ─────────────────────────────────────────
+function updateProductImage() {
+  const pid   = document.getElementById('productSelect').value;
+  const picker= document.getElementById('productImgPicker');
+  const list  = document.getElementById('productImgList');
+  const imgs  = (pid && PRODUCT_IMAGES[pid]) ? PRODUCT_IMAGES[pid] : [];
+  if (!imgs.length) { productImageUrl=''; picker.classList.add('d-none'); return; }
+  picker.classList.remove('d-none');
+  list.innerHTML='';
+  productImageUrl = imgs[0];
+  imgs.forEach((url, idx) => {
+    const w = document.createElement('div');
+    w.style.cursor='pointer';
+    w.innerHTML=`<img src="${url}" id="pimg_${idx}"
+      style="width:60px;height:60px;object-fit:cover;border-radius:8px;
+             border:3px solid ${idx===0?'#d63384':'#dee2e6'};transition:all .2s"
+      onclick="selectProductImg('${url}',${idx},${imgs.length})">`;
+    list.appendChild(w);
+  });
+}
+function selectProductImg(url, idx, total) {
+  productImageUrl = url;
+  for (let i=0;i<total;i++) {
+    const img=document.getElementById('pimg_'+i);
+    if(img) img.style.borderColor = (i===idx)?'#d63384':'#dee2e6';
+  }
+}
+document.getElementById('productSelect').addEventListener('change', updateProductImage);
+updateProductImage();
+
+// 브랜드 변경
+document.getElementById('brandSelect').addEventListener('change', async function() {
+  const url = '{{ url_for("create.instagram_products") }}?brand_id=' + encodeURIComponent(this.value);
+  const data = await fetch(url).then(r=>r.json());
+  if (!data.ok) return;
+  const ps = document.getElementById('productSelect');
+  ps.innerHTML = '<option value="">— 상품 미지정 —</option>' +
+    data.products.map(p=>`<option value="${p.id}">${p.name}${p.category?' · '+p.category:''}</option>`).join('');
+  updateProductImage();
+});
+
+// ── Step 1 ───────────────────────────────────────────────────
+document.getElementById('step1Form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const btn = document.getElementById('genBtn');
-  const resultBox = document.getElementById('resultBox');
-  btn.querySelector('.normal-text').classList.add('d-none');
-  btn.querySelector('.loading-text').classList.remove('d-none');
+  const direction = document.getElementById('directionInput').value.trim();
+  if (!direction) { alert('게시 방향을 입력해주세요.'); return; }
+
+  const btn = document.getElementById('step1Btn');
+  btn.querySelector('.btn-normal-text').classList.add('d-none');
+  btn.querySelector('.btn-loading-text').classList.remove('d-none');
   btn.disabled = true;
-  resultBox.textContent = 'AI가 콘텐츠를 생성하고 있습니다...';
-  document.getElementById('copyBtn').classList.add('d-none');
+
   try {
-    const res = await fetch('{{ url_for("create.instagram_generate") }}', { method: 'POST', body: new FormData(e.target) });
+    const res  = await fetch('{{ url_for("create.instagram_angles") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        brand_id:   document.getElementById('brandSelect').value,
+        product_id: document.getElementById('productSelect').value,
+        direction,
+      })
+    });
     const data = await res.json();
-    if (data.ok) { resultBox.textContent = data.text; resultBox.style.color = '#1a2332'; document.getElementById('copyBtn').classList.remove('d-none'); }
-    else { resultBox.textContent = '오류: ' + data.message; resultBox.style.color = '#dc3545'; }
-  } catch { resultBox.textContent = '네트워크 오류가 발생했습니다.'; resultBox.style.color = '#dc3545'; }
-  finally { btn.querySelector('.normal-text').classList.remove('d-none'); btn.querySelector('.loading-text').classList.add('d-none'); btn.disabled = false; }
+    if (!data.ok) throw new Error(data.message);
+    renderAngleCards(data.angles);
+    goStep(2);
+  } catch (err) {
+    document.getElementById('step2Error').textContent = '소구포인트 분석 실패: ' + err.message;
+    document.getElementById('step2Error').classList.remove('d-none');
+    goStep(2);
+  } finally {
+    btn.querySelector('.btn-normal-text').classList.remove('d-none');
+    btn.querySelector('.btn-loading-text').classList.add('d-none');
+    btn.disabled = false;
+  }
 });
-document.getElementById('copyBtn').addEventListener('click', () => {
-  navigator.clipboard.writeText(document.getElementById('resultBox').textContent);
-  document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
-  setTimeout(() => { document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
-});
-</script>{% endblock %}
+
+// ── Step 2: 소구포인트 카드 ──────────────────────────────────
+function renderAngleCards(angles) {
+  const container = document.getElementById('angleCards');
+  container.innerHTML = '';
+  window._angles = angles;
+  const colors = ['#d63384','#6366f1','#0ea5e9'];
+  angles.forEach((angle, i) => {
+    const col = document.createElement('div');
+    col.className = 'col-12 col-md-4';
+    col.innerHTML = `
+      <div class="card h-100 angle-card" style="border:2px solid #eee;border-radius:12px;cursor:pointer;transition:all .2s"
+           onclick="selectAngle(${i},this)">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="fw-bold" style="color:${colors[i]};font-size:1.1rem">${i+1}</span>
+            <span class="fw-semibold small">${angle.title||''}</span>
+            <span class="badge ms-auto" style="background:#f0f0ff;color:#555;font-size:.68rem">${angle.tone||''}</span>
+          </div>
+          <div class="p-2 rounded mb-2" style="background:#f8f9fa;font-size:.83rem;color:#333;line-height:1.5">
+            "${angle.hook||''}"
+          </div>
+          <div class="small text-muted mb-2" style="font-size:.76rem">🎯 ${angle.target||''}</div>
+          <div class="small text-muted" style="font-size:.76rem">📸 ${angle.image_vibe||''}</div>
+          ${(angle.key_message||[]).map(m=>`<div class="small mt-1" style="font-size:.76rem">• ${m}</div>`).join('')}
+        </div>
+        <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+          <div class="btn btn-sm w-100" style="border:2px solid ${colors[i]};color:${colors[i]};border-radius:8px">
+            이 방향으로 작성 →
+          </div>
+        </div>
+      </div>`;
+    container.appendChild(col);
+  });
+}
+
+function selectAngle(idx, el) {
+  selectedAngle = window._angles[idx];
+  document.querySelectorAll('.angle-card').forEach((c,i) => {
+    c.style.borderColor = i===idx ? '#d63384' : '#eee';
+    c.style.background  = i===idx ? '#fff0f8' : '';
+  });
+  setTimeout(() => generateCaption(), 300);
+}
+
+// ── Step 3: 캡션 생성 ────────────────────────────────────────
+async function generateCaption() {
+  goStep(3);
+  document.getElementById('step3Loading').classList.remove('d-none');
+  document.getElementById('step3Content').classList.add('d-none');
+  document.getElementById('step3Error').classList.add('d-none');
+  document.getElementById('step3AngleBadge').textContent = '✨ ' + (selectedAngle?.title || '');
+
+  try {
+    const res  = await fetch('{{ url_for("create.instagram_generate") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        brand_id:   document.getElementById('brandSelect').value,
+        product_id: document.getElementById('productSelect').value,
+        direction:  document.getElementById('directionInput').value.trim(),
+        angle:      selectedAngle,
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    // 캡션 파싱
+    parseCaptionText(data.text);
+    document.getElementById('step3Loading').classList.add('d-none');
+    document.getElementById('step3Content').classList.remove('d-none');
+  } catch (err) {
+    document.getElementById('step3Loading').classList.add('d-none');
+    document.getElementById('step3Error').textContent = '캡션 생성 실패: ' + err.message;
+    document.getElementById('step3Error').classList.remove('d-none');
+  }
+}
+
+function parseCaptionText(text) {
+  // 짧은/보통/긴 캡션 및 해시태그 파싱
+  const shortMatch  = text.match(/##\s*캡션.*?짧은\s*버전[^\n]*\n([\s\S]*?)(?=##\s*캡션|$)/i);
+  const mediumMatch = text.match(/##\s*캡션.*?보통\s*버전[^\n]*\n([\s\S]*?)(?=##\s*캡션|##\s*해시태그|$)/i);
+  const longMatch   = text.match(/##\s*캡션.*?긴\s*버전[^\n]*\n([\s\S]*?)(?=##\s*해시태그|$)/i);
+  const hashMatch   = text.match(/##\s*해시태그[^\n]*\n([\s\S]*?)(?=##\s*최적|$)/i);
+
+  captionData.short  = (shortMatch?.[1]  || '').trim();
+  captionData.medium = (mediumMatch?.[1] || '').trim();
+  captionData.long   = (longMatch?.[1]   || '').trim();
+  hashtagText        = (hashMatch?.[1]   || '').trim();
+
+  if (!captionData.short && !captionData.medium) {
+    // 폴백: 전체 텍스트를 medium으로
+    captionData.medium = text;
+  }
+
+  switchCaption('short');
+  document.getElementById('hashtagBox').textContent = hashtagText;
+  document.getElementById('finalHashtags').textContent = hashtagText;
+}
+
+function switchCaption(tab, el) {
+  if (el) {
+    document.querySelectorAll('[data-tab], #step5 .nav-link, #step3 .nav-link').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  }
+  const text = captionData[tab] || captionData.medium || captionData.long || '';
+  document.getElementById('captionTextArea').value = text;
+  document.getElementById('finalCaption').textContent = text;
+}
+
+function copyCaption() {
+  const text = document.getElementById('captionTextArea').value;
+  navigator.clipboard.writeText(text);
+}
+function copyHashtags() {
+  navigator.clipboard.writeText(hashtagText);
+}
+
+// ── Step 4: 비율 / 스타일 선택 ──────────────────────────────
+function selectRatio(ratio, el) {
+  selectedRatio = ratio;
+  document.querySelectorAll('.ratio-card').forEach(c => {
+    c.style.borderColor=''; c.style.background='';
+    c.querySelector('i').style.color='#aaa';
+  });
+  el.style.borderColor='#d63384'; el.style.background='#fff0f8';
+  el.querySelector('i').style.color='#d63384';
+  if (selectedStyle) refreshImagePrompt();
+}
+
+function selectStyle(styleId, el) {
+  selectedStyle = styleId;
+  document.querySelectorAll('.style-card').forEach(c => {
+    c.style.borderColor=''; c.style.background='';
+    c.querySelector('i').style.color='#aaa';
+  });
+  el.style.borderColor='#d63384'; el.style.background='#fff0f8';
+  el.querySelector('i').style.color='#d63384';
+
+  // 텍스트 입력 필드 전환
+  document.getElementById('textInputSection').classList.remove('d-none');
+  document.getElementById('bannerTextFields').classList.toggle('d-none', styleId !== 'realistic_banner');
+  document.getElementById('webtoonTextFields').classList.toggle('d-none', styleId !== 'webtoon');
+  document.getElementById('typoTextFields').classList.toggle('d-none', styleId !== 'typography');
+
+  document.getElementById('textInputLabel').textContent =
+    styleId === 'webtoon'   ? '말풍선 대사' :
+    styleId === 'typography'? '이미지 텍스트 안내' : '이미지 배너 텍스트';
+
+  document.getElementById('promptSection').classList.remove('d-none');
+  document.getElementById('genBtnSection').classList.remove('d-none');
+
+  const costs = { realistic_banner: 50, webtoon: 50, typography: 400 };
+  document.getElementById('genCostHint').textContent = `이미지 생성 비용: ${costs[styleId] || 50}P`;
+
+  refreshImagePrompt();
+}
+
+async function refreshImagePrompt() {
+  if (!selectedStyle) return;
+  document.getElementById('promptLoading').classList.remove('d-none');
+  document.getElementById('fluxPrompt').value = '';
+
+  try {
+    const res  = await fetch('{{ url_for("create.instagram_image_prompt") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        style:      selectedStyle,
+        brand_id:   document.getElementById('brandSelect').value,
+        product_id: document.getElementById('productSelect').value,
+        angle:      selectedAngle,
+        direction:  document.getElementById('directionInput').value.trim(),
+        size:       selectedRatio,
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('fluxPrompt').value = data.flux_prompt || '';
+      // 추천 텍스트 자동 채움
+      if (selectedStyle === 'realistic_banner' || selectedStyle === 'typography') {
+        if (data.title)    document.getElementById('imgTitle').value    = data.title;
+        if (data.subtitle) document.getElementById('imgSubtitle').value = data.subtitle;
+      } else if (selectedStyle === 'webtoon') {
+        if (data.dialogue1) document.getElementById('dialogue1').value = data.dialogue1;
+        if (data.dialogue2) document.getElementById('dialogue2').value = data.dialogue2 || '';
+      }
+    }
+  } catch (err) {
+    console.warn('프롬프트 자동생성 실패:', err);
+  } finally {
+    document.getElementById('promptLoading').classList.add('d-none');
+  }
+}
+
+// ── Step 4: 이미지 생성 ──────────────────────────────────────
+async function generateImage() {
+  const prompt = document.getElementById('fluxPrompt').value.trim();
+  if (!prompt) { alert('이미지 프롬프트를 입력해주세요.'); return; }
+
+  document.getElementById('genBtnNormal').classList.add('d-none');
+  document.getElementById('genBtnLoading').classList.remove('d-none');
+  document.getElementById('imgGenBtn').disabled = true;
+  document.getElementById('step4Error').classList.add('d-none');
+
+  // Step 5로 이동 후 로딩 표시
+  goStep(5);
+  document.getElementById('finalImage').style.display = 'none';
+  document.getElementById('finalImgLoading').classList.remove('d-none');
+  document.getElementById('downloadBtn').classList.add('d-none');
+
+  // 브랜드 컬러 가져오기
+  const brandId = document.getElementById('brandSelect').value;
+
+  const body = {
+    style:       selectedStyle,
+    flux_prompt: prompt,
+    size:        selectedRatio,
+    brand_color: '#d63384',
+    title:       document.getElementById('imgTitle')?.value.trim()    || '',
+    subtitle:    document.getElementById('imgSubtitle')?.value.trim() || '',
+    dialogue1:   document.getElementById('dialogue1')?.value.trim()   || '',
+    dialogue2:   document.getElementById('dialogue2')?.value.trim()   || '',
+  };
+
+  try {
+    const res  = await fetch('{{ url_for("create.instagram_image_generate") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    generatedImageUrl = data.image_url;
+    document.getElementById('finalImage').src = generatedImageUrl;
+    document.getElementById('finalImage').style.display = '';
+    document.getElementById('finalImgLoading').classList.add('d-none');
+    document.getElementById('downloadBtn').href = generatedImageUrl;
+    document.getElementById('downloadBtn').classList.remove('d-none');
+
+  } catch (err) {
+    document.getElementById('finalImgLoading').classList.add('d-none');
+    goStep(4);
+    document.getElementById('step4Error').textContent = '이미지 생성 실패: ' + err.message;
+    document.getElementById('step4Error').classList.remove('d-none');
+  } finally {
+    document.getElementById('genBtnNormal').classList.remove('d-none');
+    document.getElementById('genBtnLoading').classList.add('d-none');
+    document.getElementById('imgGenBtn').disabled = false;
+  }
+}
+</script>
+{% endblock %}

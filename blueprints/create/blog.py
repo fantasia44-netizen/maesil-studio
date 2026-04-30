@@ -638,3 +638,49 @@ def blog_compose():
     except Exception as e:
         logger.warning(f'[blog/compose] Haiku 배치 실패, 폴백 사용: {e}')
         return jsonify(ok=True, placements=_fallback_placements(), n_paragraphs=n_para)
+
+
+# ─────────────────────────────────────────────────────────────
+# Step 5 — 완성본 저장 (글 + 이미지 배치)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/blog/save-final', methods=['POST'])
+@login_required
+def blog_save_final():
+    """블로그 완성본(글 + 이미지 배치)을 creation 레코드에 저장.
+
+    Request JSON:
+      creation_id: str   — 블로그 텍스트 creation ID
+      images: [{role, url, is_product}]
+      placements: [{after_para_idx, image_idx}]
+    """
+    supabase    = current_app.supabase
+    data        = request.get_json(force=True) or {}
+    creation_id = (data.get('creation_id') or '').strip()
+    images      = data.get('images', [])
+    placements  = data.get('placements', [])
+
+    if not creation_id:
+        return jsonify(ok=False, message='creation_id 없음')
+
+    try:
+        # 기존 output_data 조회
+        row = supabase.table('creations').select('output_data').eq(
+            'id', creation_id
+        ).eq('user_id', current_user.id).limit(1).execute()
+        if not row.data:
+            return jsonify(ok=False, message='creation을 찾을 수 없습니다.')
+
+        existing = row.data[0].get('output_data') or {}
+        existing['images']     = images
+        existing['placements'] = placements
+        existing['has_final']  = True
+
+        supabase.table('creations').update({
+            'output_data': existing,
+        }).eq('id', creation_id).execute()
+
+        return jsonify(ok=True)
+    except Exception as e:
+        logger.error(f'[blog/save-final] {e}')
+        return jsonify(ok=False, message=str(e))

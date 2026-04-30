@@ -317,6 +317,7 @@ let generatedImages = [];   // [{role, url}]
 let blogText = '';
 let productImageUrl  = '';   // 선택된 제품 이미지 URL
 let selectedImgCount = 5;    // 총 이미지 수 (기본 5)
+let blogCreationId   = null; // 블로그 텍스트 creation ID (save-final에 사용)
 
 // 제품별 이미지 목록 (서버에서 주입)
 const PRODUCT_IMAGES = {{ products_images_map | tojson }};
@@ -561,6 +562,7 @@ async function generateBlogText() {
     if (!data.ok) throw new Error(data.message);
 
     blogText = data.text;
+    blogCreationId = data.creation_id || null;
     document.getElementById('blogTextArea').value = blogText;
     document.getElementById('step3Meta').textContent = (data.cost_charged ? data.cost_charged + 'P 사용 · ' : '') + '내용을 직접 수정할 수 있습니다';
     document.getElementById('step3Loading').classList.add('d-none');
@@ -910,6 +912,21 @@ async function renderFinalContent() {
     validImgs.forEach((img, i) => {
       if (!placed.has(i)) appendImageBlock(container, img);
     });
+
+    // ── 완성본 DB 저장 ──────────────────────────────────────
+    if (blogCreationId) {
+      try {
+        await fetch('{{ url_for("create.blog_save_final") }}', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+          body: JSON.stringify({
+            creation_id: blogCreationId,
+            images:      validImgs.map(g => ({role:g.role, url:g.url, is_product:!!g.isOriginal})),
+            placements:  placements || [],
+          })
+        });
+      } catch {}
+    }
 
   } else {
     // 폴백: ## 헤딩 기준 섹션 분리 후 균등 배치
