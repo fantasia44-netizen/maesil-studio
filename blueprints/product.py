@@ -313,12 +313,22 @@ def insight_images(product_id):
 
         detail = client.get_product(source_ref)
 
+        # 디버그: 응답 키 + 이미지 관련 필드 값 로깅
+        img_related = {k: v for k, v in detail.items()
+                       if any(kw in k.lower() for kw in ('image', 'img', 'photo', 'thumb', 'media', 'gallery', 'url'))}
+        logger.info(f'[PRODUCT] insight_images detail keys: {list(detail.keys())}')
+        logger.info(f'[PRODUCT] insight_images img fields: {img_related}')
+
         from blueprints.integrations import _collect_all_image_urls
         ext_images = _collect_all_image_urls(detail)
-        logger.info(f'[PRODUCT] insight_images: {source_ref} 이미지 {len(ext_images)}장 수집')
+        logger.info(f'[PRODUCT] insight_images: {source_ref} 이미지 {len(ext_images)}장 수집 → {ext_images}')
 
         if not ext_images:
-            return jsonify(ok=False, message='인사이트에서 이미지를 찾을 수 없습니다.')
+            # 디버그 정보 반환
+            return jsonify(ok=False,
+                           message='인사이트에서 이미지를 찾을 수 없습니다.',
+                           debug_keys=list(detail.keys()),
+                           debug_img_fields=img_related)
 
         # Supabase Storage에 다운로드 후 저장
         from blueprints.integrations import _download_and_store_images
@@ -333,9 +343,34 @@ def insight_images(product_id):
             'updated_at': now_kst().isoformat(),
         }).eq('id', product_id).execute()
 
-        return jsonify(ok=True, images=images, message=f'{len(images)}개 이미지를 가져왔습니다.')
+        return jsonify(ok=True, images=images,
+                       message=f'{len(images)}개 이미지를 가져왔습니다. (API에서 {len(ext_images)}개 발견)',
+                       debug_found=len(ext_images))
     except Exception as e:
         logger.error(f'[PRODUCT] insight_images error: {e}')
+        return jsonify(ok=False, message=str(e))
+
+
+# ── 인사이트 상품 원본 응답 확인 (디버그) ──────────────────
+@product_bp.route('/<product_id>/insight-raw', methods=['GET'])
+@login_required
+def insight_raw(product_id):
+    """인사이트 API 원본 응답 확인용 (개발 디버그)."""
+    if not current_user.is_superadmin:
+        return jsonify(ok=False, message='권한 없음'), 403
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품 없음')
+    source_ref = product.get('source_ref')
+    if not source_ref:
+        return jsonify(ok=False, message='source_ref 없음')
+    try:
+        from services.maesil_insight_connection import get_client_for_user
+        client = get_client_for_user(current_user.id)
+        detail = client.get_product(source_ref)
+        return jsonify(ok=True, keys=list(detail.keys()), data=detail)
+    except Exception as e:
         return jsonify(ok=False, message=str(e))
 
 
