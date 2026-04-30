@@ -2,7 +2,12 @@ services:
   - type: web
     name: maesil-creator
     env: python
-    buildCommand: apt-get install -y fonts-nanum fonts-noto-cjk 2>/dev/null; pip install -r requirements.txt
+    buildCommand: >-
+      mkdir -p static/fonts &&
+      apt-get install -y fonts-nanum fonts-noto-cjk 2>/dev/null ||
+      (curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf" -o static/fonts/NanumGothic.ttf &&
+       curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"    -o static/fonts/NanumGothicBold.ttf) ;
+      pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 2 --timeout 120
     envVars:
       - key: FLASK_ENV

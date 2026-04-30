@@ -547,10 +547,10 @@ function parseCaptionText(text) {
     if (hM) sections.hashtag = hM[1].trim();
   }
 
-  captionData.short  = sections.short   || '';
-  captionData.medium = sections.medium  || '';
-  captionData.long   = sections.long    || '';
-  hashtagText        = sections.hashtag || '';
+  captionData.short  = _cleanCaption(sections.short   || '');
+  captionData.medium = _cleanCaption(sections.medium  || '');
+  captionData.long   = _cleanCaption(sections.long    || '');
+  hashtagText        = _cleanHashtags(sections.hashtag || '');
 
   // 최종 폴백: 전체 텍스트를 medium으로
   if (!captionData.short && !captionData.medium && !captionData.long) {
@@ -560,6 +560,32 @@ function parseCaptionText(text) {
   switchCaption('short');
   document.getElementById('hashtagBox').textContent    = hashtagText;
   document.getElementById('finalHashtags').textContent = hashtagText;
+}
+
+/** 캡션 후처리: 마크다운 잔재 제거 */
+function _cleanCaption(text) {
+  return text
+    .replace(/^---+\s*$/gm, '')          // --- 구분선 제거
+    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **볼드** → 텍스트
+    .replace(/^\[.*?\]\s*$/gm, '')        // [설명] 형태 메타줄 제거
+    .replace(/\n{3,}/g, '\n\n')           // 3줄 이상 공백 → 2줄로
+    .trim();
+}
+
+/** 해시태그 후처리: 헤더·구분선 제거, #태그만 추출 */
+function _cleanHashtags(text) {
+  // 줄별로 처리
+  const lines = text.split('\n');
+  const tagLines = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^---+$/.test(trimmed)) continue;           // --- 구분선 제거
+    if (/^\*\*[^#]/.test(trimmed)) continue;        // **인기 태그...** 같은 헤더 제거
+    if (/^[^#]/.test(trimmed) && !trimmed.includes('#')) continue; // # 없는 설명줄 제거
+    tagLines.push(trimmed.replace(/\*\*([^*]+)\*\*/g, '$1')); // 볼드 제거
+  }
+  return tagLines.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 function switchCaption(tab, el) {

@@ -25,30 +25,63 @@ SIZE_MAP = {
 # ── 내부 유틸 ──────────────────────────────────────────────────
 
 def _font(bold: bool = False) -> str:
-    candidates = [
+    _b = bold
+    # 프로젝트 내 번들 폰트 (render.yaml buildCommand 에서 다운로드)
+    _here = os.path.dirname(os.path.abspath(__file__))
+    _proj_root = os.path.join(_here, '..')
+    proj_fonts = [
+        os.path.join(_proj_root, 'static', 'fonts', 'NanumGothicBold.ttf' if _b else 'NanumGothic.ttf'),
+    ]
+
+    candidates = proj_fonts + [
         # Windows
-        'C:/Windows/Fonts/malgunbd.ttf' if bold else 'C:/Windows/Fonts/malgun.ttf',
-        'C:/Windows/Fonts/NanumGothicBold.ttf' if bold else 'C:/Windows/Fonts/NanumGothic.ttf',
-        # Linux / Render (Nanum)
-        '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf' if bold
+        'C:/Windows/Fonts/malgunbd.ttf' if _b else 'C:/Windows/Fonts/malgun.ttf',
+        'C:/Windows/Fonts/NanumGothicBold.ttf' if _b else 'C:/Windows/Fonts/NanumGothic.ttf',
+        # Linux / Render (Nanum - apt-get install fonts-nanum)
+        '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf' if _b
             else '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
-        '/usr/share/fonts/truetype/nanum/NanumBarunGothicBold.ttf' if bold
+        '/usr/share/fonts/truetype/nanum/NanumBarunGothicBold.ttf' if _b
             else '/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf',
-        # Linux / Render (Noto CJK)
-        '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc' if bold
+        # Linux / Render (Noto CJK - apt-get install fonts-noto-cjk)
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc' if _b
             else '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-        '/usr/share/fonts/noto-cjk/NotoSansCJKkr-Bold.otf' if bold
+        '/usr/share/fonts/noto-cjk/NotoSansCJKkr-Bold.otf' if _b
             else '/usr/share/fonts/noto-cjk/NotoSansCJKkr-Regular.otf',
-        '/usr/share/fonts/noto/NotoSansCJK-Bold.ttc' if bold
+        '/usr/share/fonts/noto/NotoSansCJK-Bold.ttc' if _b
             else '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc',
         # macOS
         '/System/Library/Fonts/AppleSDGothicNeo.ttc',
         '/Library/Fonts/NanumGothic.ttf',
     ]
+
     for p in candidates:
         if os.path.exists(p):
             return p
-    raise FileNotFoundError('한국어 폰트를 찾을 수 없습니다. apt-get install fonts-nanum 을 실행하세요.')
+
+    # 최후 폴백: /tmp/ 에 런타임 다운로드
+    return _download_fallback_font(_b)
+
+
+def _download_fallback_font(bold: bool = False) -> str:
+    """한글 폰트가 없을 때 /tmp/ 에 다운로드 (최초 1회만)."""
+    import urllib.request
+    tmp_dir = '/tmp/maesil_fonts'
+    os.makedirs(tmp_dir, exist_ok=True)
+    fname = 'NanumGothicBold.ttf' if bold else 'NanumGothic.ttf'
+    path  = os.path.join(tmp_dir, fname)
+    if os.path.exists(path):
+        return path
+    urls = {
+        'NanumGothic.ttf':     'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
+        'NanumGothicBold.ttf': 'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf',
+    }
+    try:
+        logger.info('[font] 폰트 다운로드 중: %s', fname)
+        urllib.request.urlretrieve(urls[fname], path)
+        logger.info('[font] 폰트 다운로드 완료: %s', path)
+        return path
+    except Exception as e:
+        raise FileNotFoundError(f'한글 폰트를 찾을 수 없고 다운로드도 실패했습니다: {e}')
 
 
 def _hex_rgb(hex_color: str) -> tuple:
