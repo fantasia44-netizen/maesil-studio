@@ -33,13 +33,48 @@ from services.tz_utils import now_kst
 logger = logging.getLogger(__name__)
 
 
+def _collect_all_image_urls(detail: dict) -> list:
+    """인사이트 상품 상세 응답에서 모든 이미지 URL을 중복 없이 수집.
+
+    수집 대상 필드 (우선순위 순):
+      image_url, thumbnail_url, images[], thumbnail_images[],
+      detail_images[], extra_images[], gallery_images[], media[]
+    """
+    seen: set = set()
+    result: list = []
+
+    def _add(url):
+        if url and isinstance(url, str) and url.startswith('http') and url not in seen:
+            seen.add(url)
+            result.append(url)
+
+    # 단일 URL 필드
+    for field in ('image_url', 'thumbnail_url', 'main_image_url', 'cover_image_url'):
+        _add(detail.get(field))
+
+    # 배열 필드
+    for field in ('images', 'thumbnail_images', 'thumbnails',
+                  'detail_images', 'extra_images', 'gallery_images',
+                  'media', 'photo_urls', 'image_urls'):
+        raw = detail.get(field)
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, str):
+                    _add(item)
+                elif isinstance(item, dict):
+                    # {"url": "...", "type": "..."} 형태
+                    _add(item.get('url') or item.get('src') or item.get('image_url'))
+
+    return result
+
+
 def _download_and_store_images(supabase, user_id: str, product_ref: str, urls: list) -> list:
     """외부 이미지 URL 목록 → Supabase Storage 업로드 → 공개 URL 목록 반환.
     실패한 이미지는 원본 URL로 폴백.
     """
     import uuid, requests as req_lib
     stored = []
-    for idx, url in enumerate(urls[:10]):  # 최대 10장
+    for idx, url in enumerate(urls[:30]):  # 최대 30장
         try:
             r = req_lib.get(url, timeout=15, headers={
                 'User-Agent': 'Mozilla/5.0',
@@ -261,13 +296,8 @@ def import_apply():
             continue
 
         # 이미지 목록 수집 → Supabase Storage 다운로드
-        raw_images = detail.get('images') or []
-        if isinstance(raw_images, list):
-            ext_images = [i for i in raw_images if isinstance(i, str) and i]
-        else:
-            ext_images = []
-        if detail.get('image_url') and detail['image_url'] not in ext_images:
-            ext_images.insert(0, detail['image_url'])
+        ext_images = _collect_all_image_urls(detail)
+        logger.info(f'[Integrations] {sid} 이미지 {len(ext_images)}장 수집')
 
         images = _download_and_store_images(sb, str(current_user.id), sid, ext_images)
 
