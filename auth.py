@@ -94,7 +94,7 @@ def login():
             return render_template('auth/login.html')
 
         if not row.get('is_active', True):
-            flash('비활성화된 계정입니다. support@maesil.io로 문의하세요.', 'danger')
+            flash('비활성화된 계정입니다. support@maesil-insight.com으로 문의하세요.', 'danger')
             return render_template('auth/login.html')
 
         if _check_account_lock(row):
