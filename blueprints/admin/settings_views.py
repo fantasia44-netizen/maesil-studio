@@ -14,6 +14,8 @@ CONFIG_KEYS = [
     ('fal_api_key',           'fal.ai API Key',         'secret', 'FLUX + Bria 이미지·배경교체',    True),
     ('ideogram_api_key',      'Ideogram API Key',       'secret', '한글 텍스트 이미지 생성',       False),
     ('openai_api_key',        'OpenAI API Key',         'secret', 'DALL-E / GPT (선택)',            False),
+    ('maeyo_agency_url',      '매요 Agency URL',        'text',   '매요 AI CS봇 — maesil-agency 주소', False),
+    ('maeyo_cs_token',        '매요 CS Token',          'secret', 'maesil-agency MAEYO_INTERNAL_TOKEN', True),
     ('portone_api_secret',    'PortOne API Secret',     'secret', '결제 API',                      False),
     ('portone_store_id',      'PortOne Store ID',       'text',   '',                              False),
     ('portone_channel_card',  'PortOne 카드 채널 키',   'text',   '',                              False),
@@ -116,6 +118,8 @@ def test_key(key):
             return _test_fal(get_config('fal_api_key'))
         elif key == 'ideogram_api_key':
             return _test_ideogram(get_config('ideogram_api_key'))
+        elif key == 'maeyo_cs_token':
+            return _test_maeyo(get_config('maeyo_agency_url'), get_config('maeyo_cs_token'))
     except Exception as e:
         return jsonify(ok=False, message=f'오류: {e}')
 
@@ -165,6 +169,28 @@ def _test_fal(api_key: str):
             return jsonify(ok=True, message=f'키 인식됨 — 모델 접근 제한(403), fal.ai 플랜 확인 필요')
         else:
             return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
+    except Exception as e:
+        return jsonify(ok=False, message=f'연결 실패: {e}')
+
+
+def _test_maeyo(agency_url: str, cs_token: str):
+    if not agency_url:
+        return jsonify(ok=False, message='매요 Agency URL이 설정되지 않았습니다.')
+    if not cs_token:
+        return jsonify(ok=False, message='매요 CS Token이 설정되지 않았습니다.')
+    try:
+        import requests as req_lib
+        r = req_lib.get(
+            agency_url.rstrip('/') + '/health',
+            headers={'X-CS-Token': cs_token},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            return jsonify(ok=True, message='연결 성공 — 매요 AI 정상')
+        elif r.status_code == 401:
+            return jsonify(ok=False, message='토큰 인증 실패 — CS Token을 확인하세요.')
+        else:
+            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:100]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')
 

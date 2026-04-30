@@ -181,8 +181,9 @@ def import_list():
     except (TypeError, ValueError):
         page, per_page = 1, 50
 
-    keyword  = (request.args.get('keyword')  or '').strip() or None
-    category = (request.args.get('category') or '').strip() or None
+    keyword   = (request.args.get('keyword')   or '').strip() or None
+    category  = (request.args.get('category')  or '').strip() or None
+    brand_id  = (request.args.get('brand_id')  or '').strip() or None
 
     products: list[dict] = []
     pagination: dict = {}
@@ -204,7 +205,8 @@ def import_list():
         logger.error(f'[Integrations] list_products 예외: {e}')
         error_msg = '인사이트 상품 조회 중 오류가 발생했습니다.'
 
-    # 이미 가져온 상품(source_ref) — 중복 표시용
+    # 이미 가져온 상품(source_ref) — 선택된 브랜드 기준으로 중복 체크
+    # brand_id 지정 시 해당 브랜드에서만 체크, 없으면 전체 체크
     sb = current_app.supabase
     already: set[str] = set()
     try:
@@ -212,17 +214,19 @@ def import_list():
             refs = [p.get('seller_product_id') or '' for p in products]
             refs = [r for r in refs if r]
             if refs:
-                ex = (sb.table('products')
-                      .select('source_ref')
-                      .eq('user_id', str(current_user.id))
-                      .eq('source', 'maesil_insight')
-                      .in_('source_ref', refs)
-                      .execute())
+                q = (sb.table('products')
+                     .select('source_ref')
+                     .eq('user_id', str(current_user.id))
+                     .eq('source', 'maesil_insight')
+                     .in_('source_ref', refs))
+                if brand_id:
+                    q = q.eq('brand_id', brand_id)
+                ex = q.execute()
                 already = {r['source_ref'] for r in (ex.data or []) if r.get('source_ref')}
     except Exception:
         pass
 
-    # 가져오기 시 자동 매핑할 브랜드 (기본 브랜드 우선)
+    # 가져오기 시 자동 매핑할 브랜드
     from blueprints.create._base import get_accessible_brands
     brands = get_accessible_brands(sb) if sb else []
 

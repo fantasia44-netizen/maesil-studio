@@ -16,11 +16,11 @@
           <label class="form-label fw-semibold small">생성 엔진</label>
           <div class="row g-2">
             {% for engine, label, desc, cost, badge in [
-              ('flux_preview',  'FLUX 시안',    '빠른 프리뷰',      '50P',  'bg-light text-dark'),
-              ('flux_standard', 'FLUX 표준',    '브랜드 에셋',      '300P', 'bg-light text-dark'),
-              ('flux_hq',       'FLUX 고화질',  '최고 퀄리티',      '600P', 'bg-warning text-dark'),
-              ('ideogram',      'Ideogram',    '한글 텍스트 특화', '400P', 'bg-light text-dark'),
-              ('card_news',     '카드뉴스',     'PIL 한글 합성',   '800P', 'bg-light text-dark'),
+              ('flux_preview',  '빠른 시안',   '초안 확인용',      '50P',  'bg-light text-dark'),
+              ('flux_standard', '표준 품질',   '브랜드 에셋',      '300P', 'bg-light text-dark'),
+              ('flux_hq',       '고화질',      '최고 퀄리티',      '600P', 'bg-warning text-dark'),
+              ('ideogram',      '한글 특화',   '텍스트 포함 이미지','400P', 'bg-light text-dark'),
+              ('card_news',     '카드뉴스',    '한글 배너 합성',   '800P', 'bg-light text-dark'),
             ] %}
             <div class="col-6">
               <div class="engine-card border rounded p-2 text-center"
@@ -41,7 +41,7 @@
           <label class="form-label fw-semibold small">프롬프트 <span class="text-danger">*</span></label>
           <textarea id="promptInput" class="form-control" rows="4"
                     placeholder="예: 신선한 사과 선물세트, 흰 배경, 스튜디오 조명, 프로 제품 사진"></textarea>
-          <div class="form-text">영어로 입력하면 더 정확합니다 (Ideogram 제외)</div>
+          <div class="form-text">한국어/영어 모두 입력 가능합니다</div>
         </div>
 
         <!-- 카드뉴스 텍스트 (카드뉴스 엔진 선택 시) -->
@@ -108,7 +108,7 @@
         </div>
         <div id="loadingState" class="text-center d-none">
           <div class="spinner-border mb-3" style="color:#e8355a;width:3rem;height:3rem"></div>
-          <p class="text-muted small">AI가 이미지를 생성하고 있습니다...<br>30초~2분 소요</p>
+          <p class="text-muted small">열심히 작업중이에요...<br>잠시만 기다려 주세요 (30초~2분)</p>
         </div>
         <div id="imageResult" class="d-none w-100 text-center">
           <img id="resultImg" src="" class="img-fluid rounded mb-3" style="max-height:500px">

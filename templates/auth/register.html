@@ -10,19 +10,56 @@
     :root { --brand-primary: #e8355a; }
     body { background: #f5f7fa; font-family: 'Pretendard', 'Noto Sans KR', sans-serif; }
     .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 0; }
-    .auth-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.08); padding: 2.5rem; width: 100%; max-width: 460px; }
+    .auth-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.08); padding: 2.5rem; width: 100%; max-width: 500px; }
     .brand-logo { font-size: 1.4rem; font-weight: 800; color: #1a2332; }
     .brand-logo span { color: var(--brand-primary); }
-    .btn-green { background: var(--brand-primary); color: #fff; border: none; font-weight: 600; }
-    .btn-green:hover { background: #c42648; color: #fff; }
+    .btn-primary-brand { background: var(--brand-primary); color: #fff; border: none; font-weight: 600; }
+    .btn-primary-brand:hover { background: #c42648; color: #fff; }
     .form-control:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 .2rem rgba(232,53,90,.2); }
+
+    /* 계정 유형 선택 카드 */
+    .acct-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+    .acct-type-card {
+      border: 2px solid #e2e8f0; border-radius: 12px; padding: 1.2rem 1rem;
+      cursor: pointer; transition: all .2s; text-align: center; background: #fafafa;
+    }
+    .acct-type-card:hover { border-color: var(--brand-primary); background: #fff5f7; }
+    .acct-type-card.selected { border-color: var(--brand-primary); background: #fff0f3; }
+    .acct-type-card .icon { font-size: 1.8rem; margin-bottom: .4rem; }
+    .acct-type-card .title { font-weight: 700; font-size: .95rem; color: #1a2332; }
+    .acct-type-card .desc { font-size: .78rem; color: #666; margin-top: .2rem; }
+
+    /* 기업 서브 선택 */
+    .biz-sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.2rem; }
+    .biz-sub-card {
+      border: 2px solid #e2e8f0; border-radius: 10px; padding: 1rem .8rem;
+      cursor: pointer; transition: all .2s; text-align: center; background: #fafafa;
+    }
+    .biz-sub-card:hover { border-color: #6366f1; background: #f5f3ff; }
+    .biz-sub-card.selected { border-color: #6366f1; background: #ede9fe; }
+    .biz-sub-card .icon { font-size: 1.4rem; margin-bottom: .3rem; }
+    .biz-sub-card .title { font-weight: 600; font-size: .88rem; color: #1a2332; }
+    .biz-sub-card .desc { font-size: .74rem; color: #666; }
+
+    .section-label {
+      font-size: .78rem; font-weight: 700; color: #888; text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: .75rem;
+    }
+    .step-badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #f1f5f9; border-radius: 20px; padding: .25rem .8rem;
+      font-size: .78rem; color: #475569; font-weight: 600; margin-bottom: 1.2rem;
+    }
+    .back-link { color: #888; font-size: .85rem; cursor: pointer; }
+    .back-link:hover { color: var(--brand-primary); }
+    .invite-hint { font-size: .78rem; color: #888; margin-top: .3rem; }
   </style>
 </head>
 <body>
 <div class="auth-wrap">
   <div class="auth-card">
     <div class="text-center mb-4">
-      <div class="brand-logo">매실 <span>크리에이터</span></div>
+      <div class="brand-logo">매실 <span>스튜디오</span></div>
       <p class="text-muted small mt-1">무료로 시작하세요</p>
     </div>
 
@@ -32,47 +69,200 @@
       {% endfor %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('auth.register') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">이름</label>
-        <input type="text" name="name" class="form-control" placeholder="홍길동" autofocus>
-      </div>
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">이메일 <span class="text-danger">*</span></label>
-        <input type="email" name="email" class="form-control" placeholder="hello@example.com" required>
-      </div>
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">비밀번호 <span class="text-danger">*</span></label>
-        <input type="password" name="password" class="form-control" placeholder="8자 이상, 영문+숫자" required>
-      </div>
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">비밀번호 확인 <span class="text-danger">*</span></label>
-        <input type="password" name="password_confirm" class="form-control" placeholder="••••••••" required>
-      </div>
-      <div class="mb-3">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="agree_terms" id="agreeTerms" required>
-          <label class="form-check-label small" for="agreeTerms">
-            <a href="#" class="text-decoration-none">이용약관</a>에 동의합니다 <span class="text-danger">*</span>
-          </label>
+    <!-- ① 계정 유형 선택 -->
+    <div id="stepType">
+      <p class="section-label">계정 유형 선택</p>
+      <div class="acct-type-grid">
+        <div class="acct-type-card" id="cardPersonal" onclick="selectType('personal')">
+          <div class="icon">👤</div>
+          <div class="title">개인으로 시작</div>
+          <div class="desc">1인 셀러, 프리랜서,<br>개인 브랜드 운영</div>
         </div>
-        <div class="form-check mt-1">
-          <input class="form-check-input" type="checkbox" name="agree_privacy" id="agreePrivacy" required>
-          <label class="form-check-label small" for="agreePrivacy">
-            <a href="#" class="text-decoration-none">개인정보처리방침</a>에 동의합니다 <span class="text-danger">*</span>
-          </label>
+        <div class="acct-type-card" id="cardBiz" onclick="selectType('biz')">
+          <div class="icon">🏢</div>
+          <div class="title">기업으로 시작</div>
+          <div class="desc">팀 단위 협업,<br>브랜드 통합 관리</div>
         </div>
       </div>
-      <button type="submit" class="btn btn-green w-100 py-2">가입하기</button>
-    </form>
+      <p class="text-center text-muted small mb-0">
+        이미 계정이 있으신가요? <a href="{{ url_for('auth.login') }}" class="text-decoration-none fw-semibold" style="color:var(--brand-primary)">로그인</a>
+      </p>
+    </div>
 
-    <hr class="my-4">
-    <p class="text-center text-muted small mb-0">
-      이미 계정이 있으신가요? <a href="{{ url_for('auth.login') }}" class="text-decoration-none fw-semibold" style="color:var(--brand-primary)">로그인</a>
-    </p>
+    <!-- ② 기업 서브 선택 -->
+    <div id="stepBizSub" style="display:none">
+      <span class="back-link" onclick="goBack('stepType')"><i class="bi bi-arrow-left"></i> 뒤로</span>
+      <p class="section-label mt-3">기업 가입 유형</p>
+      <div class="biz-sub-grid">
+        <div class="biz-sub-card" id="cardBizNew" onclick="selectBizSub('new')">
+          <div class="icon">✨</div>
+          <div class="title">처음 시작 (관리자)</div>
+          <div class="desc">새 기업 계정 개설<br>팀원 초대 가능</div>
+        </div>
+        <div class="biz-sub-card" id="cardBizInvited" onclick="selectBizSub('invited')">
+          <div class="icon">🔑</div>
+          <div class="title">초대받은 팀원</div>
+          <div class="desc">초대 코드로<br>기존 팀에 합류</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 실제 가입 폼 -->
+    <div id="stepForm" style="display:none">
+      <span class="back-link" onclick="goBackForm()"><i class="bi bi-arrow-left"></i> 뒤로</span>
+      <div class="step-badge mt-3" id="formBadge"></div>
+
+      <form method="POST" action="{{ url_for('auth.register') }}" id="regForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="account_type" id="accountType" value="">
+        <input type="hidden" name="biz_sub" id="bizSub" value="">
+
+        <!-- 이름 -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">이름</label>
+          <input type="text" name="name" class="form-control" placeholder="홍길동" autofocus>
+        </div>
+
+        <!-- 이메일 -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">이메일 <span class="text-danger">*</span></label>
+          <input type="email" name="email" class="form-control" placeholder="hello@example.com" required>
+        </div>
+
+        <!-- 비밀번호 -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">비밀번호 <span class="text-danger">*</span></label>
+          <input type="password" name="password" class="form-control" placeholder="8자 이상, 영문+숫자" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">비밀번호 확인 <span class="text-danger">*</span></label>
+          <input type="password" name="password_confirm" class="form-control" placeholder="••••••••" required>
+        </div>
+
+        <!-- 기업 신규: 회사명 -->
+        <div id="fieldCompanyName" style="display:none" class="mb-3">
+          <label class="form-label small fw-semibold">회사/팀 이름 <span class="text-danger">*</span></label>
+          <input type="text" name="company_name" id="companyNameInput" class="form-control" placeholder="예: 매실 스튜디오">
+        </div>
+
+        <!-- 기업 초대: 초대 코드 -->
+        <div id="fieldInviteCode" style="display:none" class="mb-3">
+          <label class="form-label small fw-semibold">초대 코드 <span class="text-danger">*</span></label>
+          <input type="text" name="invite_code" id="inviteCodeInput" class="form-control text-uppercase"
+                 placeholder="8자리 초대 코드 입력" maxlength="8" style="letter-spacing:.1em; font-size:1.1rem">
+          <p class="invite-hint">관리자에게 받은 초대 코드를 입력하세요.</p>
+        </div>
+
+        <!-- 약관 동의 -->
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="agree_terms" id="agreeTerms" required>
+            <label class="form-check-label small" for="agreeTerms">
+              <a href="#" class="text-decoration-none">이용약관</a>에 동의합니다 <span class="text-danger">*</span>
+            </label>
+          </div>
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" name="agree_privacy" id="agreePrivacy" required>
+            <label class="form-check-label small" for="agreePrivacy">
+              <a href="#" class="text-decoration-none">개인정보처리방침</a>에 동의합니다 <span class="text-danger">*</span>
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary-brand w-100 py-2">가입하기</button>
+      </form>
+    </div>
+
   </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let currentType = '';
+let currentBizSub = '';
+
+function showStep(id) {
+  ['stepType','stepBizSub','stepForm'].forEach(s => {
+    document.getElementById(s).style.display = s === id ? '' : 'none';
+  });
+}
+
+function selectType(type) {
+  currentType = type;
+  document.getElementById('accountType').value = type;
+  document.getElementById('cardPersonal').classList.toggle('selected', type === 'personal');
+  document.getElementById('cardBiz').classList.toggle('selected', type === 'biz');
+
+  if (type === 'personal') {
+    // 개인: 바로 가입 폼으로
+    currentBizSub = '';
+    document.getElementById('bizSub').value = '';
+    showPersonalForm();
+  } else {
+    // 기업: 서브 선택 단계로
+    showStep('stepBizSub');
+  }
+}
+
+function showPersonalForm() {
+  document.getElementById('fieldCompanyName').style.display = 'none';
+  document.getElementById('fieldInviteCode').style.display = 'none';
+  document.getElementById('companyNameInput').removeAttribute('required');
+  document.getElementById('inviteCodeInput').removeAttribute('required');
+  document.getElementById('formBadge').innerHTML = '<i class="bi bi-person"></i> 개인 계정';
+  showStep('stepForm');
+}
+
+function selectBizSub(sub) {
+  currentBizSub = sub;
+  document.getElementById('bizSub').value = sub;
+  document.getElementById('cardBizNew').classList.toggle('selected', sub === 'new');
+  document.getElementById('cardBizInvited').classList.toggle('selected', sub === 'invited');
+
+  if (sub === 'new') {
+    document.getElementById('fieldCompanyName').style.display = '';
+    document.getElementById('fieldInviteCode').style.display = 'none';
+    document.getElementById('companyNameInput').setAttribute('required','required');
+    document.getElementById('inviteCodeInput').removeAttribute('required');
+    document.getElementById('formBadge').innerHTML = '<i class="bi bi-building"></i> 기업 계정 (관리자)';
+  } else {
+    document.getElementById('fieldCompanyName').style.display = 'none';
+    document.getElementById('fieldInviteCode').style.display = '';
+    document.getElementById('companyNameInput').removeAttribute('required');
+    document.getElementById('inviteCodeInput').setAttribute('required','required');
+    document.getElementById('formBadge').innerHTML = '<i class="bi bi-key"></i> 기업 계정 (팀원)';
+  }
+  showStep('stepForm');
+}
+
+function goBack(target) {
+  showStep(target);
+}
+
+function goBackForm() {
+  if (currentType === 'personal') {
+    showStep('stepType');
+  } else {
+    showStep('stepBizSub');
+  }
+}
+
+// 초대 코드 자동 대문자 변환
+document.getElementById('inviteCodeInput').addEventListener('input', function() {
+  this.value = this.value.toUpperCase();
+});
+
+// URL 파라미터에 invite 코드가 있으면 자동 선택
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const inv = params.get('invite');
+  if (inv) {
+    // 기업 > 초대받은 팀원 경로로 자동 이동
+    selectType('biz');
+    selectBizSub('invited');
+    document.getElementById('inviteCodeInput').value = inv.toUpperCase();
+  }
+})();
+</script>
 </body>
 </html>

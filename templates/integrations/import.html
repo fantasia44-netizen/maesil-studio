@@ -31,8 +31,8 @@
           <div class="alert alert-danger small">{{ error_msg }}</div>
         {% endif %}
 
-        <!-- 검색 -->
-        <form method="GET" class="row g-2 mb-3">
+        <!-- 검색 (brand_id도 함께 유지) -->
+        <form method="GET" class="row g-2 mb-3" id="searchForm">
           <div class="col-md-6">
             <input type="text" name="keyword" class="form-control form-control-sm"
                    value="{{ keyword }}" placeholder="상품명 검색">
@@ -41,6 +41,8 @@
             <input type="text" name="category" class="form-control form-control-sm"
                    value="{{ category }}" placeholder="카테고리">
           </div>
+          <!-- 브랜드 선택값 검색 시에도 유지 -->
+          <input type="hidden" name="brand_id" id="searchBrandId" value="{{ request.args.get('brand_id', '') }}">
           <div class="col-md-3 d-flex gap-2">
             <button type="submit" class="btn btn-outline-secondary btn-sm flex-grow-1">검색</button>
             {% if keyword or category %}
@@ -59,19 +61,24 @@
         <form method="POST" action="{{ url_for('integrations.import_apply') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-          <!-- 브랜드 선택 -->
+          <!-- 브랜드 선택 (검색해도 선택값 유지) -->
           {% if brands %}
+          {% set selected_brand_id = request.args.get('brand_id', '') %}
           <div class="mb-3 d-flex align-items-center gap-2">
-            <label class="form-label fw-semibold small mb-0">브랜드 매핑</label>
-            <select name="brand_id" class="form-select form-select-sm" style="max-width: 280px;">
-              <option value="">기본 브랜드 사용</option>
+            <label class="form-label fw-semibold small mb-0 text-nowrap">브랜드 매핑</label>
+            <select name="brand_id" id="brandSelect" class="form-select form-select-sm" style="max-width: 280px;"
+                    onchange="document.getElementById('searchBrandId').value=this.value">
+              <option value="">브랜드 선택 안 함</option>
               {% for b in brands %}
-              <option value="{{ b.id }}"{% if b.is_default %} selected{% endif %}>
+              <option value="{{ b.id }}"
+                {% if selected_brand_id == b.id %}selected
+                {% elif not selected_brand_id and b.is_default %}selected
+                {% endif %}>
                 {{ b.name }}{% if b.is_default %} ★{% endif %}
               </option>
               {% endfor %}
             </select>
-            <span class="text-muted small">— 가져온 상품들에 일괄 적용됩니다.</span>
+            <span class="text-muted small text-nowrap">— 선택한 상품에 일괄 적용</span>
           </div>
           {% endif %}
 

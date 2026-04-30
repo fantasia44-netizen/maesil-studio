@@ -1,6 +1,8 @@
 """매실 스튜디오 - 인증 (로그인/가입/로그아웃/비밀번호 재설정)"""
 import bcrypt
 import logging
+import random
+import string
 from datetime import datetime, timedelta
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
@@ -163,6 +165,15 @@ def login():
 
 
 # ──────────────────────────────────────────
+# 초대 코드 생성 헬퍼
+# ──────────────────────────────────────────
+def _generate_invite_code(length: int = 8) -> str:
+    """랜덤 대문자+숫자 초대 코드 생성"""
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=length))
+
+
+# ──────────────────────────────────────────
 # 회원가입
 # ──────────────────────────────────────────
 @auth_bp.route('/register', methods=['GET', 'POST'])
@@ -179,13 +190,17 @@ def register():
         flash('너무 많은 가입 시도입니다. 잠시 후 다시 시도하세요.', 'danger')
         return render_template('auth/register.html'), 429
 
+    # ── 공통 필드 ──
     email = validate_email(request.form.get('email', ''))
     name = request.form.get('name', '').strip()
     password = request.form.get('password', '')
     password_confirm = request.form.get('password_confirm', '')
     agree_terms = request.form.get('agree_terms')
     agree_privacy = request.form.get('agree_privacy')
+    account_type = request.form.get('account_type', 'personal')  # 'personal' | 'biz'
+    biz_sub = request.form.get('biz_sub', '')                     # 'new' | 'invited'
 
+    # ── 기본 유효성 검사 ──
     if not agree_terms or not agree_privacy:
         flash('서비스 이용약관 및 개인정보 처리방침에 모두 동의해야 합니다.', 'warning')
         return render_template('auth/register.html')
@@ -206,35 +221,88 @@ def register():
     if not name:
         name = email.split('@')[0]
 
+    # ── 기업 경로 추가 검사 ──
+    company_name = request.form.get('company_name', '').strip()
+    invite_code = request.form.get('invite_code', '').strip().upper()
+
+    if account_type == 'biz' and biz_sub == 'new' and not company_name:
+        flash('회사/팀 이름을 입력하세요.', 'warning')
+        return render_template('auth/register.html')
+
+    if account_type == 'biz' and biz_sub == 'invited' and not invite_code:
+        flash('초대 코드를 입력하세요.', 'warning')
+        return render_template('auth/register.html')
+
     supabase = current_app.supabase
     if not supabase:
         flash('DB 연결 실패', 'danger')
         return render_template('auth/register.html')
 
     try:
+        # ── 이메일 중복 체크 ──
         dup = supabase.table('users').select('id').eq('email', email).execute()
         if dup.data:
             flash('이미 가입된 이메일입니다.', 'warning')
             return render_template('auth/register.html')
 
-        user_result = supabase.table('users').insert({
+        # ── 기업 초대 코드 경로: operator 미리 조회 ──
+        operator_id = None
+        user_site_role = 'user'
+
+        if account_type == 'biz' and biz_sub == 'invited':
+            op_r = supabase.table('operators').select('id, name').eq(
+                'invite_code', invite_code
+            ).execute()
+            if not op_r.data:
+                flash('유효하지 않은 초대 코드입니다. 관리자에게 다시 확인하세요.', 'danger')
+                return render_template('auth/register.html')
+            operator_id = op_r.data[0]['id']
+            user_site_role = 'user'
+
+        # ── 사용자 생성 ──
+        user_data = {
             'email': email,
             'name': name,
             'password_hash': _hash_password(password),
             'plan_type': 'free',
             'is_active': True,
             'failed_login_count': 0,
+            'site_role': user_site_role,
             'created_at': now_kst().isoformat(),
             'updated_at': now_kst().isoformat(),
-        }).execute()
+        }
+        if operator_id:
+            user_data['operator_id'] = operator_id
 
+        user_result = supabase.table('users').insert(user_data).execute()
         if not user_result.data:
             flash('가입 중 오류가 발생했습니다.', 'danger')
             return render_template('auth/register.html')
 
         user_id = user_result.data[0]['id']
 
-        # trial 구독 생성
+        # ── 기업 신규 관리자 경로: operator 생성 후 user 업데이트 ──
+        if account_type == 'biz' and biz_sub == 'new':
+            new_invite_code = _generate_invite_code(8)
+            op_result = supabase.table('operators').insert({
+                'name': company_name,
+                'plan_type': 'free',
+                'max_brands': 10,
+                'max_users': 20,
+                'invite_code': new_invite_code,
+                'created_at': now_kst().isoformat(),
+                'updated_at': now_kst().isoformat(),
+            }).execute()
+
+            if op_result.data:
+                new_op_id = op_result.data[0]['id']
+                supabase.table('users').update({
+                    'operator_id': new_op_id,
+                    'site_role': 'operator_admin',
+                    'updated_at': now_kst().isoformat(),
+                }).eq('id', user_id).execute()
+
+        # ── trial 구독 생성 ──
         try:
             supabase.table('subscriptions').insert({
                 'user_id': user_id,
@@ -246,7 +314,7 @@ def register():
         except Exception:
             pass
 
-        # 약관 동의 이력
+        # ── 약관 동의 이력 ──
         try:
             user_agent = request.headers.get('User-Agent', '')[:500]
             agreed_at = now_kst().isoformat()
@@ -261,7 +329,12 @@ def register():
         except Exception:
             pass
 
-        flash('가입 완료! 로그인하세요.', 'success')
+        if account_type == 'biz' and biz_sub == 'invited':
+            flash(f'가입 완료! 팀에 합류했습니다. 로그인하세요.', 'success')
+        elif account_type == 'biz' and biz_sub == 'new':
+            flash('기업 계정이 생성되었습니다! 로그인 후 팀원을 초대하세요.', 'success')
+        else:
+            flash('가입 완료! 로그인하세요.', 'success')
         return redirect(url_for('auth.login'))
 
     except Exception as e:

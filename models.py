@@ -152,6 +152,7 @@ MENU_REGISTRY = [
     ('브랜드 키트', 'bi-palette',             'create.brand_kit',   'brand_kit', '콘텐츠 생성'),
     ('생성 이력',   'bi-clock-history',       'main.history',       None,        '관리'),
     ('구독 관리',   'bi-credit-card',         'billing.index',      None,        '관리'),
+    ('팀 관리',     'bi-people',              'team.index',         None,        '관리'),  # operator_admin 전용 — get_menu_items() 에서 필터
 ]
 
 
@@ -199,6 +200,9 @@ class User(UserMixin):
         items = []
         for label, icon, endpoint, feature, group in MENU_REGISTRY:
             if feature and not self.has_feature(feature):
+                continue
+            # 팀 관리: operator admin(기업 관리자)만 표시
+            if endpoint == 'team.index' and not (self.operator_id and self.is_operator_admin):
                 continue
             items.append({'label': label, 'icon': icon, 'endpoint': endpoint, 'group': group})
         return items

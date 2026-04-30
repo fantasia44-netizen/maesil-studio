@@ -9,6 +9,8 @@ _ENV_MAP = {
     'openai_api_key':        'OPENAI_API_KEY',
     'fal_api_key':           'FAL_KEY',
     'ideogram_api_key':      'IDEOGRAM_API_KEY',
+    'maeyo_agency_url':      'MAEYO_AGENCY_URL',
+    'maeyo_cs_token':        'MAEYO_CS_TOKEN',
     'portone_api_secret':    'PORTONE_API_SECRET',
     'portone_store_id':      'PORTONE_STORE_ID',
     'portone_channel_card':  'PORTONE_CHANNEL_KEY_CARD',

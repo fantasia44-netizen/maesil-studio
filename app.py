@@ -158,6 +158,12 @@ def _register_blueprints(app):
     from blueprints.integrations import integrations_bp
     app.register_blueprint(integrations_bp)
 
+    from blueprints.team import team_bp
+    app.register_blueprint(team_bp, url_prefix='/team')
+
+    from blueprints.maeyo import maeyo_bp
+    app.register_blueprint(maeyo_bp)
+
 
 def _register_hooks(app):
     @app.before_request

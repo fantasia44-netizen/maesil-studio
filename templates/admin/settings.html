@@ -13,7 +13,7 @@
 
     {% set ns = namespace(group='') %}
     {% for key, label, type_, desc, testable in CONFIG_KEYS %}
-      {% set g = 'Claude / AI' if ('api_key' in key or 'provider' in key) else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일') %}
+      {% set g = 'Claude / AI' if ('api_key' in key or 'provider' in key) else ('매요 AI' if 'maeyo' in key else ('PortOne 결제' if 'portone' in key else 'SMTP 이메일')) %}
 
       {% if g != ns.group %}
         {% if ns.group %}</div></div>{% endif %}

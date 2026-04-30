@@ -117,7 +117,7 @@
 <!-- ── 사이드바 ── -->
 <nav id="sidebar">
   <a class="sidebar-brand" href="{{ url_for('main.dashboard') }}">
-    매실 <span>크리에이터</span>
+    매실 <span>스튜디오</span>
   </a>
 
   <div class="sidebar-nav flex-grow-1 overflow-auto py-2">
@@ -199,5 +199,218 @@
   });
 </script>
 {% block extra_script %}{% endblock %}
+
+{% if current_user.is_authenticated %}
+<!-- ── 매요 AI 채팅 위젯 ── -->
+<style>
+  #maeyoBtn {
+    position: fixed; bottom: 28px; right: 28px; z-index: 9000;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: #1f1428; border: none; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+    cursor: pointer; transition: transform .2s, box-shadow .2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #maeyoBtn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,.32); }
+  #maeyoBtn img { width: 34px; height: 34px; border-radius: 50%; }
+
+  #maeyoPanel {
+    position: fixed; bottom: 92px; right: 28px; z-index: 9001;
+    width: 340px; height: 500px;
+    background: #fff; border-radius: 18px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18);
+    display: flex; flex-direction: column;
+    overflow: hidden; transition: opacity .2s, transform .2s;
+    transform-origin: bottom right;
+  }
+  #maeyoPanel.hidden { opacity: 0; pointer-events: none; transform: scale(.92); }
+
+  .maeyo-header {
+    background: #1f1428; color: #fff;
+    padding: .85rem 1rem; display: flex; align-items: center; gap: .6rem;
+  }
+  .maeyo-header img { width: 28px; height: 28px; border-radius: 50%; }
+  .maeyo-header .name { font-weight: 700; font-size: .92rem; }
+  .maeyo-header .sub  { font-size: .72rem; opacity: .65; }
+  .maeyo-header .close-btn {
+    margin-left: auto; background: none; border: none;
+    color: #fff; opacity: .7; font-size: 1.1rem; cursor: pointer;
+  }
+
+  #maeyoMessages {
+    flex: 1; overflow-y: auto; padding: .75rem;
+    display: flex; flex-direction: column; gap: .5rem;
+    background: #f8f9fb;
+  }
+  .maeyo-bubble {
+    max-width: 82%; padding: .55rem .8rem;
+    border-radius: 14px; font-size: .84rem; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .maeyo-bubble.bot {
+    background: #fff; color: #1a2332;
+    border: 1px solid #e8ecf1; align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .maeyo-bubble.user {
+    background: #1f1428; color: #fff;
+    align-self: flex-end; border-bottom-right-radius: 4px;
+  }
+  .maeyo-bubble.hint {
+    background: #fffbeb; border: 1px solid #fde68a;
+    color: #92400e; font-size: .75rem; align-self: flex-start;
+  }
+  .maeyo-action-btn {
+    display: inline-block; margin-top: .35rem;
+    background: #e8355a; color: #fff; border: none;
+    border-radius: 8px; padding: .3rem .8rem; font-size: .78rem;
+    cursor: pointer; text-decoration: none;
+  }
+  .maeyo-typing {
+    align-self: flex-start; background: #fff; border: 1px solid #e8ecf1;
+    border-radius: 14px; border-bottom-left-radius: 4px;
+    padding: .55rem .9rem;
+  }
+  .maeyo-typing span {
+    display: inline-block; width: 6px; height: 6px;
+    background: #aaa; border-radius: 50%; margin: 0 2px;
+    animation: blink 1.2s infinite;
+  }
+  .maeyo-typing span:nth-child(2) { animation-delay: .2s; }
+  .maeyo-typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+
+  .maeyo-input-row {
+    display: flex; gap: .4rem; padding: .6rem; background: #fff;
+    border-top: 1px solid #f0f0f0;
+  }
+  .maeyo-input-row input {
+    flex: 1; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: .45rem .7rem; font-size: .84rem; outline: none;
+  }
+  .maeyo-input-row input:focus { border-color: #1f1428; }
+  .maeyo-input-row button {
+    background: #1f1428; color: #fff; border: none;
+    border-radius: 10px; padding: .45rem .8rem; cursor: pointer; font-size: .84rem;
+  }
+</style>
+
+<!-- 매요 버튼 -->
+<button id="maeyoBtn" title="매요에게 물어보기" onclick="toggleMaeyo()">
+  <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed=maeyo&backgroundColor=1f1428&eyes=eva&mouth=smile01" alt="매요">
+</button>
+
+<!-- 채팅 패널 -->
+<div id="maeyoPanel" class="hidden">
+  <div class="maeyo-header">
+    <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed=maeyo&backgroundColor=1f1428&eyes=eva&mouth=smile01" alt="매요">
+    <div>
+      <div class="name">매요</div>
+      <div class="sub">매실 스튜디오 도우미</div>
+    </div>
+    <button class="close-btn" onclick="toggleMaeyo()"><i class="bi bi-x-lg"></i></button>
+  </div>
+
+  <div id="maeyoMessages">
+    <!-- 환영 메시지 -->
+    <div class="maeyo-bubble bot">안녕하세요! 저는 매요예요 😊<br>매실 스튜디오 사용에 대해 무엇이든 물어보세요.</div>
+  </div>
+
+  <div class="maeyo-input-row">
+    <input type="text" id="maeyoInput" placeholder="궁금한 점을 입력하세요..." maxlength="300"
+           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMaeyo();}">
+    <button onclick="sendMaeyo()"><i class="bi bi-send-fill"></i></button>
+  </div>
+</div>
+
+<script>
+(function() {
+  const CSRF = '{{ csrf_token() }}';
+  let conversationId = null;
+  let history = [];
+  let isOpen = false;
+  let isSending = false;
+
+  window.toggleMaeyo = function() {
+    isOpen = !isOpen;
+    document.getElementById('maeyoPanel').classList.toggle('hidden', !isOpen);
+    if (isOpen) document.getElementById('maeyoInput').focus();
+  };
+
+  window.sendMaeyo = async function() {
+    if (isSending) return;
+    const input = document.getElementById('maeyoInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    input.value = '';
+    isSending = true;
+    appendBubble(msg, 'user');
+    history.push({ role: 'user', content: msg });
+
+    const typing = appendTyping();
+
+    try {
+      const res = await fetch('/maeyo/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ message: msg, history: history.slice(-6), conversation_id: conversationId }),
+      });
+      const data = await res.json();
+      typing.remove();
+
+      if (data.ok) {
+        conversationId = data.conversation_id;
+        const reply = data.reply || '죄송해요, 다시 시도해 주세요.';
+        appendBubble(reply, 'bot');
+        history.push({ role: 'assistant', content: reply });
+
+        if (data.hint) appendBubble('💡 ' + data.hint, 'hint');
+        if (data.action?.label && data.action?.url) {
+          appendAction(data.action.label, data.action.url);
+        }
+      } else {
+        appendBubble('잠시 문제가 생겼어요. 다시 시도해 주세요.', 'bot');
+      }
+    } catch(e) {
+      typing.remove();
+      appendBubble('연결이 원활하지 않아요. 잠시 후 다시 시도해 주세요.', 'bot');
+    } finally {
+      isSending = false;
+      input.focus();
+    }
+  };
+
+  function appendBubble(text, type) {
+    const box = document.getElementById('maeyoMessages');
+    const el = document.createElement('div');
+    el.className = 'maeyo-bubble ' + type;
+    el.textContent = text;
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+    return el;
+  }
+
+  function appendAction(label, url) {
+    const box = document.getElementById('maeyoMessages');
+    const a = document.createElement('a');
+    a.className = 'maeyo-action-btn';
+    a.href = url;
+    a.textContent = label;
+    box.appendChild(a);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function appendTyping() {
+    const box = document.getElementById('maeyoMessages');
+    const el = document.createElement('div');
+    el.className = 'maeyo-typing';
+    el.innerHTML = '<span></span><span></span><span></span>';
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+    return el;
+  }
+})();
+</script>
+{% endif %}
 </body>
 </html>

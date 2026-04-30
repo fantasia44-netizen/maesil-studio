@@ -47,6 +47,7 @@ class Config:
     APP_NAME = os.environ.get('APP_NAME', '매실 스튜디오')
     APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
 
+
     JSON_AS_ASCII = False
 
 
