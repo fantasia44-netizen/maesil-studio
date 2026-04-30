@@ -691,43 +691,38 @@ const TYPE_LABELS = {
   detail_page: '상세페이지', ad_copy: '광고 카피'
 };
 
-function openStudio() {
-  studioStep = 1;
-  selectedAngle = null;
-  studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
-  updateStudioStep();
-  // 패널 초기화
-  ['step1', 'step2', 'step3'].forEach(s => {
-    const el = document.getElementById('studioStep' + s.slice(-1));
-    if (el) el.classList.add('d-none');
+// 타입 버튼 스타일 적용 (공통 함수)
+function _applyTypeBtn(activeBtn) {
+  document.querySelectorAll('.studio-type-btn').forEach(b => {
+    b.classList.remove('active');
+    b.style.borderColor = '#ddd';
+    b.style.background = '#fff';
+    b.style.color = '#333';
   });
-  document.getElementById('studioStep1').classList.remove('d-none');
-  document.getElementById('anglesArea').classList.add('d-none');
-  document.getElementById('step1Loading').classList.add('d-none');
-  document.getElementById('step1AnalyzeArea').classList.remove('d-none');
-  document.getElementById('studioBackBtn').style.display = 'none';
-  document.getElementById('studioNextBtn').style.display = 'none';
-  new bootstrap.Modal(document.getElementById('studioModal')).show();
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+    activeBtn.style.borderColor = '#e8355a';
+    activeBtn.style.background = '#fff0f3';
+    activeBtn.style.color = '#e8355a';
+  }
 }
 
+// 초기 스타일 즉시 적용 (DOMContentLoaded 불필요)
+(function() {
+  const first = document.querySelector('.studio-type-btn.active');
+  if (first) _applyTypeBtn(first);
+})();
+
 // 콘텐츠 유형 버튼 토글
+// label 클릭 시 for 속성으로 radio가 자동 선택됨 — 별도 click() 호출 불필요
 document.querySelectorAll('.studio-type-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.studio-type-btn').forEach(b => {
-      b.classList.remove('active');
-      b.style.borderColor = '#ddd';
-      b.style.background = '';
-      b.style.color = '';
-    });
-    btn.classList.add('active');
-    btn.style.borderColor = '#e8355a';
-    btn.style.background = '#fff0f3';
-    btn.style.color = '#e8355a';
-    // 체크박스 선택
-    const forId = btn.getAttribute('for');
-    document.getElementById(forId)?.click();
-    studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
-    // 시안 초기화
+  btn.addEventListener('click', (e) => {
+    _applyTypeBtn(btn);
+    // radio value는 label for → input 연결로 자동 변경되므로 nextTick에 읽음
+    setTimeout(() => {
+      studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
+    }, 0);
+    // 유형 변경 시 시안 초기화
     document.getElementById('anglesArea').classList.add('d-none');
     document.getElementById('step1AnalyzeArea').classList.remove('d-none');
     selectedAngle = null;
@@ -735,15 +730,28 @@ document.querySelectorAll('.studio-type-btn').forEach(btn => {
   });
 });
 
-// 첫 번째 버튼 스타일 초기화
-document.addEventListener('DOMContentLoaded', () => {
-  const first = document.querySelector('.studio-type-btn.active');
-  if (first) {
-    first.style.borderColor = '#e8355a';
-    first.style.background = '#fff0f3';
-    first.style.color = '#e8355a';
-  }
-});
+function openStudio() {
+  studioStep = 1;
+  selectedAngle = null;
+  studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
+  updateStudioStep();
+  // 모든 step 패널 숨기고 1만 표시
+  document.getElementById('studioStep1').classList.remove('d-none');
+  document.getElementById('studioStep2').classList.add('d-none');
+  document.getElementById('studioStep3').classList.add('d-none');
+  // step1 내부 초기화
+  document.getElementById('anglesArea').classList.add('d-none');
+  document.getElementById('step1Loading').classList.add('d-none');
+  document.getElementById('step1AnalyzeArea').classList.remove('d-none');
+  // 버튼 초기화
+  document.getElementById('studioBackBtn').style.display = 'none';
+  document.getElementById('studioNextBtn').style.display = 'none';
+  // 모달 열기 (기존 인스턴스 재사용)
+  const modalEl = document.getElementById('studioModal');
+  const existing = bootstrap.Modal.getInstance(modalEl);
+  if (existing) { existing.dispose(); }
+  new bootstrap.Modal(modalEl).show();
+}
 
 function updateStudioStep() {
   for (let i = 1; i <= 3; i++) {
