@@ -26,6 +26,10 @@
       </div>
       <div class="d-flex gap-2">
         <a href="{{ url_for('product.edit', product_id=product.id) }}" class="btn btn-sm btn-outline-secondary">편집</a>
+        <button class="btn btn-sm fw-semibold" style="background:#e8355a;color:#fff"
+                onclick="openStudio()">
+          <i class="bi bi-stars me-1"></i>콘텐츠 스튜디오
+        </button>
       </div>
     </div>
   </div>
@@ -209,6 +213,216 @@
   </div>
 </div>
 {% endif %}
+
+<!-- ══════════════════════════════════════════════════════════
+     콘텐츠 스튜디오 Modal (3단계 Wizard)
+══════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="studioModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:900px">
+    <div class="modal-content">
+
+      <!-- 헤더 -->
+      <div class="modal-header py-3" style="background:#fff;border-bottom:2px solid #f0f0f0">
+        <div>
+          <h5 class="modal-title fw-bold mb-0">
+            <i class="bi bi-stars me-2" style="color:#e8355a"></i>콘텐츠 스튜디오
+          </h5>
+          <p class="text-muted small mb-0">{{ product.name }}</p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- 스텝 인디케이터 -->
+      <div class="px-4 py-3" style="background:#fafafa;border-bottom:1px solid #eee">
+        <div class="d-flex align-items-center gap-0">
+          {% for step_n, step_label in [(1,'소구포인트 선택'), (2,'글 초안'), (3,'이미지 생성')] %}
+          <div class="d-flex align-items-center {% if not loop.last %}flex-fill{% endif %}">
+            <div class="d-flex align-items-center gap-2 studio-step-item" data-step="{{ step_n }}">
+              <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                   style="width:28px;height:28px;font-size:.8rem;background:#ddd;color:#888;transition:all .3s"
+                   id="stepCircle{{ step_n }}">{{ step_n }}</div>
+              <span class="small fw-semibold" style="color:#aaa;white-space:nowrap"
+                    id="stepLabel{{ step_n }}">{{ step_label }}</span>
+            </div>
+            {% if not loop.last %}
+            <div class="flex-fill mx-2" style="height:2px;background:#ddd;transition:all .3s"
+                 id="stepLine{{ step_n }}"></div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 패널 영역 -->
+      <div class="modal-body p-4">
+
+        <!-- ── Step 1: 소구포인트 ── -->
+        <div id="studioStep1">
+          <div class="mb-4">
+            <label class="fw-semibold mb-2 d-block">콘텐츠 유형 선택</label>
+            <div class="d-flex flex-wrap gap-2">
+              {% for type_id, label, icon in [
+                ('blog','블로그 포스트','bi-file-text'),
+                ('instagram','인스타그램','bi-instagram'),
+                ('detail_page','상세페이지','bi-layout-text-sidebar'),
+                ('ad_copy','광고 카피','bi-megaphone')
+              ] %}
+              <div class="form-check d-none" id="check_{{ type_id }}">
+                <input class="form-check-input studio-type-radio" type="radio"
+                       name="studioContentType" value="{{ type_id }}"
+                       id="stype_{{ type_id }}"
+                       {% if loop.first %}checked{% endif %}>
+              </div>
+              <label for="stype_{{ type_id }}"
+                     class="btn btn-sm studio-type-btn {% if loop.first %}active{% endif %}"
+                     style="border:2px solid #ddd;border-radius:8px;padding:.4rem .9rem;cursor:pointer">
+                <i class="bi {{ icon }} me-1"></i>{{ label }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- AI 분석 버튼 -->
+          <div class="text-center py-3" id="step1AnalyzeArea">
+            <button class="btn fw-semibold px-5 py-2" style="background:#e8355a;color:#fff;border-radius:12px"
+                    onclick="loadAngles()">
+              <i class="bi bi-cpu me-2"></i>AI 소구포인트 분석
+            </button>
+            <p class="text-muted small mt-2 mb-0">상품 특징을 분석해 3가지 콘텐츠 방향을 제안합니다</p>
+          </div>
+
+          <!-- 로딩 -->
+          <div id="step1Loading" class="text-center py-5 d-none">
+            <div class="spinner-border" style="color:#e8355a;width:2.5rem;height:2.5rem"></div>
+            <p class="mt-3 fw-semibold">AI가 소구포인트를 분석하고 있어요...</p>
+          </div>
+
+          <!-- 시안 카드 3개 -->
+          <div id="anglesArea" class="d-none">
+            <p class="fw-semibold mb-3">원하는 콘텐츠 방향을 선택하세요</p>
+            <div class="row g-3" id="angleCards"></div>
+          </div>
+        </div>
+
+        <!-- ── Step 2: 글 초안 ── -->
+        <div id="studioStep2" class="d-none">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="badge rounded-pill px-3 py-2" style="background:#fff0f3;color:#e8355a;font-size:.8rem"
+                 id="step2AngleBadge"></div>
+            <div class="badge bg-light text-muted rounded-pill px-3 py-2" id="step2TypeBadge"></div>
+          </div>
+
+          <div id="step2Loading" class="text-center py-5">
+            <div class="spinner-border" style="color:#e8355a;width:2.5rem;height:2.5rem"></div>
+            <p class="mt-3 fw-semibold">AI가 글을 작성하고 있어요...</p>
+            <p class="text-muted small">보통 15~30초 소요됩니다</p>
+          </div>
+
+          <div id="step2Content" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="fw-semibold">생성된 글 초안</label>
+              <button class="btn btn-sm btn-outline-secondary" onclick="copyStudioText()">
+                <i class="bi bi-clipboard me-1"></i>복사
+              </button>
+            </div>
+            <textarea id="studioContentText" class="form-control" rows="16"
+                      style="font-size:.85rem;line-height:1.8;resize:vertical;font-family:inherit"></textarea>
+            <p class="text-muted small mt-2 mb-0">
+              <i class="bi bi-pencil me-1"></i>내용을 직접 수정할 수 있습니다
+            </p>
+          </div>
+
+          <div id="step2Error" class="d-none alert alert-danger mt-3"></div>
+        </div>
+
+        <!-- ── Step 3: 이미지 ── -->
+        <div id="studioStep3" class="d-none">
+
+          <div id="step3PromptsArea">
+            <div id="step3Loading" class="text-center py-4">
+              <div class="spinner-border spinner-border-sm" style="color:#e8355a"></div>
+              <span class="ms-2">이미지 구성 계획 중...</span>
+            </div>
+
+            <div id="step3Prompts" class="d-none">
+              <p class="fw-semibold mb-1">이미지 생성 계획</p>
+              <p class="text-muted small mb-3">프롬프트를 수정한 후 생성하세요</p>
+              <div id="promptCards" class="d-flex flex-column gap-3"></div>
+
+              <div class="mt-4 p-3 rounded" style="background:#fff8f9;border:1px solid #f8d0d8">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <span class="fw-semibold">이미지 생성</span>
+                    <span class="badge bg-warning text-dark ms-2" id="imgCostBadge">0P</span>
+                    <span class="text-muted small ms-1">(장당 30P)</span>
+                  </div>
+                  <button class="btn fw-semibold px-4" style="background:#e8355a;color:#fff"
+                          onclick="generateStudioImages()">
+                    <i class="bi bi-image me-1"></i>이미지 생성 시작
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 이미지 생성 중 -->
+          <div id="step3Generating" class="text-center py-5 d-none">
+            <div class="spinner-border" style="color:#e8355a;width:2.5rem;height:2.5rem"></div>
+            <p class="mt-3 fw-semibold">이미지를 생성하고 있어요...</p>
+            <p class="text-muted small">FLUX AI로 고품질 이미지를 만드는 중입니다 (30~60초)</p>
+          </div>
+
+          <!-- 완성 결과 -->
+          <div id="step3Results" class="d-none">
+            <div class="d-flex align-items-center gap-2 mb-4">
+              <i class="bi bi-check-circle-fill" style="color:#198754;font-size:1.3rem"></i>
+              <span class="fw-bold fs-5">콘텐츠 완성!</span>
+            </div>
+
+            <div class="row g-3 mb-4" id="resultImgGrid"></div>
+
+            <div class="card border-0" style="background:#f8f9fa">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="fw-semibold">최종 글 초안</span>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="copyStudioText()">
+                    <i class="bi bi-clipboard"></i> 복사
+                  </button>
+                </div>
+                <div id="step3FinalText" class="small"
+                     style="white-space:pre-wrap;max-height:300px;overflow-y:auto;
+                            background:#fff;border-radius:8px;padding:1rem;
+                            font-size:.82rem;line-height:1.8;border:1px solid #eee"></div>
+              </div>
+            </div>
+
+            <div class="mt-3 d-flex gap-2 justify-content-end">
+              <button class="btn btn-outline-secondary btn-sm" onclick="saveResultImagesToProduct()">
+                <i class="bi bi-save me-1"></i>이미지를 상품에 저장
+              </button>
+            </div>
+          </div>
+
+          <div id="step3Error" class="d-none alert alert-danger mt-3"></div>
+        </div>
+
+      </div><!-- /modal-body -->
+
+      <!-- 네비게이션 푸터 -->
+      <div class="modal-footer justify-content-between" style="background:#fafafa">
+        <button class="btn btn-outline-secondary" id="studioBackBtn" onclick="studioBack()" style="display:none">
+          <i class="bi bi-arrow-left me-1"></i>이전
+        </button>
+        <div></div>
+        <button class="btn fw-semibold px-4" id="studioNextBtn" style="background:#e8355a;color:#fff;display:none"
+                onclick="studioNext()">
+          다음 <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+
+    </div><!-- /modal-content -->
+  </div>
+</div>
 
 {% endblock %}
 
@@ -462,6 +676,406 @@ function dataURLtoBlob(dataURL) {
   const arr = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
   return new Blob([arr], { type: mime });
+}
+
+// ══════════════════════════════════════════════════════
+// 콘텐츠 스튜디오
+// ══════════════════════════════════════════════════════
+let studioStep = 1;
+let selectedAngle = null;
+let studioContentType = 'blog';
+let generatedResultImages = [];
+
+const TYPE_LABELS = {
+  blog: '블로그 포스트', instagram: '인스타그램',
+  detail_page: '상세페이지', ad_copy: '광고 카피'
+};
+
+function openStudio() {
+  studioStep = 1;
+  selectedAngle = null;
+  studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
+  updateStudioStep();
+  // 패널 초기화
+  ['step1', 'step2', 'step3'].forEach(s => {
+    const el = document.getElementById('studioStep' + s.slice(-1));
+    if (el) el.classList.add('d-none');
+  });
+  document.getElementById('studioStep1').classList.remove('d-none');
+  document.getElementById('anglesArea').classList.add('d-none');
+  document.getElementById('step1Loading').classList.add('d-none');
+  document.getElementById('step1AnalyzeArea').classList.remove('d-none');
+  document.getElementById('studioBackBtn').style.display = 'none';
+  document.getElementById('studioNextBtn').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('studioModal')).show();
+}
+
+// 콘텐츠 유형 버튼 토글
+document.querySelectorAll('.studio-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.studio-type-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.borderColor = '#ddd';
+      b.style.background = '';
+      b.style.color = '';
+    });
+    btn.classList.add('active');
+    btn.style.borderColor = '#e8355a';
+    btn.style.background = '#fff0f3';
+    btn.style.color = '#e8355a';
+    // 체크박스 선택
+    const forId = btn.getAttribute('for');
+    document.getElementById(forId)?.click();
+    studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
+    // 시안 초기화
+    document.getElementById('anglesArea').classList.add('d-none');
+    document.getElementById('step1AnalyzeArea').classList.remove('d-none');
+    selectedAngle = null;
+    document.getElementById('studioNextBtn').style.display = 'none';
+  });
+});
+
+// 첫 번째 버튼 스타일 초기화
+document.addEventListener('DOMContentLoaded', () => {
+  const first = document.querySelector('.studio-type-btn.active');
+  if (first) {
+    first.style.borderColor = '#e8355a';
+    first.style.background = '#fff0f3';
+    first.style.color = '#e8355a';
+  }
+});
+
+function updateStudioStep() {
+  for (let i = 1; i <= 3; i++) {
+    const circle = document.getElementById('stepCircle' + i);
+    const label = document.getElementById('stepLabel' + i);
+    const line = document.getElementById('stepLine' + i);
+    if (!circle) continue;
+    if (i < studioStep) {
+      circle.style.background = '#198754'; circle.style.color = '#fff';
+      circle.innerHTML = '<i class="bi bi-check2"></i>';
+      if (label) label.style.color = '#198754';
+      if (line) line.style.background = '#198754';
+    } else if (i === studioStep) {
+      circle.style.background = '#e8355a'; circle.style.color = '#fff';
+      circle.textContent = i;
+      if (label) label.style.color = '#e8355a';
+      if (line) line.style.background = '#ddd';
+    } else {
+      circle.style.background = '#ddd'; circle.style.color = '#888';
+      circle.textContent = i;
+      if (label) label.style.color = '#aaa';
+      if (line) line.style.background = '#ddd';
+    }
+  }
+}
+
+async function loadAngles() {
+  studioContentType = document.querySelector('.studio-type-radio:checked')?.value || 'blog';
+  document.getElementById('step1AnalyzeArea').classList.add('d-none');
+  document.getElementById('step1Loading').classList.remove('d-none');
+  document.getElementById('anglesArea').classList.add('d-none');
+
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/studio/angles`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({content_type: studioContentType})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    renderAngleCards(data.angles || []);
+    document.getElementById('step1Loading').classList.add('d-none');
+    document.getElementById('anglesArea').classList.remove('d-none');
+  } catch(e) {
+    document.getElementById('step1Loading').classList.add('d-none');
+    document.getElementById('step1AnalyzeArea').classList.remove('d-none');
+    alert('소구포인트 분석 실패: ' + e.message);
+  }
+}
+
+function renderAngleCards(angles) {
+  const container = document.getElementById('angleCards');
+  container.innerHTML = '';
+  const colorAccents = ['#e8355a', '#6366f1', '#0ea5e9'];
+  angles.forEach((angle, i) => {
+    const card = document.createElement('div');
+    card.className = 'col-12 col-md-4';
+    card.innerHTML = `
+      <div class="card h-100 angle-card" data-idx="${i}"
+           style="border:2px solid #eee;border-radius:12px;cursor:pointer;transition:all .2s">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="fw-bold" style="color:${colorAccents[i]};font-size:1.1rem">${angle.id || String.fromCharCode(65+i)}</span>
+            <span class="fw-semibold small">${angle.title || ''}</span>
+          </div>
+          <div class="p-2 rounded mb-2" style="background:#f8f9fa;font-size:.82rem;color:#444;line-height:1.5">
+            "${angle.hook || ''}"
+          </div>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            <span class="badge bg-light text-muted">🎯 ${angle.target || ''}</span>
+            <span class="badge bg-light text-muted">✍️ ${angle.tone || ''}</span>
+          </div>
+          <p class="small text-muted mb-2" style="font-size:.78rem">${angle.approach || ''}</p>
+          ${(angle.key_points || []).map(p => `<div class="small" style="font-size:.78rem">• ${p}</div>`).join('')}
+        </div>
+        <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+          <button class="btn btn-sm w-100 fw-semibold"
+                  style="border:2px solid ${colorAccents[i]};color:${colorAccents[i]};border-radius:8px"
+                  onclick="selectAngle(${i})">
+            이 방향으로 작성 →
+          </button>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+  window._studioAngles = angles;
+}
+
+function selectAngle(idx) {
+  selectedAngle = window._studioAngles[idx];
+  // 카드 선택 표시
+  document.querySelectorAll('.angle-card').forEach((card, i) => {
+    if (i === idx) {
+      card.style.borderColor = '#e8355a';
+      card.style.background = '#fff8f9';
+    } else {
+      card.style.borderColor = '#eee';
+      card.style.background = '';
+    }
+  });
+  document.getElementById('studioNextBtn').style.display = '';
+  document.getElementById('studioNextBtn').textContent = '';
+  document.getElementById('studioNextBtn').innerHTML = '글 초안 생성 <i class="bi bi-arrow-right ms-1"></i>';
+}
+
+async function studioNext() {
+  if (studioStep === 1) {
+    if (!selectedAngle) { alert('소구포인트 시안을 선택해주세요.'); return; }
+    await goToStep2();
+  } else if (studioStep === 2) {
+    await goToStep3();
+  }
+}
+
+function studioBack() {
+  if (studioStep === 2) {
+    studioStep = 1;
+    document.getElementById('studioStep2').classList.add('d-none');
+    document.getElementById('studioStep1').classList.remove('d-none');
+    document.getElementById('studioBackBtn').style.display = 'none';
+    document.getElementById('studioNextBtn').style.display = selectedAngle ? '' : 'none';
+    document.getElementById('studioNextBtn').innerHTML = '글 초안 생성 <i class="bi bi-arrow-right ms-1"></i>';
+    updateStudioStep();
+  } else if (studioStep === 3) {
+    studioStep = 2;
+    document.getElementById('studioStep3').classList.add('d-none');
+    document.getElementById('studioStep2').classList.remove('d-none');
+    document.getElementById('studioNextBtn').style.display = '';
+    document.getElementById('studioNextBtn').innerHTML = '이미지 계획 보기 <i class="bi bi-arrow-right ms-1"></i>';
+    updateStudioStep();
+  }
+}
+
+async function goToStep2() {
+  studioStep = 2;
+  updateStudioStep();
+  document.getElementById('studioStep1').classList.add('d-none');
+  document.getElementById('studioStep2').classList.remove('d-none');
+  document.getElementById('studioBackBtn').style.display = '';
+  document.getElementById('studioNextBtn').style.display = 'none';
+
+  document.getElementById('step2AngleBadge').textContent = '✨ ' + (selectedAngle.title || '');
+  document.getElementById('step2TypeBadge').textContent = TYPE_LABELS[studioContentType] || studioContentType;
+  document.getElementById('step2Loading').classList.remove('d-none');
+  document.getElementById('step2Content').classList.add('d-none');
+  document.getElementById('step2Error').classList.add('d-none');
+
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/studio/content`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({content_type: studioContentType, angle: selectedAngle})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    document.getElementById('studioContentText').value = data.text || '';
+    document.getElementById('step2Loading').classList.add('d-none');
+    document.getElementById('step2Content').classList.remove('d-none');
+    document.getElementById('studioNextBtn').style.display = '';
+    document.getElementById('studioNextBtn').innerHTML = '이미지 계획 보기 <i class="bi bi-arrow-right ms-1"></i>';
+  } catch(e) {
+    document.getElementById('step2Loading').classList.add('d-none');
+    const errEl = document.getElementById('step2Error');
+    errEl.classList.remove('d-none');
+    errEl.textContent = '글 생성 실패: ' + e.message;
+    document.getElementById('studioBackBtn').style.display = '';
+  }
+}
+
+async function goToStep3() {
+  studioStep = 3;
+  updateStudioStep();
+  document.getElementById('studioStep2').classList.add('d-none');
+  document.getElementById('studioStep3').classList.remove('d-none');
+  document.getElementById('studioNextBtn').style.display = 'none';
+
+  document.getElementById('step3Loading').classList.remove('d-none');
+  document.getElementById('step3Prompts').classList.add('d-none');
+  document.getElementById('step3Generating').classList.add('d-none');
+  document.getElementById('step3Results').classList.add('d-none');
+  document.getElementById('step3Error').classList.add('d-none');
+
+  const contentText = document.getElementById('studioContentText').value;
+
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/studio/image-prompts`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({
+        content_type: studioContentType,
+        angle: selectedAngle,
+        content: contentText
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    renderPromptCards(data.prompts || []);
+    document.getElementById('step3Loading').classList.add('d-none');
+    document.getElementById('step3Prompts').classList.remove('d-none');
+  } catch(e) {
+    document.getElementById('step3Loading').classList.add('d-none');
+    const errEl = document.getElementById('step3Error');
+    errEl.classList.remove('d-none');
+    errEl.textContent = '이미지 프롬프트 생성 실패: ' + e.message;
+  }
+}
+
+function renderPromptCards(prompts) {
+  const container = document.getElementById('promptCards');
+  container.innerHTML = '';
+  window._studioPrompts = prompts;
+
+  prompts.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'card border-0 p-3';
+    card.style.background = '#f8f9fa';
+    card.innerHTML = `
+      <div class="d-flex align-items-start gap-3">
+        <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+             style="width:36px;height:36px;background:#e8355a;color:#fff;font-size:.85rem">${i+1}</div>
+        <div class="flex-fill">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="fw-semibold small">${item.role || ''}</span>
+            <span class="badge bg-light text-muted">${item.aspect || '1:1'}</span>
+            <span class="text-muted small">${item.style_note || ''}</span>
+          </div>
+          <textarea class="form-control form-control-sm studio-prompt-input" rows="3"
+                    data-idx="${i}"
+                    style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+
+  document.getElementById('imgCostBadge').textContent = (30 * prompts.length) + 'P';
+}
+
+async function generateStudioImages() {
+  // 수정된 프롬프트 수집
+  const inputs = document.querySelectorAll('.studio-prompt-input');
+  const prompts = (window._studioPrompts || []).map((item, i) => ({
+    role: item.role,
+    aspect: item.aspect,
+    prompt: inputs[i]?.value || item.prompt
+  }));
+
+  document.getElementById('step3Prompts').classList.add('d-none');
+  document.getElementById('step3Generating').classList.remove('d-none');
+
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/studio/generate-images`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({prompts})
+    });
+    const data = await res.json();
+
+    generatedResultImages = (data.results || []).filter(r => r.ok).map(r => r.url);
+
+    document.getElementById('step3Generating').classList.add('d-none');
+    renderFinalResults(data.results || []);
+    document.getElementById('step3Results').classList.remove('d-none');
+  } catch(e) {
+    document.getElementById('step3Generating').classList.add('d-none');
+    const errEl = document.getElementById('step3Error');
+    errEl.classList.remove('d-none');
+    errEl.textContent = '이미지 생성 실패: ' + e.message;
+    document.getElementById('step3Prompts').classList.remove('d-none');
+  }
+}
+
+function renderFinalResults(results) {
+  const grid = document.getElementById('resultImgGrid');
+  grid.innerHTML = '';
+  results.forEach(r => {
+    const col = document.createElement('div');
+    col.className = 'col-12 col-md-4';
+    if (r.ok) {
+      col.innerHTML = `
+        <div class="card border-0 overflow-hidden" style="border-radius:12px">
+          <img src="${r.url}" class="img-fluid" style="aspect-ratio:1;object-fit:cover">
+          <div class="card-footer bg-white py-2 text-center">
+            <span class="small fw-semibold">${r.role}</span>
+            <a href="${r.url}" download class="btn btn-sm btn-outline-secondary ms-2 py-0">
+              <i class="bi bi-download"></i>
+            </a>
+          </div>
+        </div>`;
+    } else {
+      col.innerHTML = `
+        <div class="card border-0 text-center p-4" style="background:#f8f9fa;border-radius:12px">
+          <i class="bi bi-image text-muted" style="font-size:2rem"></i>
+          <p class="small text-muted mt-2 mb-0">${r.role}: 생성 실패</p>
+          <p class="small text-danger">${r.message || ''}</p>
+        </div>`;
+    }
+    grid.appendChild(col);
+  });
+
+  // 최종 텍스트 표시
+  document.getElementById('step3FinalText').textContent = document.getElementById('studioContentText').value;
+}
+
+function copyStudioText() {
+  const text = document.getElementById('studioContentText').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target.closest('button');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i> 복사됨';
+    setTimeout(() => btn.innerHTML = orig, 2000);
+  });
+}
+
+async function saveResultImagesToProduct() {
+  if (!generatedResultImages.length) return;
+  const newImages = [...allImages, ...generatedResultImages.filter(u => !allImages.includes(u))];
+  const res = await fetch(`/product/${PRODUCT_ID}/save-images`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
+    body: JSON.stringify({images: newImages})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    generatedResultImages.forEach(url => addImageToGrid(url));
+    allImages = [...new Set(newImages)];
+    alert('상품 이미지에 저장했습니다.');
+  } else {
+    alert(data.message);
+  }
 }
 </script>
 {% endblock %}

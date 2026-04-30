@@ -64,6 +64,7 @@ POINT_COSTS = {
     'img_card_news':  800,   # FLUX + PIL 합성 카드뉴스
     'logo':           800,   # Ideogram 로고 시안
     'bg_remove_adv':   20,   # fal.ai BiRefNet 고급 배경 제거
+    'image_generation': 30,  # 스튜디오 이미지 생성 (FLUX Schnell, 장당)
 }
 
 # ──────────────────────────────────────────

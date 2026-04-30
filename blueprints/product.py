@@ -357,6 +357,311 @@ def delete(product_id):
     return redirect(url_for('product.index'))
 
 
+# ── 콘텐츠 스튜디오 ─────────────────────────────────────
+
+STUDIO_TYPE_LABELS = {
+    'blog': '블로그 포스트',
+    'instagram': '인스타그램 게시물',
+    'detail_page': '상품 상세페이지',
+    'ad_copy': '광고 카피',
+}
+
+STUDIO_POINT_COSTS = {
+    'blog': 80, 'instagram': 30, 'detail_page': 150, 'ad_copy': 60,
+}
+
+IMG_GEN_COST = 30  # 이미지 1장당 포인트
+
+
+def _studio_product_ctx(product: dict) -> str:
+    features_str = '\n'.join(f'- {f}' for f in (product.get('features') or []))
+    price_str = f"{product['price']:,}원" if product.get('price') else '미설정'
+    return (
+        f"상품명: {product['name']}\n"
+        f"카테고리: {product.get('category', '')}\n"
+        f"가격: {price_str}\n"
+        f"핵심 특징:\n{features_str}\n"
+        f"상품 설명: {product.get('description', '')}"
+    )
+
+
+@product_bp.route('/<product_id>/studio/angles', methods=['POST'])
+@login_required
+def studio_angles(product_id):
+    """Step 1: 소구포인트 시안 3개 생성 (무료)."""
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    content_type = (request.json or {}).get('content_type', 'blog')
+    type_label = STUDIO_TYPE_LABELS.get(content_type, content_type)
+
+    brand = None
+    if product.get('brand_id'):
+        r = supabase.table('brand_profiles').select('*').eq('id', product['brand_id']).execute()
+        brand = r.data[0] if r.data else None
+    if not brand:
+        brand = get_default_brand(supabase)
+
+    from services.claude_service import generate_text, build_brand_context
+    brand_ctx = build_brand_context(brand) if brand else ''
+    product_ctx = _studio_product_ctx(product)
+
+    system = (
+        '당신은 한국 마케팅 전문가입니다. 상품 정보를 분석해 콘텐츠 소구포인트 시안을 JSON으로 제안합니다. '
+        '반드시 유효한 JSON 배열만 출력하세요. 마크다운 코드블록 없이 순수 JSON만 출력합니다.'
+    )
+    user = f"""[브랜드 정보]
+{brand_ctx}
+
+[상품 정보]
+{product_ctx}
+
+위 상품의 {type_label} 콘텐츠 소구포인트 시안 3가지를 제안하세요.
+각 시안은 완전히 다른 접근 방식을 사용해야 합니다 (감성/기능/혜택 등 다양하게).
+
+JSON 배열로만 응답하세요:
+[
+  {{
+    "id": "A",
+    "title": "시안 제목 (15자 이내)",
+    "hook": "핵심 후킹 문구 — 독자 눈길을 잡는 첫 문장 (35자 이내)",
+    "target": "주 타겟 독자 (예: 30대 워킹맘, 건강 관심 20대 등)",
+    "tone": "글 톤앤매너 (예: 따뜻하고 감성적, 전문적/신뢰감, 친근하고 유머러스)",
+    "approach": "이 시안의 핵심 접근 방식 한 줄 설명",
+    "key_points": ["포인트1", "포인트2", "포인트3"]
+  }}
+]"""
+
+    try:
+        import json, re
+        raw = generate_text(system, user, max_tokens=1500)
+        match = re.search(r'\[[\s\S]*\]', raw)
+        if not match:
+            raise ValueError('JSON 배열 없음')
+        angles = json.loads(match.group())
+        return jsonify(ok=True, angles=angles, content_type=content_type)
+    except Exception as e:
+        logger.error(f'[STUDIO] angles error: {e}')
+        return jsonify(ok=False, message=f'소구포인트 생성 실패: {e}')
+
+
+@product_bp.route('/<product_id>/studio/content', methods=['POST'])
+@login_required
+def studio_content(product_id):
+    """Step 2: 선택된 시안으로 콘텐츠 초안 생성 (포인트 차감)."""
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    body = request.json or {}
+    content_type = body.get('content_type', 'blog')
+    angle = body.get('angle', {})
+
+    brand = None
+    if product.get('brand_id'):
+        r = supabase.table('brand_profiles').select('*').eq('id', product['brand_id']).execute()
+        brand = r.data[0] if r.data else None
+    if not brand:
+        brand = get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+
+    from services.claude_service import build_brand_context, SYSTEM_BASE
+    brand_ctx = build_brand_context(brand)
+    product_ctx = _studio_product_ctx(product)
+    type_label = STUDIO_TYPE_LABELS.get(content_type, content_type)
+
+    angle_ctx = ''
+    if angle:
+        angle_ctx = f"""
+[선택된 소구포인트 시안]
+- 시안 제목: {angle.get('title', '')}
+- 핵심 후킹 문구: {angle.get('hook', '')}
+- 타겟 독자: {angle.get('target', '')}
+- 톤앤매너: {angle.get('tone', '')}
+- 접근 방식: {angle.get('approach', '')}
+- 핵심 포인트: {', '.join(angle.get('key_points', []))}
+
+위 소구포인트 시안 방향에 맞게 콘텐츠를 작성해 주세요."""
+
+    system = f"{SYSTEM_BASE}\n\n[브랜드 정보]\n{brand_ctx}"
+
+    content_instructions = {
+        'blog': '- 제목 3가지 (클릭률 최적화)\n- SEO 최적화 본문 2,000자 내외\n- 마무리 CTA 문구\n- 해시태그 10개',
+        'instagram': '- 캡션 3가지 버전 (짧·중·긴)\n- 각 버전별 해시태그 30개',
+        'detail_page': '- 상단 훅 문구 (3초 안에 구매욕 자극)\n- 핵심 기능 설명 (기능별 카피)\n- 고객 후기 포맷 3개\n- CTA 문구 5종\n- FAQ 5개',
+        'ad_copy': '- 헤드라인 5종 (감성/혜택/비교/호기심/긴급 소구)\n- 각 헤드라인별 본문 1~2줄\n- CTA 문구',
+    }
+    instructions = content_instructions.get(content_type, f'{type_label} 콘텐츠를 작성해 주세요.')
+
+    user = f"""[상품 정보]
+{product_ctx}
+{angle_ctx}
+
+{type_label}를 작성해 주세요:
+{instructions}"""
+
+    cost = STUDIO_POINT_COSTS.get(content_type, 30)
+    input_data = _product_to_input(product)
+    input_data['studio_angle'] = angle.get('title', '')
+    input_data['studio_content_type'] = content_type
+
+    result = run_text_generation(
+        content_type, brand, input_data, system, user,
+        point_cost=cost,
+        ledger_note=f'스튜디오 {type_label} [{angle.get("title", "")}]',
+        extra_creation_fields={'product_id': product_id},
+    )
+    return jsonify(result)
+
+
+@product_bp.route('/<product_id>/studio/image-prompts', methods=['POST'])
+@login_required
+def studio_image_prompts(product_id):
+    """Step 3: 글 내용 기반 이미지 프롬프트 생성 (무료)."""
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    body = request.json or {}
+    content_type = body.get('content_type', 'blog')
+    content_text = body.get('content', '')[:3000]  # 긴 글은 앞부분만
+    angle = body.get('angle', {})
+
+    from services.claude_service import generate_text
+    product_ctx = _studio_product_ctx(product)
+    has_product_images = bool(product.get('images'))
+    img_note = (
+        '※ 상품 실물 이미지가 있으므로, 배경/분위기/라이프스타일 합성에 적합한 프롬프트를 작성하세요.'
+        if has_product_images else
+        '※ 상품 이미지가 없으므로, 상품이 자연스럽게 등장하는 라이프스타일 장면을 묘사하세요.'
+    )
+
+    type_image_roles = {
+        'blog': ['메인 썸네일', '본문 삽입 이미지 1', '본문 삽입 이미지 2'],
+        'instagram': ['피드 대표 이미지', '카드뉴스 1', '카드뉴스 2'],
+        'detail_page': ['상단 히어로 이미지', '기능 설명 이미지', '라이프스타일 이미지'],
+        'ad_copy': ['광고 메인 비주얼', '배너 이미지', '서브 비주얼'],
+    }
+    roles = type_image_roles.get(content_type, ['이미지 1', '이미지 2', '이미지 3'])
+
+    system = (
+        'You are a professional image prompt engineer for Korean e-commerce brands. '
+        'Generate FLUX image generation prompts in English. '
+        'Output only valid JSON array, no markdown code blocks.'
+    )
+    user = f"""Product info:
+{product_ctx}
+
+Content type: {STUDIO_TYPE_LABELS.get(content_type, content_type)}
+Angle/concept: {angle.get('title', '')} — {angle.get('approach', '')}
+Tone: {angle.get('tone', '')}
+Target audience: {angle.get('target', '')}
+
+Content draft (excerpt):
+{content_text[:800]}
+
+{img_note}
+
+Generate exactly 3 image prompts for these roles: {roles}
+
+JSON array format:
+[
+  {{
+    "role": "{roles[0]}",
+    "prompt": "detailed English image generation prompt optimized for FLUX, photorealistic style, Korean market aesthetic, high quality commercial photography",
+    "aspect": "16:9 or 1:1 or 4:5",
+    "style_note": "간단한 스타일 설명 (한국어)"
+  }}
+]"""
+
+    try:
+        import json, re
+        raw = generate_text(system, user, max_tokens=1200)
+        match = re.search(r'\[[\s\S]*\]', raw)
+        if not match:
+            raise ValueError('JSON 배열 없음')
+        prompts = json.loads(match.group())
+        return jsonify(ok=True, prompts=prompts, has_product_images=has_product_images)
+    except Exception as e:
+        logger.error(f'[STUDIO] image_prompts error: {e}')
+        return jsonify(ok=False, message=f'이미지 프롬프트 생성 실패: {e}')
+
+
+@product_bp.route('/<product_id>/studio/generate-images', methods=['POST'])
+@login_required
+def studio_generate_images(product_id):
+    """Step 3: fal.ai FLUX로 이미지 생성 (장당 포인트 차감)."""
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    body = request.json or {}
+    prompt_items = body.get('prompts', [])  # [{"role": ..., "prompt": ..., "aspect": ...}]
+    if not prompt_items:
+        return jsonify(ok=False, message='프롬프트가 없습니다.')
+
+    from services.point_service import use_points, InsufficientPoints
+    from services.config_service import get_config
+    import requests as req_lib, uuid
+
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        return jsonify(ok=False, message='fal.ai API 키가 설정되지 않았습니다.')
+
+    total_cost = IMG_GEN_COST * len(prompt_items)
+    try:
+        use_points(current_user.id, 'image_generation', str(uuid.uuid4()),
+                   cost_override=total_cost,
+                   note_override=f'스튜디오 이미지 {len(prompt_items)}장')
+    except InsufficientPoints as ip:
+        return jsonify(ok=False, error='points', message=str(ip))
+
+    ASPECT_MAP = {
+        '1:1': 'square', '16:9': 'landscape_16_9', '4:5': 'portrait_4_5',
+        '9:16': 'portrait_9_16', '4:3': 'landscape_4_3',
+    }
+
+    results = []
+    for item in prompt_items:
+        prompt_text = item.get('prompt', '')
+        aspect = ASPECT_MAP.get(item.get('aspect', '1:1'), 'square')
+        role = item.get('role', '이미지')
+        try:
+            resp = req_lib.post(
+                'https://fal.run/fal-ai/flux/schnell',
+                headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
+                json={'prompt': prompt_text, 'image_size': aspect, 'num_images': 1, 'num_inference_steps': 4},
+                timeout=90,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            img_url = (data.get('images') or [{}])[0].get('url', '')
+
+            # Supabase Storage에 저장
+            if img_url:
+                r2 = req_lib.get(img_url, timeout=30)
+                r2.raise_for_status()
+                path = f'{current_user.id}/studio/{product_id[:8]}_{uuid.uuid4().hex[:8]}.jpg'
+                supabase.storage.from_('creations').upload(path, r2.content, {'content-type': 'image/jpeg'})
+                stored_url = supabase.storage.from_('creations').get_public_url(path)
+                results.append({'role': role, 'url': stored_url, 'ok': True})
+            else:
+                results.append({'role': role, 'ok': False, 'message': '이미지 URL 없음'})
+        except Exception as e:
+            logger.error(f'[STUDIO] generate_images error ({role}): {e}')
+            results.append({'role': role, 'ok': False, 'message': str(e)[:100]})
+
+    success = [r for r in results if r.get('ok')]
+    return jsonify(ok=bool(success), results=results,
+                   message=f'{len(success)}/{len(results)}장 생성 완료')
+
+
 # ── 헬퍼 ────────────────────────────────────────────────
 def _product_to_input(product: dict) -> dict:
     features = product.get('features') or []
