@@ -676,14 +676,13 @@ async function generateImagePrompts() {
 }
 
 // ── Step 4: 프롬프트 카드 렌더 ───────────────────────────────
-// 전략: 제품 이미지 있으면 슬롯1 = 원본사진 그대로 / 나머지 = FLUX 생성
+// 제품 슬롯은 prompts 배열과 완전히 분리 — prompts = 순수 AI 프롬프트만
 function renderPromptCards(prompts) {
   const container = document.getElementById('promptCards');
   container.innerHTML = '';
-  window._prompts = prompts;
+  window._prompts = prompts;  // AI 프롬프트 배열 (제품 슬롯 미포함)
 
-  // 비용·버튼 라벨 업데이트
-  const aiSlots = productImageUrl ? prompts.length - 1 : prompts.length;
+  const aiSlots = prompts.length;
   const cost    = aiSlots * 50;
   document.getElementById('totalImgCost').textContent =
     productImageUrl
@@ -692,63 +691,65 @@ function renderPromptCards(prompts) {
   document.getElementById('genBtnLabel').textContent =
     productImageUrl ? `AI 이미지 ${aiSlots}장 생성하기` : `이미지 ${aiSlots}장 생성하기`;
 
+  // ── 제품 슬롯 (prompts 배열과 무관하게 별도 카드) ──────────
+  if (productImageUrl) {
+    const productCard = document.createElement('div');
+    productCard.className = 'p-3 rounded mb-1';
+    productCard.style.background = '#f0fdf4';
+    productCard.innerHTML = `
+      <div class="d-flex gap-3 align-items-start">
+        <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+             style="width:32px;height:32px;background:#198754;color:#fff;font-size:.85rem">1</div>
+        <img src="${productImageUrl}" alt="제품 이미지" id="productSlotThumb"
+             style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #198754;flex-shrink:0">
+        <div class="flex-fill">
+          <div class="fw-semibold small mb-1">메인 제품 이미지</div>
+          <div class="d-flex gap-2 mb-2">
+            <button type="button" class="btn btn-sm active" id="useOriginalBtn"
+                    style="border:2px solid #198754;background:#f0fdf4;color:#198754;border-radius:6px;font-size:.78rem"
+                    onclick="toggleBgReplace(false)">
+              원본 그대로
+            </button>
+            <button type="button" class="btn btn-sm" id="useBgReplaceBtn"
+                    style="border:2px solid #dee2e6;color:#555;border-radius:6px;font-size:.78rem"
+                    onclick="toggleBgReplace(true)">
+              🎨 배경 교체 (80P)
+            </button>
+          </div>
+          <div id="bgReplaceRow" class="d-none">
+            <textarea id="bgPrompt" class="form-control form-control-sm" rows="2"
+                      style="font-size:.78rem;font-family:monospace"
+                      placeholder="원하는 배경 설명 (영문): e.g. soft pastel kitchen with morning sunlight, warm and cozy"></textarea>
+            <div class="text-muted mt-1" style="font-size:.72rem">
+              누끼컷 배경만 교체합니다. 제품·패키지·텍스트는 건드리지 않습니다.
+            </div>
+          </div>
+        </div>
+      </div>`;
+    container.appendChild(productCard);
+  }
+
+  // ── AI 프롬프트 슬롯 (prompts 배열 전체 사용) ───────────────
   prompts.forEach((item, i) => {
-    const isProductSlot = (i === 0 && !!productImageUrl);
+    const num  = productImageUrl ? i + 2 : i + 1;  // 제품이 슬롯1이면 AI는 2번부터
     const card = document.createElement('div');
     card.className = 'p-3 rounded';
-    card.style.background = isProductSlot ? '#f0fdf4' : '#f8f9fa';
-
-    if (isProductSlot) {
-      // 슬롯 1: 원본 사용 or Bria 배경 교체
-      card.innerHTML = `
-        <div class="d-flex gap-3 align-items-start">
-          <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-               style="width:32px;height:32px;background:#198754;color:#fff;font-size:.85rem">1</div>
-          <img src="${productImageUrl}" alt="제품 이미지" id="productSlotThumb"
-               style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #198754;flex-shrink:0">
-          <div class="flex-fill">
-            <div class="fw-semibold small mb-1">메인 제품 이미지</div>
-            <div class="d-flex gap-2 mb-2">
-              <button type="button" class="btn btn-sm active" id="useOriginalBtn"
-                      style="border:2px solid #198754;background:#f0fdf4;color:#198754;border-radius:6px;font-size:.78rem"
-                      onclick="toggleBgReplace(false)">
-                원본 그대로
-              </button>
-              <button type="button" class="btn btn-sm" id="useBgReplaceBtn"
-                      style="border:2px solid #dee2e6;color:#555;border-radius:6px;font-size:.78rem"
-                      onclick="toggleBgReplace(true)">
-                🎨 배경 교체 (80P)
-              </button>
-            </div>
-            <div id="bgReplaceRow" class="d-none">
-              <textarea id="bgPrompt" class="form-control form-control-sm" rows="2"
-                        style="font-size:.78rem;font-family:monospace"
-                        placeholder="원하는 배경 설명 (영문): e.g. soft pastel kitchen with morning sunlight, warm and cozy"></textarea>
-              <div class="text-muted mt-1" style="font-size:.72rem">
-                누끼컷 배경만 교체합니다. 제품·패키지·텍스트는 건드리지 않습니다.
-              </div>
-            </div>
+    card.style.background = '#f8f9fa';
+    card.innerHTML = `
+      <div class="d-flex gap-3 align-items-start">
+        <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+             style="width:32px;height:32px;background:#e8355a;color:#fff;font-size:.85rem">${num}</div>
+        <div class="flex-fill">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="fw-semibold small">${item.role || '라이프스타일 이미지'}</span>
+            <span class="badge bg-light text-muted">${item.aspect || '16:9'}</span>
+            <span class="text-muted small">${item.style_note || ''}</span>
           </div>
-        </div>`;
-    } else {
-      // 나머지 슬롯: FLUX 텍스트→이미지 생성
-      const num = productImageUrl ? i + 1 : i + 1;
-      card.innerHTML = `
-        <div class="d-flex gap-3 align-items-start">
-          <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-               style="width:32px;height:32px;background:#e8355a;color:#fff;font-size:.85rem">${num}</div>
-          <div class="flex-fill">
-            <div class="d-flex align-items-center gap-2 mb-1">
-              <span class="fw-semibold small">${item.role || '라이프스타일 이미지'}</span>
-              <span class="badge bg-light text-muted">${item.aspect || '16:9'}</span>
-              <span class="text-muted small">${item.style_note || ''}</span>
-            </div>
-            <textarea class="form-control form-control-sm prompt-input" rows="3"
-                      data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
-                      style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
-          </div>
-        </div>`;
-    }
+          <textarea class="form-control form-control-sm prompt-input" rows="3"
+                    data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
+                    style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
+        </div>
+      </div>`;
     container.appendChild(card);
   });
 }
@@ -805,7 +806,8 @@ async function generateAllImages() {
   const total    = inputs.length;
 
   for (let i = 0; i < total; i++) {
-    const genIdx = i + 1;  // 사용자에게 보이는 번호
+    const genIdx  = i + 1;
+    const slotNum = productImageUrl ? i + 2 : i + 1;  // 화면 표시 번호
     document.getElementById('imgLoadingText').textContent =
       `라이프스타일 이미지 생성 중... (${genIdx}/${total}) — FLUX AI`;
 
@@ -821,12 +823,12 @@ async function generateAllImages() {
       });
       const data = await res.json();
       generatedImages.push({
-        role:  window._prompts?.[i + aiInputOffset]?.role || `이미지 ${genIdx}`,
+        role:  window._prompts?.[i]?.role || `이미지 ${slotNum}`,  // _prompts는 AI 전용 배열
         url:   data.ok ? data.image_url : null,
         error: data.ok ? null : data.message,
       });
     } catch (err) {
-      generatedImages.push({ role: `이미지 ${genIdx}`, url: null, error: err.message });
+      generatedImages.push({ role: `이미지 ${slotNum}`, url: null, error: err.message });
     }
   }
 
@@ -913,21 +915,6 @@ async function renderFinalContent() {
       if (!placed.has(i)) appendImageBlock(container, img);
     });
 
-    // ── 완성본 DB 저장 ──────────────────────────────────────
-    if (blogCreationId) {
-      try {
-        await fetch('{{ url_for("create.blog_save_final") }}', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
-          body: JSON.stringify({
-            creation_id: blogCreationId,
-            images:      validImgs.map(g => ({role:g.role, url:g.url, is_product:!!g.isOriginal})),
-            placements:  placements || [],
-          })
-        });
-      } catch {}
-    }
-
   } else {
     // 폴백: ## 헤딩 기준 섹션 분리 후 균등 배치
     const sections = text.split(/\n(?=##\s)/);
@@ -939,6 +926,21 @@ async function renderFinalContent() {
       }
     });
     while (imgIdx < validImgs.length) appendImageBlock(container, validImgs[imgIdx++]);
+  }
+
+  // ── 완성본 DB 저장 (Haiku 성공/폴백 무관하게 항상 저장) ──────
+  if (blogCreationId && validImgs.length > 0) {
+    try {
+      await fetch('{{ url_for("create.blog_save_final") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body: JSON.stringify({
+          creation_id: blogCreationId,
+          images:      validImgs.map(g => ({role:g.role, url:g.url, is_product:!!g.isOriginal})),
+          placements:  placements || [],
+        })
+      });
+    } catch {}
   }
 }
 

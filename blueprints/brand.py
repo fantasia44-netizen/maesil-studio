@@ -39,7 +39,9 @@ def index():
 @login_required
 def new():
     supabase = current_app.supabase
-    if not current_user.is_operator_admin:
+    # operator 소속 직원은 관리자만 브랜드 등록 가능
+    # 개인 B2C 계정(operator_id 없음)은 자유롭게 가능
+    if current_user.operator_id and not current_user.is_operator_admin:
         flash('브랜드 등록은 관리자만 가능합니다.', 'warning')
         return redirect(url_for('brand.index'))
 
@@ -57,7 +59,7 @@ def new():
 @login_required
 def edit(brand_id):
     supabase = current_app.supabase
-    if not current_user.is_operator_admin:
+    if current_user.operator_id and not current_user.is_operator_admin:
         flash('브랜드 수정은 관리자만 가능합니다.', 'warning')
         return redirect(url_for('brand.index'))
 
@@ -142,7 +144,7 @@ def _save_brand(supabase, brand_id):
 @brand_bp.route('/<brand_id>/set-default', methods=['POST'])
 @login_required
 def set_default(brand_id):
-    if not current_user.is_operator_admin:
+    if current_user.operator_id and not current_user.is_operator_admin:
         flash('관리자만 기본 브랜드를 변경할 수 있습니다.', 'warning')
         return redirect(url_for('brand.index'))
 
@@ -167,7 +169,7 @@ def set_default(brand_id):
 @brand_bp.route('/<brand_id>/delete', methods=['POST'])
 @login_required
 def delete(brand_id):
-    if not current_user.is_operator_admin:
+    if current_user.operator_id and not current_user.is_operator_admin:
         flash('브랜드 삭제는 관리자만 가능합니다.', 'warning')
         return redirect(url_for('brand.index'))
 
