@@ -9,19 +9,25 @@ maeyo_bp = Blueprint('maeyo', __name__)
 
 def _build_user_context() -> dict:
     """현재 로그인 사용자의 컨텍스트를 매요 AI에 전달할 형태로 구성."""
+    from models import PLAN_FEATURES
+    plan = getattr(current_user, 'plan_type', 'free') or 'free'
+    features = PLAN_FEATURES.get(plan, {})
+
     ctx: dict = {
-        "plan_type":        current_user.plan_type,
-        "company_name":     "",
-        "connected_channels": [],
-        "has_coupang_ad":   False,
-        "has_naver_ad":     False,
+        "plan_type":            plan,
+        "company_name":         "",
+        "has_insight_connection": False,
+        "image_gen":            features.get("image_gen", False),
+        "brand_kit":            features.get("brand_kit", False),
+        "brand_profiles":       features.get("brand_profiles", 1),
+        "connected_channels":   [],
     }
 
     supabase = current_app.supabase
     if not supabase:
         return ctx
 
-    # operator 이름
+    # operator(회사) 이름
     if current_user.operator_id:
         try:
             op = supabase.table('operators').select('name').eq(
@@ -32,12 +38,13 @@ def _build_user_context() -> dict:
         except Exception:
             pass
 
-    # 매실 인사이트 연결 여부
+    # 매실 인사이트 연동 여부
     try:
         conn = supabase.table('maesil_insight_connections').select('id').eq(
             'user_id', str(current_user.id)
         ).limit(1).execute()
         if conn.data:
+            ctx["has_insight_connection"] = True
             ctx["connected_channels"] = ["매실 인사이트"]
     except Exception:
         pass
