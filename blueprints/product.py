@@ -292,6 +292,49 @@ def save_images(product_id):
         return jsonify(ok=False, message=str(e))
 
 
+# ── 인사이트 이미지 가져오기 ──────────────────────────────
+@product_bp.route('/<product_id>/insight-images', methods=['POST'])
+@login_required
+def insight_images(product_id):
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    source_ref = product.get('source_ref')
+    if not source_ref:
+        return jsonify(ok=False, message='매실 인사이트에서 가져온 상품이 아닙니다.')
+
+    try:
+        from services.maesil_insight_connection import get_client_for_user
+        client = get_client_for_user(current_user.id)
+        if not client:
+            return jsonify(ok=False, message='매실 인사이트 연결이 없습니다. 연동 설정을 확인하세요.')
+
+        detail = client.get_product(source_ref)
+
+        raw_images = detail.get('images') or []
+        images = [i for i in raw_images if isinstance(i, str) and i]
+        if detail.get('image_url') and detail['image_url'] not in images:
+            images.insert(0, detail['image_url'])
+
+        if not images:
+            return jsonify(ok=False, message='인사이트에서 이미지를 찾을 수 없습니다.')
+
+        # 기존 이미지와 합치기
+        existing = product.get('images') or []
+        merged = existing + [img for img in images if img not in existing]
+        supabase.table('products').update({
+            'images': merged,
+            'updated_at': now_kst().isoformat(),
+        }).eq('id', product_id).execute()
+
+        return jsonify(ok=True, images=images, message=f'{len(images)}개 이미지를 가져왔습니다.')
+    except Exception as e:
+        logger.error(f'[PRODUCT] insight_images error: {e}')
+        return jsonify(ok=False, message=str(e))
+
+
 # ── 상품 삭제 ───────────────────────────────────────────
 @product_bp.route('/<product_id>/delete', methods=['POST'])
 @login_required

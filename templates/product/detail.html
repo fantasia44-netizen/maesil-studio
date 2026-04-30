@@ -39,43 +39,23 @@
   </div>
   <div class="card-body">
 
-    <!-- 탭 -->
-    <ul class="nav nav-pills mb-3 gap-1" id="imgTab">
-      <li class="nav-item">
-        <button class="nav-link active small py-1 px-3" onclick="showTab('upload')">직접 업로드</button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link small py-1 px-3" onclick="showTab('url')">URL 가져오기</button>
-      </li>
-    </ul>
-
     <!-- 직접 업로드 -->
-    <div id="tab-upload">
-      <div class="border rounded p-4 text-center mb-3" style="border-style:dashed!important;cursor:pointer"
-           onclick="document.getElementById('fileInput').click()">
-        <i class="bi bi-cloud-upload" style="font-size:2rem;color:#e8355a;opacity:.6"></i>
-        <p class="mb-0 mt-2 small text-muted">클릭하거나 이미지를 드래그하세요<br>JPG, PNG, WEBP 지원</p>
-        <input type="file" id="fileInput" accept="image/*" multiple class="d-none" onchange="uploadFiles(this.files)">
-      </div>
+    <div class="border rounded p-4 text-center mb-3" style="border-style:dashed!important;cursor:pointer"
+         onclick="document.getElementById('fileInput').click()">
+      <i class="bi bi-cloud-upload" style="font-size:2rem;color:#e8355a;opacity:.6"></i>
+      <p class="mb-0 mt-2 small text-muted">클릭하거나 이미지를 드래그하세요<br>JPG, PNG, WEBP 지원</p>
+      <input type="file" id="fileInput" accept="image/*" multiple class="d-none" onchange="uploadFiles(this.files)">
     </div>
 
-    <!-- URL 가져오기 -->
-    <div id="tab-url" class="d-none">
-      <div class="alert alert-warning small py-2">
-        <i class="bi bi-exclamation-triangle me-1"></i>
-        <strong>본인 소유 상품 URL만 사용하세요.</strong> 타인의 상품 이미지 사용은 저작권법 위반입니다.
-        <div class="form-check mt-1 mb-0">
-          <input class="form-check-input" type="checkbox" id="copyrightAgree">
-          <label class="form-check-label" for="copyrightAgree">본인 소유 상품임을 확인합니다</label>
-        </div>
-      </div>
-      <div class="input-group input-group-sm">
-        <input type="text" id="urlInput" class="form-control"
-               placeholder="https://www.coupang.com/vp/products/...">
-        <button class="btn btn-outline-secondary" onclick="fetchUrl()">가져오기</button>
-      </div>
-      <div id="urlMsg" class="form-text mt-1"></div>
+    <!-- 매실 인사이트 가져오기 -->
+    {% if product.source == 'maesil_insight' %}
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <button class="btn btn-sm btn-outline-secondary" onclick="fetchInsightImages()">
+        <i class="bi bi-box-arrow-in-down me-1"></i>매실 인사이트에서 이미지 가져오기
+      </button>
+      <span id="insightMsg" class="small text-muted"></span>
     </div>
+    {% endif %}
 
     <!-- 업로드/가져오기 진행 -->
     <div id="imgLoading" class="text-center py-3 d-none">
@@ -357,12 +337,22 @@ function downloadText(id, type) {
 let allImages = [...document.querySelectorAll('.img-item')].map(el => el.dataset.url);
 let bgTargetUrl = '';
 
-function showTab(tab) {
-  document.getElementById('tab-upload').classList.toggle('d-none', tab !== 'upload');
-  document.getElementById('tab-url').classList.toggle('d-none', tab !== 'url');
-  document.querySelectorAll('#imgTab .nav-link').forEach((el, i) => {
-    el.classList.toggle('active', (i === 0 && tab === 'upload') || (i === 1 && tab === 'url'));
-  });
+async function fetchInsightImages() {
+  setImgLoading(true);
+  document.getElementById('insightMsg').textContent = '';
+  try {
+    const res = await fetch(`/product/${PRODUCT_ID}/insight-images`, {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      (data.images || []).forEach(img => addImageToGrid(img));
+      document.getElementById('insightMsg').textContent = '✓ ' + data.message;
+    } else {
+      document.getElementById('insightMsg').textContent = '✗ ' + data.message;
+    }
+  } catch(e) { document.getElementById('insightMsg').textContent = '✗ 오류 발생'; }
+  setImgLoading(false);
 }
 
 async function uploadFiles(files) {
@@ -382,32 +372,6 @@ async function uploadFiles(files) {
   setImgLoading(false);
 }
 
-async function fetchUrl() {
-  if (!document.getElementById('copyrightAgree').checked) {
-    alert('본인 소유 상품임을 먼저 확인해주세요.');
-    return;
-  }
-  const url = document.getElementById('urlInput').value.trim();
-  if (!url) return;
-  setImgLoading(true);
-  document.getElementById('urlMsg').textContent = '';
-  try {
-    const res = await fetch(`/product/${PRODUCT_ID}/import-url`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
-      body: JSON.stringify({ url })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      (data.images || []).forEach(img => addImageToGrid(img));
-      document.getElementById('urlMsg').textContent =
-        `✓ ${data.images?.length || 0}개 이미지 가져옴 — ${data.name || ''}`;
-    } else {
-      document.getElementById('urlMsg').textContent = '✗ ' + data.message;
-    }
-  } catch(e) { document.getElementById('urlMsg').textContent = '✗ 오류 발생'; }
-  setImgLoading(false);
-}
 
 function addImageToGrid(url) {
   if (allImages.includes(url)) return;

@@ -233,16 +233,25 @@ def import_apply():
             failed += 1
             continue
 
+        # 이미지 목록 수집 (image_url + images 배열)
+        raw_images = detail.get('images') or []
+        if isinstance(raw_images, list):
+            images = [i for i in raw_images if isinstance(i, str) and i]
+        else:
+            images = []
+        if detail.get('image_url') and detail['image_url'] not in images:
+            images.insert(0, detail['image_url'])
+
         row = {
             'user_id':     str(current_user.id),
             'brand_id':    brand_id,
             'name':        detail.get('display_name') or '',
             'category':    detail.get('category') or '',
             'price':       int(detail.get('sale_price') or 0) or None,
-            'product_url': '',
+            'product_url': detail.get('product_url') or '',
             'description': detail.get('description_summary') or '',
             'features':    detail.get('features') or [],
-            'image_url':   detail.get('image_url') or '',
+            'images':      images,
             'is_active':   True,
             'source':      'maesil_insight',
             'source_ref':  sid,
