@@ -15,8 +15,15 @@ HEADERS = {
         'AppleWebKit/537.36 (KHTML, like Gecko) '
         'Chrome/124.0.0.0 Safari/537.36'
     ),
-    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Upgrade-Insecure-Requests': '1',
 }
 
 
@@ -31,10 +38,30 @@ def detect_platform(url: str) -> str:
 
 def fetch_product_info(url: str) -> dict:
     """URL → 상품명, 설명, 이미지 목록 추출"""
+    import time
     platform = detect_platform(url)
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    # Referer 설정 (플랫폼별)
+    if platform == 'naver':
+        session.headers['Referer'] = 'https://shopping.naver.com/'
+    elif platform == 'coupang':
+        session.headers['Referer'] = 'https://www.coupang.com/'
+
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
-        resp.raise_for_status()
+        # 첫 요청 실패 시 1초 후 재시도
+        for attempt in range(2):
+            try:
+                resp = session.get(url, timeout=15, allow_redirects=True)
+                if resp.status_code == 429 and attempt == 0:
+                    time.sleep(1.5)
+                    continue
+                resp.raise_for_status()
+                break
+            except requests.exceptions.HTTPError as e:
+                if attempt == 1:
+                    raise
         soup = BeautifulSoup(resp.text, 'html.parser')
     except Exception as e:
         raise ValueError(f'페이지를 불러올 수 없습니다: {e}')
