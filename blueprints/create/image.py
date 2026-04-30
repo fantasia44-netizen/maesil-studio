@@ -14,6 +14,7 @@ ENGINE_COST_MAP = {
     'flux_hq':       'img_hq',
     'ideogram':      'img_ideogram',
     'card_news':     'img_card_news',
+    'bg_replace':    'bg_replace',   # Bria 배경 교체
 }
 
 
@@ -29,9 +30,8 @@ def image_generate():
     style_preset = data.get('style_preset')
     brand_color  = data.get('brand_color', '#e8355a')
     texts        = data.get('texts', [])   # 카드뉴스 전용
-    # img2img 전용 — 제품 레퍼런스 이미지
+    # 배경 교체 전용 — 누끼컷 원본 URL
     reference_image_url = (data.get('reference_image_url') or '').strip() or None
-    strength            = float(data.get('strength', 0.80))
 
     if not prompt:
         return jsonify(ok=False, message='프롬프트를 입력하세요.')
@@ -71,12 +71,14 @@ def image_generate():
 
         if engine == 'card_news':
             image_url = generate_card_news(texts or [prompt], prompt, brand_color)
+        elif engine == 'bg_replace':
+            # Bria 배경 교체 — reference_image_url = 누끼컷, prompt = 배경 설명
+            if not reference_image_url:
+                return jsonify(ok=False, message='배경 교체는 원본 이미지 URL이 필요합니다.')
+            from services.imagen_service import replace_background
+            image_url = replace_background(reference_image_url, prompt)
         else:
-            image_url = generate_image(
-                prompt, engine, style_preset, size, brand_color,
-                reference_image_url=reference_image_url,
-                strength=strength,
-            )
+            image_url = generate_image(prompt, engine, style_preset, size, brand_color)
 
         # Supabase Storage 업로드
         filename = f'{engine}_{creation_id[:8]}.jpg'

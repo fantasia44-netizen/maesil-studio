@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 
 # ── 엔진별 포인트 비용 ───────────────────────────────────
 IMAGE_COSTS = {
-    'flux_preview':  50,   # FLUX.2 Klein — 빠른 시안
-    'flux_standard': 300,  # FLUX.2 Pro — 브랜드 에셋
-    'flux_hq':       600,  # FLUX.2 Pro Max — 최고 품질
+    'flux_preview':  50,   # FLUX Schnell — 빠른 라이프스타일 씬
+    'flux_standard': 300,  # FLUX Pro — 브랜드 에셋
+    'flux_hq':       600,  # FLUX Pro Max — 최고 품질
     'ideogram':      400,  # Ideogram 3.0 — 한글 타이포
     'card_news':     800,  # FLUX + PIL 합성
+    'bg_replace':    80,   # Bria 배경 교체 — 누끼컷 전용
 }
 
 # ── 스타일 프리셋 (LoRA 대신 프롬프트로 브랜드 일관성) ──
@@ -39,22 +40,10 @@ STYLE_PRESETS = {
 
 def generate_image(prompt: str, engine: str = 'flux_standard',
                    style_preset: str = None, size: str = '1024x1024',
-                   brand_color: str = None,
-                   reference_image_url: str = None,
-                   strength: float = 0.80) -> str:
-    """이미지 생성 — base64 data URL 또는 https URL 반환
-
-    Args:
-      reference_image_url: 제품 원본 이미지 URL — 지정 시 img2img 모드로 전환.
-                           (FLUX Dev img2img: 제품을 유지하면서 배경/씬 변환)
-      strength: 변형 강도 0.0(원본 그대로)~1.0(완전 재생성). 기본 0.80.
-    """
+                   brand_color: str = None) -> str:
+    """이미지 생성 — https URL 반환"""
     if style_preset and style_preset in STYLE_PRESETS:
         prompt = f'{prompt}, {STYLE_PRESETS[style_preset]}'
-
-    # 제품 레퍼런스 이미지가 있으면 img2img 우선
-    if reference_image_url:
-        return _generate_flux_img2img(prompt, reference_image_url, strength, size)
 
     if engine in ('flux_preview', 'flux_standard', 'flux_hq'):
         return _generate_flux(prompt, engine, size)
@@ -62,6 +51,42 @@ def generate_image(prompt: str, engine: str = 'flux_standard',
         return _generate_ideogram(prompt, size)
     else:
         return _generate_flux(prompt, 'flux_standard', size)
+
+
+def replace_background(image_url: str, bg_prompt: str) -> str:
+    """Bria AI 배경 교체 — 누끼컷(제품 컷아웃)의 배경만 교체.
+
+    fal.ai 엔드포인트: fal-ai/bria/background/replace
+    제품 패키지·텍스트·로고는 완전히 보존됨.
+    bg_prompt: 원하는 배경 설명 (영문)
+    """
+    from services.config_service import get_config
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    resp = requests.post(
+        'https://fal.run/fal-ai/bria/background/replace',
+        headers={
+            'Authorization': f'Key {api_key}',
+            'Content-Type': 'application/json',
+        },
+        json={
+            'image_url': image_url,
+            'prompt': bg_prompt,
+            'negative_prompt': 'blurry, low quality, distorted',
+            'num_images': 1,
+        },
+        timeout=90,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    # Bria 응답 구조: {"images": [{"url": "..."}]} 또는 {"image": {"url": "..."}}
+    if data.get('images'):
+        return data['images'][0]['url']
+    if data.get('image'):
+        return data['image']['url']
+    raise ValueError(f'Bria 배경 교체 응답 파싱 실패: {data}')
 
 
 def generate_card_news(texts: list[str], background_prompt: str,
@@ -81,50 +106,6 @@ _FAL_MODELS = {
     'flux_standard': 'fal-ai/flux-pro',           # Pro — 브랜드 에셋
     'flux_hq':       'fal-ai/flux-pro/v1.1-ultra',# Max — 최고화질
 }
-
-
-def _generate_flux_img2img(prompt: str, image_url: str,
-                           strength: float, size: str) -> str:
-    """FLUX Dev img2img — 제품 이미지를 레퍼런스로 유지하며 씬/배경 변환.
-
-    fal.ai 엔드포인트: fal-ai/flux/dev/image-to-image
-    strength 0.0 = 원본 그대로, 1.0 = 완전 재생성.
-    제품 패키지 한글 보존 권장값: 0.45~0.60
-    """
-    from services.config_service import get_config
-    api_key = get_config('fal_api_key')
-    if not api_key:
-        raise ValueError('FAL_KEY가 설정되지 않았습니다.')
-
-    # 제품 텍스트/패키지 보존 지시어 자동 추가
-    # FLUX는 한글 텍스트를 멋대로 변형하므로 원본 보존을 강제
-    preserve_hint = (
-        'preserve original product label and packaging exactly as shown, '
-        'do not alter any text or logo on the product'
-    )
-    enhanced_prompt = f'{prompt}, {preserve_hint}'
-
-    w, h = size.split('x')
-    resp = requests.post(
-        'https://fal.run/fal-ai/flux/dev/image-to-image',
-        headers={
-            'Authorization': f'Key {api_key}',
-            'Content-Type': 'application/json',
-        },
-        json={
-            'prompt': enhanced_prompt,
-            'image_url': image_url,
-            'strength': max(0.0, min(1.0, float(strength))),
-            'image_size': {'width': int(w), 'height': int(h)},
-            'num_inference_steps': 28,
-            'num_images': 1,
-            'enable_safety_checker': True,
-        },
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return data['images'][0]['url']
 
 
 def _generate_flux(prompt: str, engine: str, size: str) -> str:

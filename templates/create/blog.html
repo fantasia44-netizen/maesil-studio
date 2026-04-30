@@ -544,6 +544,26 @@ function copyBlogText() {
   setTimeout(() => btn.innerHTML = orig, 2000);
 }
 
+// ── 배경 교체 토글 ───────────────────────────────────────────
+function toggleBgReplace(on) {
+  const origBtn = document.getElementById('useOriginalBtn');
+  const bgBtn   = document.getElementById('useBgReplaceBtn');
+  const bgRow   = document.getElementById('bgReplaceRow');
+  if (!origBtn) return;
+
+  if (on) {
+    origBtn.style.borderColor = '#dee2e6'; origBtn.style.background = '#fff'; origBtn.style.color = '#555';
+    bgBtn.style.borderColor   = '#e8355a'; bgBtn.style.background   = '#fff8f9'; bgBtn.style.color = '#e8355a';
+    bgBtn.classList.add('active');
+    bgRow.classList.remove('d-none');
+  } else {
+    origBtn.style.borderColor = '#198754'; origBtn.style.background = '#f0fdf4'; origBtn.style.color = '#198754';
+    bgBtn.style.borderColor   = '#dee2e6'; bgBtn.style.background   = '#fff'; bgBtn.style.color = '#555';
+    bgBtn.classList.remove('active');
+    bgRow.classList.add('d-none');
+  }
+}
+
 // ── Step 4: 이미지 수 선택 ───────────────────────────────────
 function selectImgCount(n, el) {
   selectedImgCount = n;
@@ -640,20 +660,34 @@ function renderPromptCards(prompts) {
     card.style.background = isProductSlot ? '#f0fdf4' : '#f8f9fa';
 
     if (isProductSlot) {
-      // 슬롯 1: 원본 제품 이미지 그대로 사용 (AI 생성 X)
+      // 슬롯 1: 원본 사용 or Bria 배경 교체
       card.innerHTML = `
-        <div class="d-flex gap-3 align-items-center">
+        <div class="d-flex gap-3 align-items-start">
           <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
                style="width:32px;height:32px;background:#198754;color:#fff;font-size:.85rem">1</div>
-          <img src="${productImageUrl}" alt="제품 이미지"
+          <img src="${productImageUrl}" alt="제품 이미지" id="productSlotThumb"
                style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #198754;flex-shrink:0">
-          <div>
-            <div class="fw-semibold small mb-1">
-              메인 제품 이미지 <span class="badge bg-success ms-1">원본 사용</span>
+          <div class="flex-fill">
+            <div class="fw-semibold small mb-1">메인 제품 이미지</div>
+            <div class="d-flex gap-2 mb-2">
+              <button type="button" class="btn btn-sm active" id="useOriginalBtn"
+                      style="border:2px solid #198754;background:#f0fdf4;color:#198754;border-radius:6px;font-size:.78rem"
+                      onclick="toggleBgReplace(false)">
+                원본 그대로
+              </button>
+              <button type="button" class="btn btn-sm" id="useBgReplaceBtn"
+                      style="border:2px solid #dee2e6;color:#555;border-radius:6px;font-size:.78rem"
+                      onclick="toggleBgReplace(true)">
+                🎨 배경 교체 (80P)
+              </button>
             </div>
-            <div class="text-muted" style="font-size:.75rem">
-              실제 제품 사진을 그대로 삽입합니다.<br>
-              AI 생성 없음 — 패키지 글자·로고 원본 유지
+            <div id="bgReplaceRow" class="d-none">
+              <textarea id="bgPrompt" class="form-control form-control-sm" rows="2"
+                        style="font-size:.78rem;font-family:monospace"
+                        placeholder="원하는 배경 설명 (영문): e.g. soft pastel kitchen with morning sunlight, warm and cozy"></textarea>
+              <div class="text-muted mt-1" style="font-size:.72rem">
+                누끼컷 배경만 교체합니다. 제품·패키지·텍스트는 건드리지 않습니다.
+              </div>
             </div>
           </div>
         </div>`;
@@ -692,15 +726,40 @@ async function generateAllImages() {
   document.getElementById('imgGenLoading').classList.remove('d-none');
   document.getElementById('step4Error').classList.add('d-none');
 
-  // 슬롯 1이 원본 제품 이미지면 바로 추가 (AI 생성 안 함)
+  // 슬롯 1: 제품 이미지 (원본 or 배경 교체)
   let aiInputOffset = 0;
   if (productImageUrl && window._prompts?.length) {
-    generatedImages.push({
-      role: '메인 제품 이미지',
-      url:  productImageUrl,
-      isOriginal: true,
-    });
-    aiInputOffset = 1;  // prompt-input은 index 0부터지만 generatedImages는 이미 1개
+    const doBgReplace = document.getElementById('useBgReplaceBtn')?.classList.contains('active');
+    const bgPromptVal = (document.getElementById('bgPrompt')?.value || '').trim();
+
+    if (doBgReplace && bgPromptVal) {
+      // Bria 배경 교체
+      document.getElementById('imgLoadingText').textContent = '제품 배경 교체 중... — Bria AI';
+      try {
+        const res  = await fetch('/create/image/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({
+            engine: 'bg_replace',
+            prompt: bgPromptVal,
+            reference_image_url: productImageUrl,
+            size: '1024x1024',
+          })
+        });
+        const data = await res.json();
+        generatedImages.push({
+          role: '메인 제품 이미지 (배경 교체)',
+          url:  data.ok ? data.image_url : productImageUrl,
+          isOriginal: !data.ok,
+        });
+      } catch {
+        generatedImages.push({ role: '메인 제품 이미지', url: productImageUrl, isOriginal: true });
+      }
+    } else {
+      // 원본 그대로
+      generatedImages.push({ role: '메인 제품 이미지', url: productImageUrl, isOriginal: true });
+    }
+    aiInputOffset = 1;
   }
 
   const styleMod = STYLE_MODIFIERS[selectedStyle] || '';
