@@ -15,5 +15,5 @@ Pillow==11.1.0
 openai==1.77.0
 sentry-sdk[flask]==2.20.0
 markdown==3.7
-rembg==2.0.75
+rembg==2.0.57
 beautifulsoup4==4.12.3
