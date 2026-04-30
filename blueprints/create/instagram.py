@@ -144,22 +144,28 @@ def instagram_angles():
 [브랜드·상품 정보]
 {brand_ctx}{dir_line}
 
-인스타그램 특성:
-- 이미지가 먼저 눈에 들어옴 → 첫 줄 후킹이 핵심
-- 짧고 강렬한 메시지
-- 감성·공감·경험 중심
+인스타그램에서 실제로 반응 오는 5가지 스토리 아크 유형:
+- 고민공감형: 공감 → 심화 → 전환 → 해결 → 희망 (감성·공감 위주)
+- 문제해결형: 문제 → 고통 → 발견 → 결과 → CTA (솔루션 제시)
+- 정보제공형: 후킹 질문 → 정보1 → 정보2 → 정보3 → 정리 (교육형)
+- 사건스토리형: 사건 → 전개 → 클라이막스 → 해결 → 반전 (스토리텔링)
+- 유머공감형: 웃긴상황 → 공감 → 더웃김 → 반전 → 제품연결 (유머)
+
+각 시안은 이 중 하나의 스토리 아크를 선택해 맞춤 제안하세요.
 
 각 시안 필드:
 - id: "angle_1" ~ "angle_3"
 - title: 방향 제목 (8자 이내)
-- hook: 첫 줄 후킹 문구 (20자 이내, 인스타 캡션 첫 줄)
+- hook: 첫 줄 후킹 문구 (20자 이내)
 - target: 타겟 (15자 이내)
-- tone: 톤 (예: 감성형, 유머형, 정보형, 라이프스타일형)
-- image_vibe: 이 방향에 어울리는 이미지 분위기 (한글, 1문장)
+- tone: 톤 (감성형/유머형/정보형/라이프스타일형 중 택1)
+- story_arc: 위 5가지 중 가장 어울리는 스토리 아크 유형명 (예: "고민공감형")
+- arc_flow: 이 아크의 컷 흐름 요약 (예: "공감→심화→전환→해결→희망", 화살표로 연결)
+- image_vibe: 이미지 분위기 (한글, 1문장)
 - key_message: 핵심 메시지 2~3줄 (문자열 배열)
 
 순수 JSON 배열만 출력:
-[{{"id":"angle_1","title":"...","hook":"...","target":"...","tone":"...","image_vibe":"...","key_message":["...","..."]}},...]\n"""
+[{{"id":"angle_1","title":"...","hook":"...","target":"...","tone":"...","story_arc":"...","arc_flow":"...","image_vibe":"...","key_message":["...","..."]}},...]\n"""
 
     try:
         raw   = generate_text(system, prompt, max_tokens=1200, model='claude-haiku-4-5-20251001')
@@ -245,7 +251,133 @@ def instagram_generate():
 
 
 # ─────────────────────────────────────────────────────────────
-# Step 4 — 이미지 프롬프트 자동 생성 (Haiku)
+# Step 4 — N컷 스토리 플랜 생성 (Haiku)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/instagram/story-plan', methods=['POST'])
+@login_required
+def instagram_story_plan():
+    """스타일 + 장 수 + 소구포인트 → 패널별 장면·프롬프트·텍스트 배열"""
+    supabase = current_app.supabase
+    data     = request.get_json(force=True) or {}
+
+    style      = (data.get('style')      or 'realistic_banner').strip()
+    quantity   = min(max(int(data.get('quantity') or 5), 1), 9)
+    brand_id   = (data.get('brand_id')   or '').strip()
+    product_id = (data.get('product_id') or '').strip()
+    angle      = data.get('angle') or {}
+    direction  = (data.get('direction')  or '').strip()
+    img_size   = (data.get('size')       or '1:1').strip()
+
+    brand   = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+    product = _get_product(supabase, product_id) if product_id else None
+
+    from services.claude_service import build_brand_context, generate_text
+    brand_ctx   = build_brand_context(brand, product)
+    angle_title = angle.get('title', '')     if isinstance(angle, dict) else ''
+    angle_vibe  = angle.get('image_vibe', '') if isinstance(angle, dict) else ''
+    angle_hook  = angle.get('hook', '')      if isinstance(angle, dict) else ''
+    story_arc   = angle.get('story_arc', '') if isinstance(angle, dict) else ''
+    arc_flow    = angle.get('arc_flow', '')  if isinstance(angle, dict) else ''
+
+    # story_arc 없으면 기본 추론
+    if not story_arc:
+        tone = (angle.get('tone', '') if isinstance(angle, dict) else '').lower()
+        if '유머' in tone:
+            story_arc, arc_flow = '유머공감형', '웃긴상황→공감→더웃김→반전→제품연결'
+        elif '정보' in tone:
+            story_arc, arc_flow = '정보제공형', '후킹질문→정보1→정보2→정보3→정리'
+        else:
+            story_arc, arc_flow = '고민공감형', '공감→심화→전환→해결→희망'
+
+    STYLE_INFO = {
+        'realistic_banner': {
+            'name':       '실사 라이프스타일 배너',
+            'img_guide':  '실사 사진 스타일. 사람/라이프스타일 장면. 텍스트 포함 금지.',
+            'text_field': 'title(메인 한글 문구 15자 이내), subtitle(서브 20자 이내, 없으면 빈 문자열)',
+            'story_hint': '각 컷은 홍보 스토리텔링: 공감→문제→해결→제품→CTA 흐름으로',
+        },
+        'webtoon': {
+            'name':       '웹툰 만화 컷',
+            'img_guide':  '한국 웹툰 스타일. 귀엽고 디테일한 캐릭터. 말풍선 공간 확보. 텍스트 배경 없이.',
+            'text_field': 'dialogue1(첫 번째 말풍선 20자 이내), dialogue2(두 번째 말풍선 20자 이내, 없으면 빈 문자열)',
+            'story_hint': '연속 만화 스토리: 도입→문제→발견→해결→마무리 형식으로 자연스럽게 연결',
+        },
+        'typography': {
+            'name':       '타이포그래피 카드',
+            'img_guide':  '텍스트 중심 감성 디자인 카드. 브랜드 컬러 배경. 한글 텍스트 직접 포함.',
+            'text_field': 'title(메인 15자 이내), subtitle(서브 20자 이내)',
+            'story_hint': '메시지 카드 시리즈: 각 카드가 하나의 메시지를 전달. 시리즈로 읽히도록',
+        },
+    }
+    info = STYLE_INFO.get(style, STYLE_INFO['realistic_banner'])
+
+    # arc_flow → quantity에 맞게 역할 배분
+    arc_stages = [s.strip() for s in arc_flow.split('→') if s.strip()] if arc_flow else []
+    if arc_stages and len(arc_stages) != quantity:
+        # 스테이지 수를 quantity에 맞게 조정
+        if len(arc_stages) > quantity:
+            arc_stages = arc_stages[:quantity]
+        else:
+            while len(arc_stages) < quantity:
+                arc_stages.append('마무리')
+    arc_hint = ' → '.join(arc_stages) if arc_stages else ''
+
+    system = '당신은 인스타그램 카드뉴스·웹툰 스토리 작가 겸 AI 이미지 프롬프트 엔지니어입니다. 순수 JSON 배열만 출력하세요.'
+    prompt = f"""인스타그램 {quantity}컷 {info['name']} 구성안을 JSON 배열로 만드세요.
+
+[브랜드·상품]
+{brand_ctx}
+
+[소구포인트]
+- 방향: {angle_title}
+- 이미지 분위기: {angle_vibe}
+- 후킹 문구: {angle_hook}
+- 게시 방향: {direction}
+
+[스토리 아크: {story_arc}]
+컷 흐름: {arc_hint or info['story_hint']}
+각 컷이 이 흐름대로 자연스럽게 연결되도록 구성하세요.
+스토리는 처음부터 끝까지 하나의 완결된 이야기로 흘러야 합니다.
+
+[이미지 스타일]
+{info['name']}: {info['img_guide']}
+
+[비율] {img_size}
+
+[출력 — 정확히 {quantity}개 JSON 배열]
+각 패널 필드:
+- panel: 번호 (1~{quantity})
+- role: 이 컷의 역할 — 위 흐름 단계명 그대로 (8자 이내)
+- scene_ko: 이 장면 한국어 요약 (15자 이내)
+- flux_prompt: 영문 FLUX 프롬프트 (50~80단어, 이 패널 장면에 맞게 구체적으로. 직전 패널과 달라야 함)
+- {info['text_field']}
+- title, subtitle, dialogue1, dialogue2 — 해당 스타일에 쓰지 않는 필드는 반드시 빈 문자열
+
+순수 JSON 배열만:
+[{{"panel":1,"role":"공감","scene_ko":"...","flux_prompt":"...","title":"...","subtitle":"...","dialogue1":"","dialogue2":""}},...]"""
+
+    try:
+        raw    = generate_text(system, prompt,
+                               max_tokens=quantity * 350,
+                               model='claude-haiku-4-5-20251001')
+        clean  = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
+        s, e   = clean.find('['), clean.rfind(']') + 1
+        if s >= 0 and e > s:
+            clean = clean[s:e]
+        panels = json.loads(clean)
+        if not isinstance(panels, list) or not panels:
+            raise ValueError('empty')
+        return jsonify(ok=True, panels=panels[:quantity])
+    except Exception as ex:
+        logger.error(f'[insta/story-plan] {ex}')
+        return jsonify(ok=False, message=f'스토리 구성 생성 실패: {ex}')
+
+
+# ─────────────────────────────────────────────────────────────
+# Step 4 — 이미지 프롬프트 자동 생성 (단일, Haiku)
 # ─────────────────────────────────────────────────────────────
 
 @create_bp.route('/instagram/image-prompt', methods=['POST'])

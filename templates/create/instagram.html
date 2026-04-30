@@ -133,18 +133,37 @@
 </div>
 
 <!-- ══════ Step 4 ══════ -->
-<div id="step4" class="d-none" style="max-width:860px">
+<div id="step4" class="d-none" style="max-width:900px">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <button class="btn btn-sm btn-outline-secondary" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>캡션으로</button>
+    <span id="step4ArcBadge" class="badge rounded-pill px-3 py-2" style="background:#fff0f8;color:#d63384;font-size:.78rem"></span>
   </div>
 
   <div class="card mb-3">
     <div class="card-header py-3">
-      <h6 class="mb-0 fw-bold"><i class="bi bi-image me-2" style="color:#d63384"></i>이미지 설정</h6>
+      <h6 class="mb-0 fw-bold"><i class="bi bi-images me-2" style="color:#d63384"></i>이미지 설정</h6>
     </div>
     <div class="card-body p-4">
 
-      <!-- 비율 선택 -->
+      <!-- ① 장 수 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">
+          이미지 장 수
+          <span class="text-muted fw-normal ms-1" style="font-size:.78rem">인스타 카루셀 1~9장</span>
+        </label>
+        <div class="d-flex gap-2 flex-wrap">
+          {% for n in range(1, 10) %}
+          <button type="button" class="qty-btn btn btn-sm {% if n == 1 %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                  style="width:42px;height:42px;font-weight:700;font-size:.95rem;padding:0"
+                  onclick="selectQuantity({{ n }}, this)">{{ n }}</button>
+          {% endfor %}
+        </div>
+        <div class="mt-2 text-muted" style="font-size:.76rem" id="qtyHint">
+          1장 — 단일 이미지로 생성합니다
+        </div>
+      </div>
+
+      <!-- ② 비율 선택 -->
       <div class="mb-4">
         <label class="form-label fw-semibold small mb-2">이미지 비율</label>
         <div class="d-flex gap-3">
@@ -160,14 +179,14 @@
         </div>
       </div>
 
-      <!-- 스타일 선택 -->
-      <div class="mb-4">
+      <!-- ③ 스타일 선택 -->
+      <div class="mb-3">
         <label class="form-label fw-semibold small mb-2">이미지 스타일</label>
         <div class="row g-3" id="styleCards">
           {% for sid, sicon, slabel, sdesc, scost in [
-            ('realistic_banner','bi-camera','실사 배너','라이프스타일 사진 + 하단 한글 텍스트 배너','50P'),
-            ('webtoon','bi-emoji-smile','웹툰 컷','웹툰 스타일 씬 + 한글 말풍선 대사','50P'),
-            ('typography','bi-fonts','타이포 카드','한글 텍스트를 이미지에 직접 렌더링','400P'),
+            ('realistic_banner','bi-camera','실사 배너','라이프스타일 사진 + 하단 한글 텍스트 배너','50P/장'),
+            ('webtoon','bi-emoji-smile','웹툰 컷','웹툰 스타일 씬 + 한글 말풍선 대사','50P/장'),
+            ('typography','bi-fonts','타이포 카드','한글 텍스트를 이미지에 직접 렌더링','400P/장'),
           ] %}
           <div class="col-12 col-md-4">
             <div class="style-card border rounded p-3 h-100"
@@ -185,8 +204,8 @@
         </div>
       </div>
 
-      <!-- 텍스트 입력 (스타일별 조건부) -->
-      <div id="textInputSection" class="d-none">
+      <!-- ④-A 단일 이미지 모드 (qty=1) -->
+      <div id="singleImgSection" class="d-none">
         <hr class="my-3">
         <label class="form-label fw-semibold small mb-2" id="textInputLabel">이미지에 들어갈 텍스트</label>
         <div id="bannerTextFields">
@@ -202,39 +221,89 @@
             <i class="bi bi-info-circle me-1"></i>타이포 카드는 아래 프롬프트에 한글 텍스트를 직접 포함해 주세요
           </div>
         </div>
-      </div>
 
-      <!-- AI 이미지 프롬프트 -->
-      <div id="promptSection" class="d-none mt-3">
-        <hr class="my-3">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <label class="form-label fw-semibold small mb-0">AI 이미지 프롬프트 <span class="text-muted fw-normal">(영문, 직접 수정 가능)</span></label>
-          <button class="btn btn-sm btn-outline-secondary" onclick="refreshImagePrompt()">
-            <i class="bi bi-arrow-clockwise me-1"></i>재생성
+        <div class="mt-3">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <label class="form-label fw-semibold small mb-0">AI 이미지 프롬프트 <span class="text-muted fw-normal">(영문)</span></label>
+            <button class="btn btn-sm btn-outline-secondary" onclick="refreshImagePrompt()">
+              <i class="bi bi-arrow-clockwise me-1"></i>재생성
+            </button>
+          </div>
+          <textarea id="fluxPrompt" class="form-control form-control-sm" rows="4"
+                    style="font-size:.8rem;font-family:monospace;resize:vertical"
+                    placeholder="이미지 생성 프롬프트..."></textarea>
+          <div id="promptLoading" class="text-center py-2 d-none">
+            <span class="spinner-border spinner-border-sm me-1" style="color:#d63384"></span>
+            <span class="text-muted small">프롬프트 생성 중...</span>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <button id="imgGenBtn" class="btn fw-semibold py-2 w-100"
+                  style="background:#d63384;color:#fff;border-radius:10px"
+                  onclick="generateImage()">
+            <span id="genBtnNormal"><i class="bi bi-image me-2"></i>이미지 생성하기</span>
+            <span id="genBtnLoading" class="d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
           </button>
-        </div>
-        <textarea id="fluxPrompt" class="form-control form-control-sm" rows="4"
-                  style="font-size:.8rem;font-family:monospace;resize:vertical"
-                  placeholder="이미지 생성 프롬프트..."></textarea>
-        <div id="promptLoading" class="text-center py-2 d-none">
-          <span class="spinner-border spinner-border-sm me-1" style="color:#d63384"></span>
-          <span class="text-muted small">프롬프트 생성 중...</span>
+          <div class="text-center text-muted mt-2" id="genCostHint" style="font-size:.78rem"></div>
         </div>
       </div>
 
-      <!-- 생성 버튼 -->
-      <div id="genBtnSection" class="mt-4 d-none">
-        <button id="imgGenBtn" class="btn fw-semibold px-5 py-2 w-100"
-                style="background:#d63384;color:#fff;border-radius:10px"
-                onclick="generateImage()">
-          <span id="genBtnNormal"><i class="bi bi-image me-2"></i>이미지 생성하기</span>
-          <span id="genBtnLoading" class="d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
-        </button>
-        <div class="text-center text-muted mt-2" id="genCostHint" style="font-size:.78rem"></div>
+      <!-- ④-B 멀티 이미지 모드 (qty>1) -->
+      <div id="multiImgSection" class="d-none">
+        <hr class="my-3">
+
+        <!-- 스토리 구성 생성 버튼 -->
+        <div id="storyPlanBtn" class="d-none">
+          <button class="btn fw-semibold w-100 py-2" style="background:#6366f1;color:#fff;border-radius:10px"
+                  onclick="generateStoryPlan()">
+            <i class="bi bi-magic me-2"></i>스토리 구성 생성
+          </button>
+          <div class="text-center text-muted mt-2" style="font-size:.76rem">
+            AI가 각 컷의 장면·대사·프롬프트를 자동으로 구성합니다
+          </div>
+        </div>
+
+        <!-- 패널 플랜 로딩 -->
+        <div id="panelPlanLoading" class="text-center py-4 d-none">
+          <div class="spinner-border" style="color:#6366f1;width:1.8rem;height:1.8rem"></div>
+          <p class="mt-2 text-muted small">스토리 구성 중...</p>
+        </div>
+
+        <!-- 패널 카드 목록 -->
+        <div id="panelCards" class="d-flex flex-column gap-2"></div>
+
+        <!-- 재구성 + 모두 생성 버튼 -->
+        <div id="genAllSection" class="mt-3 d-none">
+          <div class="d-flex gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="generateStoryPlan()">
+              <i class="bi bi-arrow-clockwise me-1"></i>스토리 재구성
+            </button>
+          </div>
+
+          <!-- 진행 상태바 -->
+          <div id="genProgress" class="mb-2 d-none">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <span class="small text-muted" id="genProgressText">생성 중...</span>
+              <span class="small text-muted" id="genProgressPct">0%</span>
+            </div>
+            <div class="progress" style="height:6px;border-radius:3px">
+              <div id="genProgressBar" class="progress-bar" style="width:0%;background:#d63384;transition:width .3s"></div>
+            </div>
+          </div>
+
+          <button id="genAllBtn" class="btn fw-semibold py-2 w-100"
+                  style="background:#d63384;color:#fff;border-radius:10px"
+                  onclick="generateAllImages()">
+            <span id="genAllNormal"><i class="bi bi-images me-2"></i>모두 생성하기</span>
+            <span id="genAllLoading" class="d-none"><span class="spinner-border spinner-border-sm me-2"></span>생성 중...</span>
+          </button>
+          <div class="text-center text-muted mt-2" id="genAllCostHint" style="font-size:.78rem"></div>
+        </div>
       </div>
+
     </div>
   </div>
-
   <div id="step4Error" class="alert alert-danger d-none"></div>
 </div>
 
@@ -249,24 +318,63 @@
     <!-- 이미지 -->
     <div class="col-md-5">
       <div class="card h-100">
-        <div class="card-header py-2">
+        <div class="card-header py-2 d-flex align-items-center justify-content-between">
           <span class="small fw-semibold">생성된 이미지</span>
+          <span id="carouselRole" class="text-muted" style="font-size:.72rem"></span>
         </div>
         <div class="card-body p-2 text-center">
-          <img id="finalImage" src="" alt="인스타 이미지" style="max-width:100%;border-radius:8px;display:none">
-          <div id="finalImgLoading" class="py-5">
-            <div class="spinner-border" style="color:#d63384;width:2rem;height:2rem"></div>
-            <p class="mt-2 text-muted small">이미지 생성 중...</p>
+
+          <!-- 단일 이미지 뷰 -->
+          <div id="singleImageView">
+            <img id="finalImage" src="" alt="인스타 이미지" style="max-width:100%;border-radius:8px;display:none">
+            <div id="finalImgLoading" class="py-5">
+              <div class="spinner-border" style="color:#d63384;width:2rem;height:2rem"></div>
+              <p class="mt-2 text-muted small">이미지 생성 중...</p>
+            </div>
+            <div id="step5ImgActions" class="mt-2 flex-column gap-2" style="display:none">
+              <a id="downloadBtn" href="#" target="_blank" download
+                 class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-download me-1"></i>이미지 저장
+              </a>
+              <button class="btn btn-sm btn-outline-primary" onclick="goStep(4)">
+                <i class="bi bi-arrow-repeat me-1"></i>이미지 재생성
+              </button>
+            </div>
           </div>
-          <div id="step5ImgActions" class="d-none mt-2 flex-column gap-2" style="display:none">
-            <a id="downloadBtn" href="#" target="_blank" download
-               class="btn btn-sm btn-outline-secondary">
-              <i class="bi bi-download me-1"></i>이미지 저장
-            </a>
-            <button class="btn btn-sm btn-outline-primary" onclick="goStep(4)">
-              <i class="bi bi-arrow-repeat me-1"></i>이미지 재생성
-            </button>
+
+          <!-- 캐러셀 뷰 (멀티 이미지) -->
+          <div id="carouselView" class="d-none">
+            <div class="d-flex align-items-center justify-content-between mb-2 px-1">
+              <button class="btn btn-sm btn-outline-secondary px-2" onclick="carouselGo(-1)">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <span id="carouselCounter" class="small fw-semibold text-muted">1 / 5</span>
+              <button class="btn btn-sm btn-outline-secondary px-2" onclick="carouselGo(1)">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+            <div style="position:relative;min-height:180px">
+              <img id="carouselImg" src="" alt="캐러셀 이미지"
+                   style="max-width:100%;border-radius:8px;display:none">
+              <div id="carouselImgLoading" class="py-4">
+                <div class="spinner-border spinner-border-sm" style="color:#d63384"></div>
+                <div class="small text-muted mt-1">생성 중...</div>
+              </div>
+            </div>
+            <!-- 썸네일 스트립 -->
+            <div id="thumbStrip" class="d-flex gap-1 flex-wrap mt-2 justify-content-center px-1"></div>
+            <!-- 액션 -->
+            <div class="d-flex gap-2 mt-2">
+              <a id="carouselDownloadBtn" href="#" download
+                 class="btn btn-sm btn-outline-secondary flex-fill">
+                <i class="bi bi-download me-1"></i>저장
+              </a>
+              <button class="btn btn-sm btn-outline-primary flex-fill" onclick="goStep(4)">
+                <i class="bi bi-arrow-repeat me-1"></i>재구성
+              </button>
+            </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -325,11 +433,15 @@ let currentStep        = 1;
 let selectedAngle      = null;
 let selectedRatio      = '1:1';
 let selectedStyle      = null;
+let selectedQuantity   = 1;
 let captionData        = { short: '', medium: '', long: '' };
 let hashtagText        = '';
 let generatedImageUrl  = '';
 let productImageUrl    = '';
 let selectedBrandColor = '{{ (default_brand.primary_color if default_brand and default_brand.primary_color else "#e8355a") }}';
+let panelPlans         = [];
+let generatedImages    = [];
+let carouselIdx        = 0;
 
 // ── 스텝 UI ──────────────────────────────────────────────────
 function updateStepIndicator(step) {
@@ -451,6 +563,10 @@ function renderAngleCards(angles) {
   angles.forEach((angle, i) => {
     const col = document.createElement('div');
     col.className = 'col-12 col-md-4';
+    const arcBadge = angle.story_arc
+      ? `<div class="mt-2 px-2 py-1 rounded" style="background:#f0f0ff;font-size:.72rem;color:#6366f1;line-height:1.4">
+           🎭 <strong>${angle.story_arc}</strong>${angle.arc_flow ? '<br><span style="opacity:.75">'+angle.arc_flow+'</span>' : ''}
+         </div>` : '';
     col.innerHTML = `
       <div class="card h-100 angle-card" style="border:2px solid #eee;border-radius:12px;cursor:pointer;transition:all .2s"
            onclick="selectAngle(${i},this)">
@@ -463,9 +579,10 @@ function renderAngleCards(angles) {
           <div class="p-2 rounded mb-2" style="background:#f8f9fa;font-size:.83rem;color:#333;line-height:1.5">
             "${angle.hook||''}"
           </div>
-          <div class="small text-muted mb-2" style="font-size:.76rem">🎯 ${angle.target||''}</div>
-          <div class="small text-muted" style="font-size:.76rem">📸 ${angle.image_vibe||''}</div>
+          <div class="small text-muted mb-1" style="font-size:.76rem">🎯 ${angle.target||''}</div>
+          <div class="small text-muted mb-1" style="font-size:.76rem">📸 ${angle.image_vibe||''}</div>
           ${(angle.key_message||[]).map(m=>`<div class="small mt-1" style="font-size:.76rem">• ${m}</div>`).join('')}
+          ${arcBadge}
         </div>
         <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
           <div class="btn btn-sm w-100" style="border:2px solid ${colors[i]};color:${colors[i]};border-radius:8px">
@@ -483,6 +600,11 @@ function selectAngle(idx, el) {
     c.style.borderColor = i===idx ? '#d63384' : '#eee';
     c.style.background  = i===idx ? '#fff0f8' : '';
   });
+  // Step 4 arc badge 업데이트
+  const badge = document.getElementById('step4ArcBadge');
+  if (badge && selectedAngle?.story_arc) {
+    badge.textContent = `🎭 ${selectedAngle.story_arc}`;
+  }
   setTimeout(() => generateCaption(), 300);
 }
 
@@ -606,6 +728,51 @@ function copyHashtags() {
   navigator.clipboard.writeText(hashtagText);
 }
 
+// ── Step 4: 장 수 선택 ───────────────────────────────────────
+function selectQuantity(n, btn) {
+  selectedQuantity = n;
+  document.querySelectorAll('.qty-btn').forEach((b, i) => {
+    const active = (i + 1) === n;
+    b.classList.toggle('btn-primary', active);
+    b.classList.toggle('btn-outline-secondary', !active);
+  });
+  const hints = [
+    '1장 — 단일 이미지로 생성합니다',
+    '2장 — 비포/애프터, 비교 구성',
+    '3장 — 짧은 스토리 흐름',
+    '4장 — 핵심 포인트 4가지',
+    '5장 — 기본 스토리 아크 (추천)',
+    '6장 — 풍부한 스토리텔링',
+    '7장 — 웹툰 연재형',
+    '8장 — 상세 정보 카드뉴스',
+    '9장 — 인스타 최대 카루셀',
+  ];
+  document.getElementById('qtyHint').textContent = hints[n - 1] || `${n}장 카루셀`;
+  if (selectedStyle) _updateImgSections();
+  _updateCostHints();
+}
+
+function _updateImgSections() {
+  const isSingle = selectedQuantity === 1;
+  document.getElementById('singleImgSection').classList.toggle('d-none', !isSingle);
+  document.getElementById('multiImgSection').classList.toggle('d-none', isSingle);
+  if (!isSingle && panelPlans.length === 0) {
+    document.getElementById('storyPlanBtn').classList.remove('d-none');
+    document.getElementById('genAllSection').classList.add('d-none');
+  }
+  _updateCostHints();
+}
+
+function _updateCostHints() {
+  if (!selectedStyle) return;
+  const costs = { realistic_banner: 50, webtoon: 50, typography: 400 };
+  const unit  = costs[selectedStyle] || 50;
+  const el    = document.getElementById('genCostHint');
+  if (el) el.textContent = `이미지 생성 비용: ${unit}P/장`;
+  const allEl = document.getElementById('genAllCostHint');
+  if (allEl) allEl.textContent = `총 ${selectedQuantity}장 × ${unit}P = ${selectedQuantity * unit}P`;
+}
+
 // ── Step 4: 비율 / 스타일 선택 ──────────────────────────────
 function selectRatio(ratio, el) {
   selectedRatio = ratio;
@@ -615,7 +782,7 @@ function selectRatio(ratio, el) {
   });
   el.style.borderColor='#d63384'; el.style.background='#fff0f8';
   el.querySelector('i').style.color='#d63384';
-  if (selectedStyle) refreshImagePrompt();
+  if (selectedStyle && selectedQuantity === 1) refreshImagePrompt();
 }
 
 function selectStyle(styleId, el) {
@@ -627,23 +794,18 @@ function selectStyle(styleId, el) {
   el.style.borderColor='#d63384'; el.style.background='#fff0f8';
   el.querySelector('i').style.color='#d63384';
 
-  // 텍스트 입력 필드 전환
-  document.getElementById('textInputSection').classList.remove('d-none');
+  // 단일/멀티 섹션 전환
+  _updateImgSections();
+
+  // 단일 모드: 텍스트 필드 전환
   document.getElementById('bannerTextFields').classList.toggle('d-none', styleId !== 'realistic_banner');
   document.getElementById('webtoonTextFields').classList.toggle('d-none', styleId !== 'webtoon');
   document.getElementById('typoTextFields').classList.toggle('d-none', styleId !== 'typography');
-
   document.getElementById('textInputLabel').textContent =
-    styleId === 'webtoon'   ? '말풍선 대사' :
-    styleId === 'typography'? '이미지 텍스트 안내' : '이미지 배너 텍스트';
+    styleId === 'webtoon'    ? '말풍선 대사' :
+    styleId === 'typography' ? '이미지 텍스트 안내' : '이미지 배너 텍스트';
 
-  document.getElementById('promptSection').classList.remove('d-none');
-  document.getElementById('genBtnSection').classList.remove('d-none');
-
-  const costs = { realistic_banner: 50, webtoon: 50, typography: 400 };
-  document.getElementById('genCostHint').textContent = `이미지 생성 비용: ${costs[styleId] || 50}P`;
-
-  refreshImagePrompt();
+  if (selectedQuantity === 1) refreshImagePrompt();
 }
 
 async function refreshImagePrompt() {
@@ -667,7 +829,6 @@ async function refreshImagePrompt() {
     const data = await res.json();
     if (data.ok) {
       document.getElementById('fluxPrompt').value = data.flux_prompt || '';
-      // 추천 텍스트 자동 채움
       if (selectedStyle === 'realistic_banner' || selectedStyle === 'typography') {
         if (data.title)    document.getElementById('imgTitle').value    = data.title;
         if (data.subtitle) document.getElementById('imgSubtitle').value = data.subtitle;
@@ -683,7 +844,7 @@ async function refreshImagePrompt() {
   }
 }
 
-// ── Step 4: 이미지 생성 ──────────────────────────────────────
+// ── Step 4: 단일 이미지 생성 ─────────────────────────────────
 async function generateImage() {
   const prompt = document.getElementById('fluxPrompt').value.trim();
   if (!prompt) { alert('이미지 프롬프트를 입력해주세요.'); return; }
@@ -693,14 +854,8 @@ async function generateImage() {
   document.getElementById('imgGenBtn').disabled = true;
   document.getElementById('step4Error').classList.add('d-none');
 
-  // Step 5로 이동 후 로딩 표시
   goStep(5);
-  document.getElementById('finalImage').style.display = 'none';
-  document.getElementById('finalImgLoading').classList.remove('d-none');
-  document.getElementById('downloadBtn').classList.add('d-none');
-
-  // 브랜드 컬러 가져오기
-  const brandId = document.getElementById('brandSelect').value;
+  _showStep5Single(true);
 
   const body = {
     style:       selectedStyle,
@@ -723,16 +878,10 @@ async function generateImage() {
     if (!data.ok) throw new Error(data.message);
 
     generatedImageUrl = data.image_url;
-    document.getElementById('finalImage').src = generatedImageUrl;
-    document.getElementById('finalImage').style.display = '';
-    document.getElementById('finalImgLoading').classList.add('d-none');
-    document.getElementById('downloadBtn').href = generatedImageUrl;
-    const actEl = document.getElementById('step5ImgActions');
-    actEl.style.display = 'flex';
-    actEl.style.flexDirection = 'column';
+    generatedImages   = [data.image_url];
+    _showStep5Single(false, data.image_url);
 
   } catch (err) {
-    document.getElementById('finalImgLoading').classList.add('d-none');
     goStep(4);
     document.getElementById('step4Error').textContent = '이미지 생성 실패: ' + err.message;
     document.getElementById('step4Error').classList.remove('d-none');
@@ -741,6 +890,269 @@ async function generateImage() {
     document.getElementById('genBtnLoading').classList.add('d-none');
     document.getElementById('imgGenBtn').disabled = false;
   }
+}
+
+function _showStep5Single(loading, imageUrl) {
+  document.getElementById('singleImageView').classList.remove('d-none');
+  document.getElementById('carouselView').classList.add('d-none');
+  document.getElementById('carouselRole').textContent = '';
+  if (loading) {
+    document.getElementById('finalImage').style.display = 'none';
+    document.getElementById('finalImgLoading').classList.remove('d-none');
+    document.getElementById('step5ImgActions').style.display = 'none';
+  } else {
+    document.getElementById('finalImage').src = imageUrl;
+    document.getElementById('finalImage').style.display = '';
+    document.getElementById('finalImgLoading').classList.add('d-none');
+    document.getElementById('downloadBtn').href = imageUrl;
+    const actEl = document.getElementById('step5ImgActions');
+    actEl.style.display = 'flex';
+    actEl.style.flexDirection = 'column';
+  }
+}
+
+// ── Step 4: 스토리 플랜 생성 (멀티) ─────────────────────────
+async function generateStoryPlan() {
+  if (!selectedStyle) { alert('이미지 스타일을 먼저 선택해주세요.'); return; }
+
+  document.getElementById('storyPlanBtn').classList.add('d-none');
+  document.getElementById('panelPlanLoading').classList.remove('d-none');
+  document.getElementById('panelCards').innerHTML = '';
+  document.getElementById('genAllSection').classList.add('d-none');
+  document.getElementById('step4Error').classList.add('d-none');
+  panelPlans      = [];
+  generatedImages = new Array(selectedQuantity).fill(null);
+
+  try {
+    const res = await fetch('{{ url_for("create.instagram_story_plan") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        style:      selectedStyle,
+        quantity:   selectedQuantity,
+        brand_id:   document.getElementById('brandSelect').value,
+        product_id: document.getElementById('productSelect').value,
+        angle:      selectedAngle,
+        direction:  document.getElementById('directionInput').value.trim(),
+        size:       selectedRatio,
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    panelPlans = data.panels;
+    renderPanelCards(panelPlans);
+    document.getElementById('genAllSection').classList.remove('d-none');
+    _updateCostHints();
+
+  } catch (err) {
+    document.getElementById('storyPlanBtn').classList.remove('d-none');
+    document.getElementById('step4Error').textContent = '스토리 구성 실패: ' + err.message;
+    document.getElementById('step4Error').classList.remove('d-none');
+  } finally {
+    document.getElementById('panelPlanLoading').classList.add('d-none');
+  }
+}
+
+// ── 패널 카드 렌더링 ─────────────────────────────────────────
+function renderPanelCards(panels) {
+  const container = document.getElementById('panelCards');
+  container.innerHTML = '';
+  const roleColors = ['#d63384','#6366f1','#0ea5e9','#16a34a','#ea580c','#7c3aed','#db2777','#0284c7','#15803d'];
+  const isBanner  = selectedStyle === 'realistic_banner';
+  const isWebtoon = selectedStyle === 'webtoon';
+
+  panels.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = `panelCard_${i}`;
+
+    const textFields = isWebtoon ? `
+      <div class="d-flex gap-2 mt-2">
+        <input type="text" class="form-control form-control-sm" id="p${i}_dialogue1"
+               value="${_esc(p.dialogue1||'')}" placeholder="첫 번째 말풍선 (20자)" maxlength="25">
+        <input type="text" class="form-control form-control-sm" id="p${i}_dialogue2"
+               value="${_esc(p.dialogue2||'')}" placeholder="두 번째 말풍선 (선택)" maxlength="25">
+      </div>` : `
+      <div class="d-flex gap-2 mt-2">
+        <input type="text" class="form-control form-control-sm" id="p${i}_title"
+               value="${_esc(p.title||'')}" placeholder="메인 문구 (15자)" maxlength="20">
+        <input type="text" class="form-control form-control-sm" id="p${i}_subtitle"
+               value="${_esc(p.subtitle||'')}" placeholder="서브 문구 (20자)" maxlength="25">
+      </div>`;
+
+    card.innerHTML = `
+      <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="fw-bold" style="color:${roleColors[i%roleColors.length]};min-width:18px">${p.panel}</span>
+          <span class="badge" style="background:#f0f0ff;color:#6366f1;font-size:.72rem">${p.role||''}</span>
+          <span class="small text-muted" style="font-size:.76rem">${p.scene_ko||''}</span>
+          <span id="panelStatus_${i}" class="ms-auto badge"
+                style="background:#f5f5f5;color:#999;font-size:.68rem">미생성</span>
+        </div>
+        <textarea class="form-control form-control-sm" id="p${i}_prompt" rows="2"
+                  style="font-size:.75rem;font-family:monospace;resize:none">${_esc(p.flux_prompt||'')}</textarea>
+        ${textFields}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Step 4: 모두 생성하기 (순차 생성) ────────────────────────
+async function generateAllImages() {
+  if (!panelPlans.length) { alert('스토리 구성을 먼저 생성해주세요.'); return; }
+
+  const genAllBtn = document.getElementById('genAllBtn');
+  document.getElementById('genAllNormal').classList.add('d-none');
+  document.getElementById('genAllLoading').classList.remove('d-none');
+  genAllBtn.disabled = true;
+
+  const progress    = document.getElementById('genProgress');
+  const progressBar = document.getElementById('genProgressBar');
+  const progressTxt = document.getElementById('genProgressText');
+  const progressPct = document.getElementById('genProgressPct');
+  progress.classList.remove('d-none');
+
+  generatedImages = new Array(panelPlans.length).fill(null);
+
+  for (let i = 0; i < panelPlans.length; i++) {
+    const p = panelPlans[i];
+    const pct = Math.round(i / panelPlans.length * 100);
+    progressTxt.textContent = `${i + 1}번째 컷 생성 중...`;
+    progressPct.textContent = `${pct}%`;
+    progressBar.style.width = `${pct}%`;
+
+    const statusEl = document.getElementById(`panelStatus_${i}`);
+    if (statusEl) {
+      statusEl.style.background='#fef9c3'; statusEl.style.color='#92400e';
+      statusEl.textContent='생성 중';
+    }
+
+    const flux_prompt = document.getElementById(`p${i}_prompt`)?.value.trim() || p.flux_prompt || '';
+    const title       = document.getElementById(`p${i}_title`)?.value.trim()    || p.title    || '';
+    const subtitle    = document.getElementById(`p${i}_subtitle`)?.value.trim() || p.subtitle || '';
+    const dialogue1   = document.getElementById(`p${i}_dialogue1`)?.value.trim()|| p.dialogue1|| '';
+    const dialogue2   = document.getElementById(`p${i}_dialogue2`)?.value.trim()|| p.dialogue2|| '';
+
+    try {
+      const res = await fetch('{{ url_for("create.instagram_image_generate") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+        body: JSON.stringify({
+          style:       selectedStyle,
+          flux_prompt,
+          size:        selectedRatio,
+          brand_color: selectedBrandColor || '#e8355a',
+          title, subtitle, dialogue1, dialogue2,
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message);
+
+      generatedImages[i] = data.image_url;
+      if (statusEl) {
+        statusEl.style.background='#dcfce7'; statusEl.style.color='#166534';
+        statusEl.textContent='✓ 완료';
+      }
+    } catch (err) {
+      generatedImages[i] = null;
+      if (statusEl) {
+        statusEl.style.background='#fee2e2'; statusEl.style.color='#991b1b';
+        statusEl.textContent='실패';
+      }
+      console.error(`패널 ${i + 1} 생성 실패:`, err);
+    }
+  }
+
+  progressPct.textContent = '100%';
+  progressBar.style.width = '100%';
+  progressTxt.textContent = '모든 컷 생성 완료!';
+
+  document.getElementById('genAllNormal').classList.remove('d-none');
+  document.getElementById('genAllLoading').classList.add('d-none');
+  genAllBtn.disabled = false;
+
+  const validImages = generatedImages.filter(Boolean);
+  if (validImages.length > 0) {
+    goStep(5);
+    _showStep5Carousel();
+  }
+}
+
+// ── Step 5: 캐러셀 뷰 ────────────────────────────────────────
+function _showStep5Carousel() {
+  document.getElementById('singleImageView').classList.add('d-none');
+  document.getElementById('carouselView').classList.remove('d-none');
+  carouselIdx = 0;
+  _buildThumbStrip();
+  carouselShowImage(0);
+}
+
+function _buildThumbStrip() {
+  const strip = document.getElementById('thumbStrip');
+  strip.innerHTML = '';
+  generatedImages.forEach((url, i) => {
+    const th = document.createElement('div');
+    th.id = `thumb_${i}`;
+    th.style.cssText = 'cursor:pointer;flex-shrink:0';
+    if (url) {
+      th.innerHTML = `<img src="${url}"
+        style="width:52px;height:52px;object-fit:cover;border-radius:6px;
+               border:3px solid ${i === 0 ? '#d63384' : '#dee2e6'};transition:all .2s"
+        onclick="carouselShowImage(${i})">`;
+    } else {
+      th.innerHTML = `<div style="width:52px;height:52px;border-radius:6px;border:2px dashed #ccc;
+        display:flex;align-items:center;justify-content:center;font-size:.65rem;color:#aaa">실패</div>`;
+    }
+    strip.appendChild(th);
+  });
+}
+
+function carouselShowImage(idx) {
+  if (idx < 0) idx = generatedImages.length - 1;
+  if (idx >= generatedImages.length) idx = 0;
+  carouselIdx = idx;
+
+  // 썸네일 테두리 업데이트
+  generatedImages.forEach((_, i) => {
+    const th  = document.getElementById(`thumb_${i}`);
+    const img = th?.querySelector('img');
+    if (img) img.style.borderColor = i === idx ? '#d63384' : '#dee2e6';
+  });
+
+  // 카운터
+  document.getElementById('carouselCounter').textContent = `${idx + 1} / ${generatedImages.length}`;
+
+  // 패널 역할 표시
+  if (panelPlans[idx]) {
+    const p = panelPlans[idx];
+    document.getElementById('carouselRole').textContent = `${p.panel}컷 · ${p.role} — ${p.scene_ko}`;
+  }
+
+  // 메인 이미지
+  const url       = generatedImages[idx];
+  const mainImg   = document.getElementById('carouselImg');
+  const loadingEl = document.getElementById('carouselImgLoading');
+  if (url) {
+    mainImg.src = url;
+    mainImg.style.display = '';
+    loadingEl.classList.add('d-none');
+    const dlBtn = document.getElementById('carouselDownloadBtn');
+    dlBtn.href     = url;
+    dlBtn.download = `insta_${idx + 1}.jpg`;
+  } else {
+    mainImg.style.display = 'none';
+    loadingEl.classList.remove('d-none');
+    loadingEl.querySelector('.small').textContent = '이 컷 생성에 실패했습니다';
+  }
+}
+
+function carouselGo(dir) {
+  carouselShowImage(carouselIdx + dir);
 }
 </script>
 {% endblock %}
