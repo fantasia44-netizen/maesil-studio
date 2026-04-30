@@ -17,3 +17,4 @@ sentry-sdk[flask]==2.20.0
 markdown==3.7
 rembg==2.0.57
 onnxruntime==1.20.1
+beautifulsoup4==4.12.3

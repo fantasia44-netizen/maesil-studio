@@ -222,6 +222,76 @@ def generate_one(product_id):
     return jsonify(result)
 
 
+# ── 상품 이미지: URL 가져오기 ────────────────────────────
+@product_bp.route('/<product_id>/import-url', methods=['POST'])
+@login_required
+def import_url(product_id):
+    product = _get_product(current_app.supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    url = (request.json or {}).get('url', '').strip()
+    if not url:
+        return jsonify(ok=False, message='URL을 입력하세요.')
+
+    try:
+        from services.url_importer import fetch_product_info, detect_platform
+        info = fetch_product_info(url)
+        return jsonify(ok=True, **info)
+    except Exception as e:
+        logger.error(f'[PRODUCT] import_url error: {e}')
+        return jsonify(ok=False, message=str(e))
+
+
+# ── 상품 이미지: 파일 업로드 ─────────────────────────────
+@product_bp.route('/<product_id>/upload-image', methods=['POST'])
+@login_required
+def upload_image(product_id):
+    product = _get_product(current_app.supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    file = request.files.get('file')
+    if not file:
+        return jsonify(ok=False, message='파일을 선택하세요.')
+
+    import uuid
+    try:
+        image_bytes = file.read()
+        filename = f'product_{product_id[:8]}_{uuid.uuid4().hex[:8]}.jpg'
+        path = f'{current_user.id}/products/{filename}'
+
+        supabase = current_app.supabase
+        mime = file.content_type or 'image/jpeg'
+        supabase.storage.from_('creations').upload(path, image_bytes, {'content-type': mime})
+        public_url = supabase.storage.from_('creations').get_public_url(path)
+        return jsonify(ok=True, image_url=public_url)
+    except Exception as e:
+        logger.error(f'[PRODUCT] upload_image error: {e}')
+        return jsonify(ok=False, message=str(e))
+
+
+# ── 상품 이미지 목록 저장 ────────────────────────────────
+@product_bp.route('/<product_id>/save-images', methods=['POST'])
+@login_required
+def save_images(product_id):
+    supabase = current_app.supabase
+    product = _get_product(supabase, product_id)
+    if not product:
+        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
+
+    images = (request.json or {}).get('images', [])
+    try:
+        supabase.table('products').update({
+            'images': images,
+            'updated_at': now_kst().isoformat(),
+        }).eq('id', product_id).execute()
+        return jsonify(ok=True, message=f'{len(images)}개 이미지가 저장되었습니다.')
+    except Exception as e:
+        logger.error(f'[PRODUCT] save_images error: {e}')
+        return jsonify(ok=False, message=str(e))
+
+
 # ── 상품 삭제 ───────────────────────────────────────────
 @product_bp.route('/<product_id>/delete', methods=['POST'])
 @login_required
