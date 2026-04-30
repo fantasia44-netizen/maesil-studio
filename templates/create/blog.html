@@ -370,20 +370,57 @@ document.getElementById('relationMode').addEventListener('change', function() {
     !(this.value === 'series' || this.value === 'variant'));
 });
 
-// 상품 선택 시 이미지 미리보기 업데이트
+// 상품 선택 시 이미지 피커 업데이트
 function updateProductImage() {
-  const sel = document.getElementById('productSelect');
-  const opt = sel.options[sel.selectedIndex];
-  productImageUrl = (opt && opt.dataset.image) ? opt.dataset.image : '';
-  const preview = document.getElementById('productImgPreview');
-  const thumb   = document.getElementById('productImgThumb');
-  if (productImageUrl) {
-    thumb.src = productImageUrl;
-    preview.classList.remove('d-none');
-  } else {
-    preview.classList.add('d-none');
+  const sel     = document.getElementById('productSelect');
+  const pid     = sel.value;
+  const picker  = document.getElementById('productImgPicker');
+  const list    = document.getElementById('productImgList');
+  const imgs    = (pid && PRODUCT_IMAGES[pid]) ? PRODUCT_IMAGES[pid] : [];
+
+  if (!imgs.length) {
+    productImageUrl = '';
+    picker.classList.add('d-none');
+    return;
   }
+
+  picker.classList.remove('d-none');
+  list.innerHTML = '';
+  productImageUrl = imgs[0];   // 첫 번째 자동 선택
+
+  imgs.forEach((url, idx) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'cursor:pointer;position:relative';
+    wrap.innerHTML = `
+      <img src="${url}" alt="상품 이미지 ${idx + 1}"
+           id="pimg_${idx}"
+           style="width:64px;height:64px;object-fit:cover;border-radius:8px;
+                  border:3px solid ${idx === 0 ? '#e8355a' : '#dee2e6'};
+                  transition:all .2s"
+           onclick="selectProductImg('${url}', ${idx}, ${imgs.length})">
+      ${idx === 0 ? '<div style="font-size:.6rem;color:#e8355a;text-align:center;margin-top:2px">선택됨</div>' : ''}`;
+    list.appendChild(wrap);
+  });
 }
+
+function selectProductImg(url, idx, total) {
+  productImageUrl = url;
+  for (let i = 0; i < total; i++) {
+    const img = document.getElementById('pimg_' + i);
+    if (img) img.style.borderColor = (i === idx) ? '#e8355a' : '#dee2e6';
+  }
+  // 선택됨 라벨 업데이트
+  document.querySelectorAll('#productImgList > div').forEach((wrap, i) => {
+    const lbl = wrap.querySelector('div');
+    if (i === idx) {
+      if (!lbl) wrap.insertAdjacentHTML('beforeend',
+        '<div style="font-size:.6rem;color:#e8355a;text-align:center;margin-top:2px">선택됨</div>');
+    } else {
+      if (lbl) lbl.remove();
+    }
+  });
+}
+
 document.getElementById('productSelect').addEventListener('change', updateProductImage);
 updateProductImage();  // 초기 실행
 
@@ -795,8 +832,8 @@ async function generateAllImages() {
 
   if (generatedImages.some(g => g.url)) {
     document.getElementById('goFinalBtn').style.display = '';
-    renderFinalContent();
     goStep(5);
+    await renderFinalContent();   // Haiku 배치 결정 후 렌더
   } else {
     document.getElementById('promptSection').style.display = '';
     const errEl = document.getElementById('step4Error');
@@ -805,58 +842,109 @@ async function generateAllImages() {
   }
 }
 
-// ── Step 5: 완성본 렌더 ───────────────────────────────────────
-function renderFinalContent() {
-  const text = document.getElementById('blogTextArea').value;
+// ── Step 5: 완성본 렌더 (Haiku 이미지 배치) ─────────────────
+async function renderFinalContent() {
+  const text      = document.getElementById('blogTextArea').value;
   const container = document.getElementById('finalContent');
+  const validImgs = generatedImages.filter(g => g.url);
+
+  // 로딩 표시
+  container.innerHTML = `
+    <div class="text-center py-4 text-muted">
+      <div class="spinner-border spinner-border-sm me-2" style="color:#e8355a"></div>
+      AI가 이미지 배치를 최적화하는 중...
+    </div>`;
+
+  // ── Haiku에게 배치 요청 ─────────────────────────────────────
+  let placements  = null;
+  let n_paragraphs = 0;
+
+  if (validImgs.length > 0) {
+    try {
+      const res  = await fetch('{{ url_for("create.blog_compose") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          blog_text: text,
+          images: validImgs.map(g => ({
+            role:       g.role,
+            url:        g.url,
+            is_product: !!(g.isOriginal),
+          })),
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        placements   = data.placements;
+        n_paragraphs = data.n_paragraphs;
+      }
+    } catch (err) {
+      console.warn('[compose] Haiku 배치 실패, 폴백 사용:', err);
+    }
+  }
+
+  // ── 렌더링 ──────────────────────────────────────────────────
   container.innerHTML = '';
 
-  // 글을 섹션으로 분리 (## 헤딩 기준)
-  const sections = text.split(/\n(?=##\s)/);
+  const paragraphs = text.split('\n\n').map(p => p.trim()).filter(Boolean);
 
-  // 이미지를 섹션 사이에 배치
-  const validImgs = generatedImages.filter(g => g.url);
-  let imgIdx = 0;
+  if (placements && placements.length > 0) {
+    // Haiku 배치: {after_para_idx, image_idx}[]
+    const placementMap = {};
+    placements.forEach(({ after_para_idx, image_idx }) => {
+      if (!placementMap[after_para_idx]) placementMap[after_para_idx] = [];
+      placementMap[after_para_idx].push(image_idx);
+    });
 
-  sections.forEach((section, i) => {
-    // 텍스트 블록
-    const textDiv = document.createElement('div');
-    textDiv.style.cssText = 'white-space:pre-wrap;margin-bottom:1.5rem';
-    textDiv.textContent = section.trim();
-    container.appendChild(textDiv);
+    const placed = new Set();
+    paragraphs.forEach((para, i) => {
+      appendTextBlock(container, para);
+      (placementMap[i] || []).forEach(imgIdx => {
+        if (validImgs[imgIdx]) {
+          appendImageBlock(container, validImgs[imgIdx]);
+          placed.add(imgIdx);
+        }
+      });
+    });
+    // 배치 안 된 이미지 — 맨 마지막에 추가
+    validImgs.forEach((img, i) => {
+      if (!placed.has(i)) appendImageBlock(container, img);
+    });
 
-    // 섹션 사이에 이미지 삽입
-    if (imgIdx < validImgs.length && i < sections.length - 1) {
-      const imgWrap = document.createElement('div');
-      imgWrap.style.cssText = 'margin:1.5rem 0;text-align:center';
-      imgWrap.innerHTML = `
-        <img src="${validImgs[imgIdx].url}" alt="${validImgs[imgIdx].role}"
-             style="max-width:100%;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
-        <div class="text-muted small mt-2">${validImgs[imgIdx].role}</div>
-        <a href="${validImgs[imgIdx].url}" download target="_blank"
-           class="btn btn-sm btn-outline-secondary mt-1">
-          <i class="bi bi-download me-1"></i>이미지 저장
-        </a>`;
-      container.appendChild(imgWrap);
-      imgIdx++;
-    }
-  });
-
-  // 남은 이미지 마지막에 추가
-  while (imgIdx < validImgs.length) {
-    const imgWrap = document.createElement('div');
-    imgWrap.style.cssText = 'margin:1.5rem 0;text-align:center';
-    imgWrap.innerHTML = `
-      <img src="${validImgs[imgIdx].url}" alt="${validImgs[imgIdx].role}"
-           style="max-width:100%;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.1)">
-      <div class="text-muted small mt-2">${validImgs[imgIdx].role}</div>
-      <a href="${validImgs[imgIdx].url}" download target="_blank"
-         class="btn btn-sm btn-outline-secondary mt-1">
-        <i class="bi bi-download me-1"></i>이미지 저장
-      </a>`;
-    container.appendChild(imgWrap);
-    imgIdx++;
+  } else {
+    // 폴백: ## 헤딩 기준 섹션 분리 후 균등 배치
+    const sections = text.split(/\n(?=##\s)/);
+    let imgIdx = 0;
+    sections.forEach((section, i) => {
+      appendTextBlock(container, section.trim());
+      if (imgIdx < validImgs.length && i < sections.length - 1) {
+        appendImageBlock(container, validImgs[imgIdx++]);
+      }
+    });
+    while (imgIdx < validImgs.length) appendImageBlock(container, validImgs[imgIdx++]);
   }
+}
+
+function appendTextBlock(container, text) {
+  if (!text) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'white-space:pre-wrap;margin-bottom:1.2rem;line-height:1.9';
+  div.textContent = text;
+  container.appendChild(div);
+}
+
+function appendImageBlock(container, img) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin:2rem 0;text-align:center';
+  wrap.innerHTML = `
+    <img src="${img.url}" alt="${img.role}"
+         style="max-width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.12)">
+    <div class="text-muted small mt-2">${img.role}</div>
+    <a href="${img.url}" target="_blank" download
+       class="btn btn-sm btn-outline-secondary mt-1">
+      <i class="bi bi-download me-1"></i>이미지 저장
+    </a>`;
+  container.appendChild(wrap);
 }
 
 function copyFinalText() {

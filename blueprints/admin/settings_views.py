@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 CONFIG_KEYS = [
     # (key, label, type, description, testable)
     ('anthropic_api_key',     'Claude API Key',         'secret', 'Anthropic Claude 텍스트 생성',  True),
-    ('fal_api_key',           'fal.ai API Key',         'secret', 'FLUX 이미지 생성',              True),
+    ('fal_api_key',           'fal.ai API Key',         'secret', 'FLUX + Bria 이미지·배경교체',    True),
     ('ideogram_api_key',      'Ideogram API Key',       'secret', '한글 텍스트 이미지 생성',       False),
     ('openai_api_key',        'OpenAI API Key',         'secret', 'DALL-E / GPT (선택)',            False),
     ('portone_api_secret',    'PortOne API Secret',     'secret', '결제 API',                      False),

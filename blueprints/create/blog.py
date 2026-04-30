@@ -525,7 +525,8 @@ JSON 배열 형식:
 순수 JSON만 출력하세요."""
 
     try:
-        raw = generate_text(system_prompt, user_prompt, max_tokens=1200)
+        raw = generate_text(system_prompt, user_prompt, max_tokens=1200,
+                            model='claude-haiku-4-5-20251001')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         arr_start = clean.find('[')
         arr_end   = clean.rfind(']') + 1
@@ -538,3 +539,102 @@ JSON 배열 형식:
     except Exception as e:
         logger.error(f'[blog/image-prompts] 이미지 프롬프트 생성 실패: {e}')
         return jsonify(ok=False, message=f'이미지 프롬프트 생성 중 오류가 발생했습니다: {e}')
+
+
+# ─────────────────────────────────────────────────────────────
+# Step 5 — Haiku 이미지 배치 결정
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/blog/compose', methods=['POST'])
+@login_required
+def blog_compose():
+    """블로그 글 + 이미지 목록 → Haiku가 이미지 삽입 위치 결정.
+
+    Request JSON:
+      blog_text: str               — 완성된 블로그 본문
+      images: [{role, url, is_product}]  — 생성된 이미지 목록
+
+    Response JSON:
+      placements: [{after_para_idx: int, image_idx: int}]
+      n_paragraphs: int
+    """
+    data      = request.get_json(force=True) or {}
+    blog_text = (data.get('blog_text') or '').strip()
+    images    = data.get('images', [])   # [{role, url, is_product}]
+
+    if not blog_text:
+        return jsonify(ok=False, message='블로그 텍스트가 없습니다.')
+    if not images:
+        return jsonify(ok=True, placements=[], n_paragraphs=0)
+
+    # 이중 개행 기준으로 단락 분리 (빈 줄 제거)
+    paragraphs = [p.strip() for p in blog_text.split('\n\n') if p.strip()]
+    n_para = len(paragraphs)
+    n_img  = len(images)
+
+    if n_para == 0:
+        return jsonify(ok=True, placements=[], n_paragraphs=0)
+
+    # ── Haiku 프롬프트 ─────────────────────────────────────────
+    para_list = '\n'.join(
+        f'[단락{i}] {p[:100]}{"…" if len(p) > 100 else ""}'
+        for i, p in enumerate(paragraphs)
+    )
+    img_list = '\n'.join(
+        f'[이미지{i}] {img.get("role", "이미지")}'
+        + (' ← 제품 메인컷' if img.get('is_product') else ' — 라이프스타일 씬')
+        for i, img in enumerate(images)
+    )
+
+    system = (
+        '당신은 한국 블로그 편집자입니다. '
+        '독자 이탈을 방지하고 몰입감을 높이도록 이미지 삽입 위치를 결정합니다. '
+        '순수 JSON만 출력하세요 — 마크다운, 설명 텍스트 없이.'
+    )
+    user_prompt = f"""블로그에 단락 {n_para}개, 이미지 {n_img}개를 삽입합니다.
+각 이미지를 어느 단락 뒤에 배치할지 결정하세요 (단락 인덱스는 0부터).
+
+[단락 목록]
+{para_list}
+
+[이미지 목록]
+{img_list}
+
+배치 규칙:
+1. 제품 메인컷(is_product)은 초반(단락 0 또는 1) 바로 뒤에 배치 — 독자 신뢰 확보
+2. 라이프스타일 씬은 글 전체에 고르게 분산
+3. 이미지 두 장을 연속으로 붙이지 말 것 (단락 사이 최소 1개 단락 간격)
+4. 마지막 단락(인덱스 {n_para - 1}) 뒤 배치도 가능
+5. 내용과 가장 어울리는 단락 다음에 배치
+
+응답 형식 (순수 JSON):
+{{"placements": [{{"after_para_idx": 0, "image_idx": 0}}, ...]}}"""
+
+    from services.claude_service import generate_text
+
+    def _fallback_placements():
+        """Haiku 실패 시 균등 분배."""
+        step = max(1, n_para // (n_img + 1))
+        return [
+            {'after_para_idx': min((i + 1) * step - 1, n_para - 1), 'image_idx': i}
+            for i in range(n_img)
+        ]
+
+    try:
+        raw = generate_text(system, user_prompt, max_tokens=400,
+                            model='claude-haiku-4-5-20251001')
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
+        obj_s = clean.find('{')
+        obj_e = clean.rfind('}') + 1
+        if obj_s >= 0 and obj_e > obj_s:
+            clean = clean[obj_s:obj_e]
+        result     = json.loads(clean)
+        placements = result.get('placements', [])
+        # 기본 검증
+        for p in placements:
+            if not isinstance(p.get('after_para_idx'), int):
+                raise ValueError('after_para_idx가 정수가 아님')
+        return jsonify(ok=True, placements=placements, n_paragraphs=n_para)
+    except Exception as e:
+        logger.warning(f'[blog/compose] Haiku 배치 실패, 폴백 사용: {e}')
+        return jsonify(ok=True, placements=_fallback_placements(), n_paragraphs=n_para)

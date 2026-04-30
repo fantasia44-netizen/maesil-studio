@@ -86,11 +86,15 @@ def build_brand_context(brand: dict,
     return '\n'.join(parts) if parts else '브랜드 정보 없음'
 
 
-def generate_text(system_prompt: str, user_prompt: str, max_tokens: int = 4096) -> str:
-    """텍스트 생성 — 결과 문자열 반환"""
+def generate_text(system_prompt: str, user_prompt: str,
+                  max_tokens: int = 4096, model: str = None) -> str:
+    """텍스트 생성 — 결과 문자열 반환.
+    model 미지정 시 DEFAULT_MODEL(Sonnet) 사용.
+    저렴한 단순 작업엔 'claude-haiku-4-5-20251001' 지정 가능.
+    """
     client = get_client()
     message = client.messages.create(
-        model=DEFAULT_MODEL,
+        model=model or DEFAULT_MODEL,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=[{'role': 'user', 'content': user_prompt}],
