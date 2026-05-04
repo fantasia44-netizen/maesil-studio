@@ -1,8 +1,8 @@
 """블로그 포스트 프롬프트 — 4축 입력 + 이력 관계 모드 + 카테고리별 안전망.
 
 입력 모델 (input_data):
-  topic            큰 주제 ("이유식재료")
-  keyword          핵심 키워드 ("야채큐브")
+  topic            큰 주제 (예: "신제품 소개")
+  keyword          핵심 키워드 (예: "브랜드명 + 제품명")
   details          상세 지시 (선택, 강조 포인트)
   purpose          글 목적 (정보제공 | 구매유도 | 브랜드인지)
   angle            앵글 (information|review|timeline|comparison|qna|trend)

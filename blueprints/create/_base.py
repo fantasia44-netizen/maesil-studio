@@ -85,7 +85,7 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
       ledger_note: 포인트 ledger 메모 (예: '블로그 (1,000자)').
       extra_creation_fields: creations 테이블에 추가 저장할 컬럼들.
                              예: {'product_id': '...', 'angle': 'review',
-                                  'topic': '이유식', 'keyword': '야채큐브',
+                                  'topic': '신제품 소개', 'keyword': '핵심키워드',
                                   'length_chars': 1000, 'relation_mode': 'series',
                                   'relation_ref_id': '...'}
       post_process: callable(output_text: str) -> str — 결과 후처리 (디스클레이머 부착 등).

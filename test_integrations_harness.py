@@ -102,13 +102,13 @@ try:
     fake_resp = MagicMock()
     fake_resp.status_code = 200
     fake_resp.json.return_value = {
-        'operator_id': 'op-uuid', 'operator_name': '배마마',
+        'operator_id': 'op-uuid', 'operator_name': '테스트운영사',
         'plan': 'professional', 'scopes': ['products:read'],
     }
     with patch('services.maesil_insight_client.requests.get',
                return_value=fake_resp) as mock_get:
         out = c.verify()
-        check("verify() 200 → dict 반환", out['operator_name'] == '배마마')
+        check("verify() 200 → dict 반환", out['operator_name'] == '테스트운영사')
         # 호출 인자 검증
         call_args = mock_get.call_args
         url_arg = call_args.args[0] if call_args.args else call_args.kwargs.get('url', '')

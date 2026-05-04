@@ -594,7 +594,7 @@ with test_app.app_context():
         {
             'user_id': 'u-admin', 'operator_id': 'op-1',
             'token_encrypted': 'ENC_TOKEN', 'token_prefix': 'mi_adminx',
-            'insight_operator_name': '배마마', 'insight_plan': 'pro',
+            'insight_operator_name': '테스트운영사', 'insight_plan': 'pro',
             'scopes': ['products:read'], 'connected_at': '2026-05-01T10:00:00',
         }
     ]
@@ -612,7 +612,7 @@ with test_app.app_context():
     # 팀원 조회 → 관리자가 등록한 연결 공유
     conn_member = get_connection('u-member', operator_id='op-1')
     check('팀원 → 같은 operator 연결 공유 반환', conn_member is not None)
-    check('팀원 조회 시 연결 운영사명 일치', conn_member.get('insight_operator_name') == '배마마')
+    check('팀원 조회 시 연결 운영사명 일치', conn_member.get('insight_operator_name') == '테스트운영사')
 
     # 개인 사용자는 자신의 연결만
     conn_personal = get_connection('u-personal', operator_id=None)
@@ -634,7 +634,7 @@ with test_app.app_context():
     row = save_connection(
         'u-admin',
         token='mi_testtoken123',
-        me={'operator_name': '배마마', 'plan': 'pro', 'scopes': ['products:read']},
+        me={'operator_name': '테스트운영사', 'plan': 'pro', 'scopes': ['products:read']},
         operator_id='op-1',
     )
     check('save_connection(operator): insert 호출됨', len(sb.inserts) == 1)
@@ -815,33 +815,33 @@ with test_app.app_context():
 
     from services.prompts.blog import build_prompt
 
-    brand = {'name': '배마마', 'industry': '이유식', 'target_customer': '30대 엄마'}
-    product = {'name': '야채큐브', 'category': '이유식', 'price': 18900,
-               'features': ['첨가물 무첨가', '월령별']}
+    brand = {'name': '테스트브랜드', 'industry': '식품', 'target_customer': '30대 직장인'}
+    product = {'name': '테스트상품', 'category': 'food', 'price': 15000,
+               'features': ['무첨가', '국내산']}
 
     sys_p, user_p, max_t = build_prompt(
         brand,
-        {'topic': '이유식재료', 'keyword': '야채큐브', 'angle': 'information',
+        {'topic': '신제품 소개', 'keyword': '테스트상품', 'angle': 'information',
          'length': '1000', 'relation_mode': 'new'},
         product=product,
         merged_avoid_words=['효능', '치료'],
         recent_creations=[
-            {'title': '이전 글 1', 'topic': '이유식', 'keyword': '죽', 'angle': 'review'},
+            {'title': '이전 글 1', 'topic': '건강식품', 'keyword': '영양', 'angle': 'review'},
         ],
     )
     check('build_prompt new 모드 → tuple 반환', isinstance((sys_p, user_p, max_t), tuple))
     check('1000자 max_tokens=4000', max_t == 4000)
-    check('system 프롬프트에 브랜드명', '배마마' in sys_p)
-    check('system 프롬프트에 상품 정보', '야채큐브' in sys_p)
+    check('system 프롬프트에 브랜드명', '테스트브랜드' in sys_p)
+    check('system 프롬프트에 상품 정보', '테스트상품' in sys_p)
     check('system 프롬프트에 금지 표현 강조',
           '절대 사용 금지' in sys_p and '효능' in sys_p)
     check('user 프롬프트 — 이력 회피 모드', '다양성 모드' in user_p)
 
     sys_s, user_s, t2 = build_prompt(
         brand,
-        {'topic': '이유식재료', 'keyword': '야채큐브', 'angle': 'timeline',
+        {'topic': '신제품 소개', 'keyword': '테스트상품', 'angle': 'timeline',
          'length': '2000', 'relation_mode': 'series'},
-        related_creation={'title': '시리즈 1편 — 이유식 입문',
+        related_creation={'title': '시리즈 1편 — 제품 입문',
                           'excerpt': '이전 글 본문 발췌입니다.'},
     )
     check('series 모드 max_tokens=6000', t2 == 6000)
@@ -855,19 +855,19 @@ print('\n[17] services.claude_service.build_brand_context')
 
 from services.claude_service import build_brand_context
 
-ctx_simple = build_brand_context({'name': '배마마'})
-check('단일 브랜드 컨텍스트', '배마마' in ctx_simple)
+ctx_simple = build_brand_context({'name': '테스트브랜드'})
+check('단일 브랜드 컨텍스트', '테스트브랜드' in ctx_simple)
 
 ctx_with_product = build_brand_context(
-    {'name': '배마마'},
-    product={'name': '야채큐브', 'price': 18900, 'features': ['무첨가', '월령별']},
+    {'name': '테스트브랜드'},
+    product={'name': '테스트상품', 'price': 18900, 'features': ['무첨가', '국내산']},
 )
-check('상품 컨텍스트 — 상품명', '야채큐브' in ctx_with_product)
+check('상품 컨텍스트 — 상품명', '테스트상품' in ctx_with_product)
 check('상품 컨텍스트 — 가격 포맷', '18,900원' in ctx_with_product)
 check('상품 컨텍스트 — 특징', '무첨가' in ctx_with_product)
 
 ctx_avoids = build_brand_context(
-    {'name': '배마마'},
+    {'name': '테스트브랜드'},
     merged_avoid_words=['효능', '치료'],
 )
 check('merged_avoid_words 주입 — 강조 문구', '절대 사용 금지' in ctx_avoids and '효능' in ctx_avoids)
