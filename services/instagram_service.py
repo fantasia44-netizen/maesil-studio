@@ -127,19 +127,48 @@ def _wrap(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
 def create_banner_image(bg_url: str,
                         texts: list[str],
                         brand_color: str = '#e8355a',
-                        pil_size: tuple = (1080, 1080)) -> str:
-    """FLUX 배경 + 하단 그라디언트 배너 + 한글 텍스트 레이어"""
+                        pil_size: tuple = (1080, 1080),
+                        text_gravity: str = 'bottom-left',
+                        text_scale: float = 1.0) -> str:
+    """FLUX 배경 + 그라디언트 배너 + 한글 텍스트 레이어
+
+    text_gravity: 'bottom-left'(기본), 'bottom-center', 'top-left', 'top-center', 'center-left'
+    text_scale:   폰트 사이즈 배율 (기본 1.0)
+    """
     img = _load(bg_url).resize(pil_size, Image.LANCZOS)
     W, H = img.size
+
+    # ── 위치별 파라미터 결정 ─────────────────────────────
+    is_top    = text_gravity.startswith('top')
+    is_center = text_gravity.startswith('center')
+
+    if is_top:
+        gs_top_ratio, gs_bot_ratio = 0.0,  0.35
+        y_start,      x_start      = 0.06, 0.06 if 'left' in text_gravity else 0.25
+    elif is_center:
+        gs_top_ratio, gs_bot_ratio = 0.25, 0.70
+        y_start,      x_start      = 0.38, 0.06
+    else:  # bottom-left / bottom-center
+        gs_top_ratio, gs_bot_ratio = 0.55, 1.0
+        y_start,      x_start      = 0.59, 0.06 if 'left' in text_gravity else 0.25
 
     # ── 그라디언트 오버레이 ──────────────────────────────
     ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     dov = ImageDraw.Draw(ov)
 
-    gs = int(H * 0.55)
-    for y in range(gs, H):
-        a = int(220 * (y - gs) / (H - gs))
-        dov.line([(0, y), (W, y)], fill=(8, 8, 8, a))
+    if is_top:
+        # 위에서 아래로 진하게 → 아래는 투명
+        top_end = int(H * gs_bot_ratio)
+        for y_px in range(0, top_end):
+            a = int(220 * (1 - y_px / top_end))
+            dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
+    else:
+        # 기존 방식 (bottom / center)
+        gs = int(H * gs_top_ratio)
+        gs_end = int(H * gs_bot_ratio) if not is_center else H
+        for y_px in range(gs, gs_end):
+            a = int(220 * (y_px - gs) / (gs_end - gs))
+            dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
 
     # 브랜드 컬러 바 (맨 아래 12px)
     br, bg_, bb = _hex_rgb(brand_color)
@@ -151,14 +180,15 @@ def create_banner_image(bg_url: str,
     # ── 폰트 ────────────────────────────────────────────
     try:
         fp = _font(bold=True)
-        f1 = ImageFont.truetype(fp, int(H * 0.076))
-        f2 = ImageFont.truetype(fp, int(H * 0.045))
-        f3 = ImageFont.truetype(fp, int(H * 0.034))
+        f1 = ImageFont.truetype(fp, int(H * 0.076 * text_scale))
+        f2 = ImageFont.truetype(fp, int(H * 0.045 * text_scale))
+        f3 = ImageFont.truetype(fp, int(H * 0.034 * text_scale))
     except Exception:
         f1 = f2 = f3 = ImageFont.load_default()
 
     fonts = [f1, f2, f3]
-    y = int(H * 0.59)
+    y = int(H * y_start)
+    x = int(W * x_start)
 
     for i, text in enumerate(texts[:3]):
         if not text:
@@ -167,8 +197,8 @@ def create_banner_image(bg_url: str,
         lines = _wrap(text, font, int(W * 0.87))[:2]
         for ln in lines:
             # 드롭 섀도
-            d.text((int(W * 0.06) + 2, y + 2), ln, font=font, fill=(0, 0, 0, 160))
-            d.text((int(W * 0.06),     y    ), ln, font=font, fill=(255, 255, 255, 255))
+            d.text((x + 2, y + 2), ln, font=font, fill=(0, 0, 0, 160))
+            d.text((x,     y    ), ln, font=font, fill=(255, 255, 255, 255))
             bb = font.getbbox(ln)
             y += int((bb[3] - bb[1]) * 1.35)
         y += int(H * 0.008)
@@ -182,8 +212,12 @@ def create_banner_image(bg_url: str,
 
 def create_webtoon_image(bg_url: str,
                          dialogues: list[str],
-                         pil_size: tuple = (1080, 1080)) -> str:
-    """웹툰 스타일 배경 + 한글 말풍선 (최대 2개)"""
+                         pil_size: tuple = (1080, 1080),
+                         bubble_layout: str = 'default') -> str:
+    """웹툰 스타일 배경 + 한글 말풍선 (최대 2개)
+
+    bubble_layout: 'default', 'top-right', 'bottom-both', 'top-both'
+    """
     img = _load(bg_url).resize(pil_size, Image.LANCZOS)
     W, H = img.size
     d   = ImageDraw.Draw(img)
@@ -194,11 +228,26 @@ def create_webtoon_image(bg_url: str,
     except Exception:
         font = ImageFont.load_default()
 
-    # 말풍선 기본 위치 (좌상 / 우중)
-    cfgs = [
-        {'ax': int(W * 0.06), 'ay': int(H * 0.05),  'tail': 'down'},
-        {'ax': int(W * 0.30), 'ay': int(H * 0.50),  'tail': 'up'},
-    ]
+    # 말풍선 레이아웃
+    LAYOUTS = {
+        'default':     [
+            {'ax': int(W * 0.06), 'ay': int(H * 0.05),  'tail': 'down'},
+            {'ax': int(W * 0.30), 'ay': int(H * 0.50),  'tail': 'up'},
+        ],
+        'top-right':   [
+            {'ax': int(W * 0.42), 'ay': int(H * 0.05),  'tail': 'down'},
+            {'ax': int(W * 0.06), 'ay': int(H * 0.50),  'tail': 'up'},
+        ],
+        'bottom-both': [
+            {'ax': int(W * 0.06), 'ay': int(H * 0.55),  'tail': 'up'},
+            {'ax': int(W * 0.40), 'ay': int(H * 0.70),  'tail': 'up'},
+        ],
+        'top-both':    [
+            {'ax': int(W * 0.06), 'ay': int(H * 0.05),  'tail': 'down'},
+            {'ax': int(W * 0.42), 'ay': int(H * 0.10),  'tail': 'down'},
+        ],
+    }
+    cfgs = LAYOUTS.get(bubble_layout, LAYOUTS['default'])
 
     for dlg, cfg in zip(dialogues[:2], cfgs):
         if dlg.strip():

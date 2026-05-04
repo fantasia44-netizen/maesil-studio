@@ -204,6 +204,52 @@
         </div>
       </div>
 
+      <!-- ③-B 서브 화풍 선택 (realistic_banner / webtoon 전용) -->
+      <div id="subStyleSection" class="d-none mt-1">
+        <hr class="my-2">
+        <label class="form-label fw-semibold small mb-2" id="subStyleLabel">세부 화풍 <span class="text-muted fw-normal">(같은 화풍으로 전 컷 일관성 유지)</span></label>
+        <!-- 실사 배너 서브 -->
+        <div id="bannerSubStyles" class="d-none">
+          <div class="d-flex flex-wrap gap-2">
+            {% for ssid, ssemoji, sslabel, ssdesc in [
+              ('lifestyle_warm',  '🌅', '라이프스타일', '따뜻한 자연광'),
+              ('editorial_clean', '📸', '에디토리얼',  '잡지 화보, 클린'),
+              ('outdoor_fresh',   '🌿', '아웃도어',    '야외 자연광'),
+              ('indoor_cozy',     '🕯️', '인테리어',    '카페·홈 감성'),
+              ('film_grain',      '🎞️', '필름 감성',   '빈티지 grain'),
+            ] %}
+            <div class="substyle-card border rounded p-2 text-center"
+                 style="cursor:pointer;transition:all .2s;min-width:90px;flex:1" data-substyle="{{ ssid }}"
+                 onclick="selectSubStyle('{{ ssid }}',this)">
+              <div style="font-size:1.2rem">{{ ssemoji }}</div>
+              <div class="fw-semibold" style="font-size:.75rem;margin-top:2px">{{ sslabel }}</div>
+              <div class="text-muted" style="font-size:.62rem">{{ ssdesc }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <!-- 웹툰 서브 -->
+        <div id="webtoonSubStyles" class="d-none">
+          <div class="d-flex flex-wrap gap-2">
+            {% for ssid, ssemoji, sslabel, ssdesc in [
+              ('kr_webtoon',  '📖', '한국 웹툰',    '선명한 선화'),
+              ('ghibli',      '🌿', '지브리풍',      '수채화 느낌'),
+              ('pastel_cute', '🍬', '파스텔 귀여운', 'SD 캐릭터'),
+              ('retro_anime', '📺', '레트로 애니',   '90년대 스타일'),
+              ('minimal_bw',  '🖊️', '미니멀 라인',   '흑백 선화'),
+            ] %}
+            <div class="substyle-card border rounded p-2 text-center"
+                 style="cursor:pointer;transition:all .2s;min-width:90px;flex:1" data-substyle="{{ ssid }}"
+                 onclick="selectSubStyle('{{ ssid }}',this)">
+              <div style="font-size:1.2rem">{{ ssemoji }}</div>
+              <div class="fw-semibold" style="font-size:.75rem;margin-top:2px">{{ sslabel }}</div>
+              <div class="text-muted" style="font-size:.62rem">{{ ssdesc }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
       <!-- ④-A 단일 이미지 모드 (qty=1) -->
       <div id="singleImgSection" class="d-none">
         <hr class="my-3">
@@ -336,9 +382,44 @@
                  class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-download me-1"></i>이미지 저장
               </a>
+              <button id="bannerEditBtn" class="btn btn-sm btn-outline-warning d-none"
+                      onclick="toggleBannerEditor()">
+                <i class="bi bi-arrows-move me-1"></i>텍스트 위치·크기 수정
+              </button>
+              <button class="btn btn-sm btn-outline-success"
+                      onclick="document.getElementById('singleInsertPanel').classList.toggle('d-none')">
+                <i class="bi bi-upload me-1"></i>이미지 삽입
+              </button>
               <button class="btn btn-sm btn-outline-primary" onclick="goStep(4)">
                 <i class="bi bi-arrow-repeat me-1"></i>이미지 재생성
               </button>
+            </div>
+            <!-- 배너 위치/크기 편집 패널 -->
+            <div id="bannerEditorPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#fffbea;border:1px solid #fde68a">
+              <div class="small fw-semibold mb-2">텍스트 위치</div>
+              <div class="d-flex flex-wrap gap-1 mb-2">
+                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="top-left"     onclick="selectGravity('top-left',this)">↖ 상단좌</button>
+                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="top-center"   onclick="selectGravity('top-center',this)">↑ 상단중</button>
+                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="center-left"  onclick="selectGravity('center-left',this)">← 중앙좌</button>
+                <button class="pos-btn btn btn-sm btn-outline-secondary active" data-g="bottom-left"    onclick="selectGravity('bottom-left',this)">↙ 하단좌</button>
+                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="bottom-center" onclick="selectGravity('bottom-center',this)">↓ 하단중</button>
+              </div>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="small text-muted">크기</span>
+                <button class="scale-btn btn btn-sm btn-outline-secondary" data-s="0.75" onclick="selectScale(0.75,this)">S</button>
+                <button class="scale-btn btn btn-sm btn-outline-secondary active" data-s="1.0"  onclick="selectScale(1.0,this)">M</button>
+                <button class="scale-btn btn btn-sm btn-outline-secondary" data-s="1.35" onclick="selectScale(1.35,this)">L</button>
+              </div>
+              <button class="btn btn-sm w-100 fw-semibold" style="background:#d63384;color:#fff;border-radius:8px" onclick="recompositeSingle()">
+                <span class="spinner-border spinner-border-sm d-none me-1" id="recompSpin"></span>
+                <i class="bi bi-magic me-1"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
+              </button>
+            </div>
+            <!-- 이미지 직접 삽입 패널 -->
+            <div id="singleInsertPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
+              <div class="small fw-semibold mb-2">파일 업로드</div>
+              <input type="file" class="form-control form-control-sm mb-2" accept="image/*" onchange="insertSingleImg(this)">
+              <div id="singleProductThumbs" class="d-flex flex-wrap gap-1 mt-1"></div>
             </div>
           </div>
 
@@ -364,7 +445,7 @@
             <!-- 썸네일 스트립 -->
             <div id="thumbStrip" class="d-flex gap-1 flex-wrap mt-2 justify-content-center px-1"></div>
             <!-- 액션 -->
-            <div class="d-flex gap-2 mt-2">
+            <div class="d-flex gap-2 mt-2 flex-wrap">
               <a id="carouselDownloadBtn" href="#" download
                  class="btn btn-sm btn-outline-secondary flex-fill">
                 <i class="bi bi-download me-1"></i>저장
@@ -373,9 +454,19 @@
                       onclick="openRegenModal(carouselIdx)">
                 <i class="bi bi-pencil-square me-1"></i>이 컷 수정생성
               </button>
-              <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="goStep(4)">
+              <button class="btn btn-sm btn-outline-success flex-fill"
+                      onclick="toggleCarouselInsert()">
+                <i class="bi bi-upload me-1"></i>이미지 삽입
+              </button>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="goStep(4)">
                 <i class="bi bi-arrow-repeat me-1"></i>전체 재구성
               </button>
+            </div>
+            <!-- 캐러셀 이미지 삽입 패널 -->
+            <div id="carouselInsertPanel" class="d-none mt-2 p-2 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
+              <div class="small fw-semibold mb-1">현재 컷 이미지 삽입</div>
+              <input type="file" class="form-control form-control-sm mb-1" accept="image/*" onchange="insertCarouselImg(this)">
+              <div id="carouselProductThumbs" class="d-flex flex-wrap gap-1"></div>
             </div>
           </div>
 
@@ -449,6 +540,32 @@ let panelManualImages  = [];   // 각 패널의 수동 업로드 이미지 URL (
 let carouselIdx        = 0;
 let regenModalIdx      = -1;   // 수정생성 팝업 대상 패널 인덱스
 let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
+let selectedSubStyle   = null; // 서브 화풍
+let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
+let selectedGravity    = 'bottom-left';
+let selectedTextScale  = 1.0;
+
+// ── 서브스타일 프롬프트 수식어 ────────────────────────────────
+const BANNER_SUBSTYLE = {
+  lifestyle_warm:  'bright airy lifestyle photography, warm golden hour sunlight, cozy natural home setting',
+  editorial_clean: 'fashion editorial photography, clean minimal white background, sophisticated magazine composition',
+  outdoor_fresh:   'outdoor natural daylight photography, park or nature backdrop, fresh vibrant green environment',
+  indoor_cozy:     'cozy indoor ambiance, warm lamp light, modern cafe or Scandinavian home interior',
+  film_grain:      'analog film photography, grain texture, vintage Kodak color palette, nostalgic warm tones',
+};
+const WEBTOON_SUBSTYLE = {
+  kr_webtoon:  'Korean manhwa webtoon style, vibrant clean flat colors, bold black outlines, digital comic art',
+  ghibli:      'Studio Ghibli inspired anime, soft watercolor brush strokes, gentle muted nature palette, hand-painted',
+  pastel_cute: 'pastel kawaii chibi illustration, round soft shapes, gentle pink mint palette, children book style',
+  retro_anime: '1990s retro anime style, cel-shading, bold outlines, classic Japanese animation warm palette',
+  minimal_bw:  'minimal clean line art, limited black white and one accent color, simple graphic manga',
+};
+function _subStyleMod() {
+  if (!selectedSubStyle) return '';
+  if (selectedStyle === 'realistic_banner') return BANNER_SUBSTYLE[selectedSubStyle] || '';
+  if (selectedStyle === 'webtoon')          return WEBTOON_SUBSTYLE[selectedSubStyle] || '';
+  return '';
+}
 
 // ── 스텝 UI ──────────────────────────────────────────────────
 function updateStepIndicator(step) {
@@ -830,6 +947,16 @@ function selectStyle(styleId, el) {
     styleId === 'webtoon'    ? '말풍선 대사' :
     styleId === 'typography' ? '이미지 텍스트 안내' : '이미지 배너 텍스트';
 
+  // 서브스타일 섹션 show/hide
+  const subSec = document.getElementById('subStyleSection');
+  const hasSub = (styleId === 'realistic_banner' || styleId === 'webtoon');
+  subSec.classList.toggle('d-none', !hasSub);
+  document.getElementById('bannerSubStyles').classList.toggle('d-none', styleId !== 'realistic_banner');
+  document.getElementById('webtoonSubStyles').classList.toggle('d-none', styleId !== 'webtoon');
+  // 서브스타일 리셋
+  selectedSubStyle = null;
+  document.querySelectorAll('.substyle-card').forEach(c => { c.style.borderColor=''; c.style.background=''; });
+
   if (selectedQuantity === 1) refreshImagePrompt();
 }
 
@@ -889,9 +1016,13 @@ async function generateImage() {
   goStep(5);
   _showStep5Single(true);
 
+  // 서브스타일 수식어를 프롬프트에 추가
+  const subMod = _subStyleMod();
+  const finalPrompt = subMod ? `${prompt}, ${subMod}` : prompt;
+
   const body = {
     style:       selectedStyle,
-    flux_prompt: prompt,
+    flux_prompt: finalPrompt,
     size:        selectedRatio,
     brand_color: selectedBrandColor || '#e8355a',
     title:       document.getElementById('imgTitle')?.value.trim()    || '',
@@ -909,6 +1040,7 @@ async function generateImage() {
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
 
+    bannerBaseUrl     = data.base_image_url || null;
     generatedImageUrl = data.image_url;
     generatedImages   = [data.image_url];
     _showStep5Single(false, data.image_url);
@@ -940,6 +1072,11 @@ function _showStep5Single(loading, imageUrl) {
     const actEl = document.getElementById('step5ImgActions');
     actEl.style.display = 'flex';
     actEl.style.flexDirection = 'column';
+    // 배너/웹툰일 때만 편집 버튼 표시
+    const editBtn = document.getElementById('bannerEditBtn');
+    if (editBtn) editBtn.classList.toggle('d-none', selectedStyle !== 'realistic_banner' && selectedStyle !== 'webtoon');
+    // 상품 이미지 삽입 썸네일 채우기
+    _fillInsertThumbs('singleProductThumbs', url => { generatedImageUrl=url; document.getElementById('finalImage').src=url; document.getElementById('downloadBtn').href=url; document.getElementById('singleInsertPanel').classList.add('d-none'); });
   }
 }
 
@@ -1106,7 +1243,9 @@ async function generateAllImages() {
       continue;
     }
 
-    const flux_prompt = document.getElementById(`p${i}_prompt`)?.value.trim() || p.flux_prompt || '';
+    const rawPrompt   = document.getElementById(`p${i}_prompt`)?.value.trim() || p.flux_prompt || '';
+    const subMod      = _subStyleMod();
+    const flux_prompt = subMod ? `${rawPrompt}, ${subMod}` : rawPrompt;
     const title       = document.getElementById(`p${i}_title`)?.value.trim()    || p.title    || '';
     const subtitle    = document.getElementById(`p${i}_subtitle`)?.value.trim() || p.subtitle || '';
     const dialogue1   = document.getElementById(`p${i}_dialogue1`)?.value.trim()|| p.dialogue1|| '';
@@ -1358,6 +1497,130 @@ function regenModalReplace() {
 
 function regenModalKeep() {
   bootstrap.Modal.getOrCreateInstance(document.getElementById('regenModal')).hide();
+}
+
+// ── 서브스타일 선택 ───────────────────────────────────────────
+function selectSubStyle(ssid, el) {
+  selectedSubStyle = ssid;
+  document.querySelectorAll('.substyle-card').forEach(c => { c.style.borderColor=''; c.style.background=''; });
+  el.style.borderColor = '#d63384';
+  el.style.background  = '#fff0f8';
+  if (selectedQuantity === 1) refreshImagePrompt();
+}
+
+// ── 배너 위치·크기 컨트롤 ────────────────────────────────────
+function toggleBannerEditor() {
+  document.getElementById('bannerEditorPanel').classList.toggle('d-none');
+}
+function selectGravity(g, el) {
+  selectedGravity = g;
+  document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+function selectScale(s, el) {
+  selectedTextScale = s;
+  document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+async function recompositeSingle() {
+  if (!bannerBaseUrl) { alert('먼저 이미지를 생성하세요.'); return; }
+  const spin = document.getElementById('recompSpin');
+  spin.classList.remove('d-none');
+  const isWebtoon = selectedStyle === 'webtoon';
+  const endpoint  = isWebtoon ? '/create/instagram/recomposite-webtoon' : '/create/instagram/recomposite-banner';
+  const body = isWebtoon ? {
+    base_image_url: bannerBaseUrl,
+    dialogue1: document.getElementById('dialogue1')?.value.trim() || '',
+    dialogue2: document.getElementById('dialogue2')?.value.trim() || '',
+    size: selectedRatio,
+    bubble_layout: selectedGravity,
+  } : {
+    base_image_url: bannerBaseUrl,
+    title:       document.getElementById('imgTitle')?.value.trim()    || '',
+    subtitle:    document.getElementById('imgSubtitle')?.value.trim() || '',
+    brand_color: selectedBrandColor || '#e8355a',
+    size:        selectedRatio,
+    text_gravity: selectedGravity,
+    text_scale:   selectedTextScale,
+  };
+  try {
+    const res  = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    generatedImageUrl = data.image_url;
+    document.getElementById('finalImage').src = data.image_url;
+    document.getElementById('downloadBtn').href = data.image_url;
+  } catch(e) { alert('재합성 실패: ' + e.message); }
+  finally { spin.classList.add('d-none'); }
+}
+
+// ── 단일 이미지 삽입 ─────────────────────────────────────────
+async function insertSingleImg(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const res  = await fetch('/create/upload-asset', { method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd });
+    const data = await res.json();
+    if (data.ok) {
+      generatedImageUrl = data.url;
+      document.getElementById('finalImage').src = data.url;
+      document.getElementById('downloadBtn').href = data.url;
+      document.getElementById('singleInsertPanel').classList.add('d-none');
+    } else alert('업로드 실패: ' + data.message);
+  } catch(e) { alert('오류: ' + e.message); }
+}
+
+// ── 캐러셀 이미지 삽입 ───────────────────────────────────────
+function toggleCarouselInsert() {
+  const panel = document.getElementById('carouselInsertPanel');
+  if (panel.classList.contains('d-none')) {
+    _fillInsertThumbs('carouselProductThumbs', url => {
+      generatedImages[carouselIdx] = url;
+      carouselShowImage(carouselIdx);
+      _buildThumbStrip();
+      panel.classList.add('d-none');
+    });
+  }
+  panel.classList.toggle('d-none');
+}
+async function insertCarouselImg(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const res  = await fetch('/create/upload-asset', { method:'POST', headers:{'X-CSRFToken':CSRF}, body:fd });
+    const data = await res.json();
+    if (data.ok) {
+      generatedImages[carouselIdx] = data.url;
+      carouselShowImage(carouselIdx);
+      _buildThumbStrip();
+      document.getElementById('carouselInsertPanel').classList.add('d-none');
+    } else alert('업로드 실패: ' + data.message);
+  } catch(e) { alert('오류: ' + e.message); }
+}
+
+// ── 공통: 상품 이미지 썸네일 채우기 ─────────────────────────
+function _fillInsertThumbs(containerId, onSelect) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  const allImgs = Object.values(PRODUCT_IMAGES).flat().slice(0, 8);
+  if (!allImgs.length) return;
+  const label = document.createElement('div');
+  label.className = 'w-100 small text-muted mb-1';
+  label.textContent = '상품 이미지에서 선택';
+  container.appendChild(label);
+  allImgs.forEach((url, i) => {
+    const img = document.createElement('img');
+    img.src = url;
+    img.title = `상품 이미지 ${i+1}`;
+    img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid transparent';
+    img.onmouseover = () => img.style.borderColor = '#d63384';
+    img.onmouseout  = () => img.style.borderColor = 'transparent';
+    img.onclick     = () => onSelect(url);
+    container.appendChild(img);
+  });
 }
 </script>
 

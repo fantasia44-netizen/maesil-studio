@@ -545,9 +545,75 @@ def instagram_image_generate():
             'status':      'done',
         }).eq('id', creation_id).execute()
 
-        return jsonify(ok=True, image_url=final_url, cost=cost, creation_id=creation_id)
+        return jsonify(ok=True, image_url=final_url, base_image_url=bg_url, cost=cost, creation_id=creation_id)
 
     except Exception as ex:
         logger.error(f'[insta/image-generate] {ex}')
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message=f'이미지 생성 실패: {ex}')
+
+
+# ─────────────────────────────────────────────────────────────
+# 재합성 — 포인트 소모 없이 PIL 재합성만
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/instagram/recomposite-banner', methods=['POST'])
+@login_required
+def instagram_recomposite_banner():
+    """base_image_url + 텍스트 + 위치 → PIL 재합성 (포인트 소모 없음)"""
+    data         = request.get_json(force=True) or {}
+    base_url     = (data.get('base_image_url') or '').strip()
+    title        = (data.get('title')          or '').strip()
+    subtitle     = (data.get('subtitle')       or '').strip()
+    brand_color  = (data.get('brand_color')    or '#e8355a').strip()
+    img_size     = (data.get('size')           or '1:1').strip()
+    text_gravity = (data.get('text_gravity')   or 'bottom-left').strip()
+    text_scale   = float(data.get('text_scale') or 1.0)
+
+    if not base_url:
+        return jsonify(ok=False, message='base_image_url이 필요합니다.')
+
+    from services.instagram_service import create_banner_image
+    from services.imagen_service import upload_to_supabase
+    import uuid
+
+    _, pil_size = SIZE_MAP.get(img_size, SIZE_MAP['1:1'])
+    texts = [t for t in [title, subtitle] if t]
+    try:
+        data_url  = create_banner_image(base_url, texts, brand_color, pil_size, text_gravity, text_scale)
+        filename  = f'insta_banner_r_{uuid.uuid4().hex[:8]}.jpg'
+        final_url = upload_to_supabase(data_url, current_user.id, filename)
+        return jsonify(ok=True, image_url=final_url)
+    except Exception as e:
+        logger.error(f'[recomposite-banner] {e}')
+        return jsonify(ok=False, message=str(e))
+
+
+@create_bp.route('/instagram/recomposite-webtoon', methods=['POST'])
+@login_required
+def instagram_recomposite_webtoon():
+    """base_image_url + 대사 + 레이아웃 → PIL 재합성 (포인트 소모 없음)"""
+    data          = request.get_json(force=True) or {}
+    base_url      = (data.get('base_image_url') or '').strip()
+    dialogue1     = (data.get('dialogue1')      or '').strip()
+    dialogue2     = (data.get('dialogue2')      or '').strip()
+    img_size      = (data.get('size')           or '1:1').strip()
+    bubble_layout = (data.get('bubble_layout')  or 'default').strip()
+
+    if not base_url:
+        return jsonify(ok=False, message='base_image_url이 필요합니다.')
+
+    from services.instagram_service import create_webtoon_image
+    from services.imagen_service import upload_to_supabase
+    import uuid
+
+    _, pil_size  = SIZE_MAP.get(img_size, SIZE_MAP['1:1'])
+    dialogues    = [d for d in [dialogue1, dialogue2] if d]
+    try:
+        data_url  = create_webtoon_image(base_url, dialogues, pil_size, bubble_layout)
+        filename  = f'insta_webtoon_r_{uuid.uuid4().hex[:8]}.jpg'
+        final_url = upload_to_supabase(data_url, current_user.id, filename)
+        return jsonify(ok=True, image_url=final_url)
+    except Exception as e:
+        logger.error(f'[recomposite-webtoon] {e}')
+        return jsonify(ok=False, message=str(e))
