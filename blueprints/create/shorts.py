@@ -217,7 +217,6 @@ def shorts_generate():
         return jsonify(ok=False, message='포인트가 부족합니다.')
 
     from services.shorts_service import start_shorts_pipeline
-    from flask import current_app
     start_shorts_pipeline(
         creation_id=creation_id,
         user_id=current_user.id,
