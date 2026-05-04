@@ -161,6 +161,7 @@ MENU_REGISTRY = [
     ('블로그',      'bi-file-text',           'create.blog',        None,        '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',   None,        '콘텐츠 생성'),
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',      None,        '콘텐츠 생성'),
+    ('브랜드 로고', 'bi-pentagon',            'create.logo',        None,        '콘텐츠 생성'),
     ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page', None,        '콘텐츠 생성'),
     ('썸네일 문구', 'bi-card-heading',        'create.thumbnail',   None,        '콘텐츠 생성'),
     ('광고 카피',   'bi-megaphone',           'create.ad_copy',     None,        '콘텐츠 생성'),

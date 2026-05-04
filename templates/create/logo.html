@@ -1,0 +1,289 @@
+{% extends 'base.html' %}
+{% block title %}브랜드 로고 만들기 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 브랜드 로고{% endblock %}
+
+{% block content %}
+<div style="max-width:720px">
+
+  <div class="card mb-4">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-pentagon me-2" style="color:#d63384"></i>브랜드 로고 만들기
+        <span class="badge bg-light text-dark ms-2 fw-normal" style="font-size:.72rem">Ideogram V3 · 한글 직접 렌더링</span>
+      </h6>
+    </div>
+    <div class="card-body p-4">
+      <input type="hidden" id="csrfToken" value="{{ csrf_token() }}">
+
+      <!-- 브랜드 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">브랜드</label>
+        <select id="brandSelect" class="form-select form-select-sm" onchange="fillFromBrand(this)">
+          {% for b in brands %}
+          <option value="{{ b.id }}"
+                  data-name="{{ b.name }}"
+                  data-color="{{ b.brand_color or '#e8355a' }}"
+                  {{ 'selected' if b.id == default_brand.id }}>
+            {{ b.name }}{% if b.is_default %} (기본){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <!-- 브랜드명 한글 -->
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small">브랜드명 <span class="text-danger">*</span></label>
+          <input id="brandNameKo" class="form-control form-control-sm"
+                 placeholder="예: 매실 스튜디오" maxlength="20">
+          <div class="form-text" style="font-size:.72rem">로고에 직접 표시될 한글 이름</div>
+        </div>
+        <!-- 영문명 -->
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small">영문명 <span class="text-muted fw-normal">(선택)</span></label>
+          <input id="brandNameEn" class="form-control form-control-sm"
+                 placeholder="예: Maesil Studio" maxlength="30">
+        </div>
+        <!-- 슬로건 -->
+        <div class="col-12">
+          <label class="form-label fw-semibold small">슬로건 / 태그라인 <span class="text-muted fw-normal">(선택)</span></label>
+          <input id="tagline" class="form-control form-control-sm"
+                 placeholder="예: 내 브랜드의 모든 콘텐츠" maxlength="40">
+        </div>
+      </div>
+
+      <!-- 로고 타입 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">로고 타입</label>
+        <div class="row g-2">
+          {% for lid, llabel, ldesc in [
+            ('combination', '조합형',   '심볼 + 브랜드명'),
+            ('wordmark',    '워드마크', '텍스트 타이포만'),
+            ('emblem',      '엠블럼',   '배지/방패 형태'),
+            ('lettermark',  '레터마크', '이니셜 중심'),
+            ('mascot',      '마스코트', '캐릭터 로고'),
+          ] %}
+          <div class="col-6 col-md-4">
+            <div class="logo-type-card border rounded p-2 text-center"
+                 style="cursor:pointer" data-val="{{ lid }}"
+                 onclick="select('logoType', '{{ lid }}', this)">
+              <div class="fw-semibold small">{{ llabel }}</div>
+              <div class="text-muted" style="font-size:.68rem">{{ ldesc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="logoType" value="combination">
+      </div>
+
+      <!-- 분위기 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">브랜드 분위기</label>
+        <div class="row g-2">
+          {% for vid, vlabel, vdesc in [
+            ('modern_minimal',  '모던 미니멀', '깔끔·심플'),
+            ('vintage_classic', '빈티지 클래식','레트로·클래식'),
+            ('cute_friendly',   '귀엽고 친근한','소프트·캐주얼'),
+            ('tech_bold',       '테크·강렬한', '기하학·미래적'),
+            ('natural_warm',    '자연·따뜻한', '유기적·핸드메이드'),
+            ('luxury_premium',  '럭셔리·프리미엄','고급·정교한'),
+          ] %}
+          <div class="col-6 col-md-4">
+            <div class="vibe-card border rounded p-2 text-center"
+                 style="cursor:pointer" data-val="{{ vid }}"
+                 onclick="select('vibe', '{{ vid }}', this)">
+              <div class="fw-semibold small">{{ vlabel }}</div>
+              <div class="text-muted" style="font-size:.68rem">{{ vdesc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="vibe" value="modern_minimal">
+      </div>
+
+      <!-- 컬러 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">메인 컬러</label>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          {% for c in ['#e8355a','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#111111','#ffffff'] %}
+          <div class="color-dot rounded-circle border"
+               style="width:26px;height:26px;background:{{ c }};cursor:pointer"
+               onclick="pickColor('{{ c }}', this)" title="{{ c }}"></div>
+          {% endfor %}
+          <input type="color" id="colorPicker" value="#e8355a"
+                 oninput="pickColor(this.value, null)"
+                 class="form-control form-control-color" style="width:36px;height:26px;padding:0;border:none;cursor:pointer">
+        </div>
+        <input type="hidden" id="primaryColor" value="#e8355a">
+      </div>
+
+      <!-- 추가 요청 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">추가 요청 <span class="text-muted fw-normal">(선택)</span></label>
+        <input id="extraRequest" class="form-control form-control-sm"
+               placeholder="예: 커피잔 모티브 포함, 파란색 계열로, 원형 형태">
+      </div>
+
+      <!-- 생성 버튼 -->
+      <div class="d-grid">
+        <button id="generateBtn" class="btn btn-primary py-2" onclick="generateLogo()">
+          <i class="bi bi-magic me-2"></i>로고 시안 3개 생성
+          <span class="badge bg-white text-dark ms-2" style="font-size:.72rem">800P</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 결과 -->
+  <div id="resultArea" class="d-none">
+    <div class="card">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-images me-2" style="color:#d63384"></i>로고 시안 3가지</h6>
+        <button class="btn btn-sm btn-outline-secondary" onclick="generateLogo()">
+          <i class="bi bi-arrow-clockwise me-1"></i>재생성
+        </button>
+      </div>
+      <div class="card-body p-4">
+        <div class="alert alert-info py-2 px-3 mb-3" style="font-size:.82rem">
+          <i class="bi bi-info-circle me-1"></i>
+          마음에 드는 시안을 우클릭 → 이미지 저장, 또는 다운로드 버튼을 이용하세요.
+          브랜드 키트 제작 후 각종 소재에 적용할 수 있습니다.
+        </div>
+        <div id="logoGrid" class="row g-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 로딩 -->
+  <div id="loadingArea" class="d-none text-center py-5">
+    <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem"></div>
+    <div class="fw-semibold">로고 시안 생성 중...</div>
+    <div class="text-muted small mt-1">Ideogram V3으로 3가지 시안을 만들고 있습니다 (약 20~40초)</div>
+  </div>
+
+  <!-- 에러 -->
+  <div id="errorArea" class="d-none">
+    <div class="alert alert-danger" id="errorMsg"></div>
+  </div>
+
+</div>
+
+<style>
+.logo-type-card, .vibe-card { transition: all .15s; }
+.logo-type-card:hover, .vibe-card:hover { border-color:#d63384 !important; background:#fff0f8; }
+.logo-type-card.active, .vibe-card.active { border-color:#d63384 !important; background:#fff0f8; }
+.color-dot { transition: outline .1s; }
+</style>
+
+<script>
+const CSRF = document.getElementById('csrfToken').value;
+let selectedValues = { logoType: 'combination', vibe: 'modern_minimal' };
+
+function select(field, val, el) {
+  const group = el.closest('.row').querySelectorAll('[data-val]');
+  group.forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedValues[field] = val;
+  document.getElementById(field).value = val;
+}
+
+function pickColor(hex, el) {
+  document.querySelectorAll('.color-dot').forEach(d => { d.style.outline = ''; d.style.outlineOffset = ''; });
+  if (el) { el.style.outline = '2px solid #333'; el.style.outlineOffset = '2px'; }
+  document.getElementById('primaryColor').value = hex;
+  document.getElementById('colorPicker').value  = hex;
+}
+
+function fillFromBrand(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (opt.dataset.name) document.getElementById('brandNameKo').value = opt.dataset.name;
+  if (opt.dataset.color) pickColor(opt.dataset.color, null);
+}
+
+async function generateLogo() {
+  const brandNameKo = document.getElementById('brandNameKo').value.trim();
+  const brandNameEn = document.getElementById('brandNameEn').value.trim();
+  if (!brandNameKo && !brandNameEn) {
+    alert('브랜드명을 입력해주세요.');
+    return;
+  }
+
+  document.getElementById('resultArea').classList.add('d-none');
+  document.getElementById('errorArea').classList.add('d-none');
+  document.getElementById('loadingArea').classList.remove('d-none');
+  document.getElementById('generateBtn').disabled = true;
+
+  try {
+    const res  = await fetch('/create/logo/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        brand_id:     document.getElementById('brandSelect').value,
+        brand_name:   brandNameEn,
+        brand_name_ko: brandNameKo,
+        tagline:      document.getElementById('tagline').value.trim(),
+        logo_style:   selectedValues.logoType,
+        vibe:         selectedValues.vibe,
+        primary_color: document.getElementById('primaryColor').value,
+        extra:        document.getElementById('extraRequest').value.trim(),
+      }),
+    });
+    const data = await res.json();
+
+    document.getElementById('loadingArea').classList.add('d-none');
+    document.getElementById('generateBtn').disabled = false;
+
+    if (!data.ok) {
+      document.getElementById('errorMsg').textContent = data.message;
+      document.getElementById('errorArea').classList.remove('d-none');
+      return;
+    }
+
+    renderLogos(data.logo_urls);
+    document.getElementById('resultArea').classList.remove('d-none');
+    document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    document.getElementById('loadingArea').classList.add('d-none');
+    document.getElementById('generateBtn').disabled = false;
+    document.getElementById('errorMsg').textContent = '오류가 발생했습니다: ' + e.message;
+    document.getElementById('errorArea').classList.remove('d-none');
+  }
+}
+
+function renderLogos(urls) {
+  const grid = document.getElementById('logoGrid');
+  grid.innerHTML = urls.map((url, i) => `
+    <div class="col-md-4">
+      <div class="card h-100 text-center" style="overflow:hidden">
+        <div class="p-2" style="background:#f8f9fa">
+          <img src="${url}" alt="로고 시안 ${i+1}"
+               style="width:100%;aspect-ratio:1/1;object-fit:contain;border-radius:8px">
+        </div>
+        <div class="card-body p-2">
+          <div class="small fw-semibold mb-2">시안 ${i+1}</div>
+          <a href="${url}" download="logo_${i+1}.png" target="_blank"
+             class="btn btn-sm btn-outline-primary w-100">
+            <i class="bi bi-download me-1"></i>다운로드
+          </a>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// 초기 선택 상태 설정
+document.addEventListener('DOMContentLoaded', () => {
+  const firstType = document.querySelector('.logo-type-card[data-val="combination"]');
+  if (firstType) firstType.classList.add('active');
+  const firstVibe = document.querySelector('.vibe-card[data-val="modern_minimal"]');
+  if (firstVibe) firstVibe.classList.add('active');
+  // 브랜드명 자동 채우기
+  const sel = document.getElementById('brandSelect');
+  if (sel) fillFromBrand(sel);
+  // 기본 컬러 표시
+  const firstDot = document.querySelector('.color-dot');
+  if (firstDot) pickColor(firstDot.title, firstDot);
+});
+</script>
+{% endblock %}
