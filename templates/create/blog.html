@@ -98,14 +98,40 @@
           </div>
         </div>
 
-        <div class="mb-4 d-none" id="refBlock">
+        <!-- new 모드: 회피 목록 표시 -->
+        <div class="mb-4" id="refBlockNew">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <label class="form-label fw-semibold small mb-0">이전 글 중복 방지 목록</label>
+            <button type="button" class="btn btn-sm btn-link p-0 text-muted" style="font-size:.75rem"
+                    onclick="document.getElementById('avoidList').classList.toggle('d-none')">
+              목록 보기/숨기기
+            </button>
+          </div>
+          <div id="avoidListEmpty" class="text-muted small d-none">이전 글이 없습니다. 자유롭게 작성됩니다.</div>
+          <div id="avoidList" class="d-none">
+            <div id="avoidBadges" class="d-flex flex-wrap gap-1 mt-1"></div>
+          </div>
+          <div class="text-muted mt-1" id="avoidHint" style="font-size:.75rem"></div>
+        </div>
+
+        <!-- series/variant 모드: 이전글 선택 + 미리보기 -->
+        <div class="mb-4 d-none" id="refBlockRef">
           <label class="form-label fw-semibold small">참조할 이전 글</label>
-          <select id="refSelect" class="form-select form-select-sm">
+          <select id="refSelect" class="form-select form-select-sm" onchange="loadRefPreview(this.value)">
             <option value="">— 선택 —</option>
             {% for r in recent_blogs %}
             <option value="{{ r.id }}">{{ r.created_at[:10] }} · {{ r.title[:50] }}</option>
             {% endfor %}
           </select>
+          <!-- 선택한 글 발췌 미리보기 -->
+          <div id="refPreview" class="d-none mt-2 p-3 rounded" style="background:#f8f9fa;border-left:3px solid #e8355a">
+            <div class="small fw-semibold mb-1" id="refPreviewTitle"></div>
+            <div class="text-muted" id="refPreviewExcerpt" style="font-size:.78rem;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
+          </div>
+          <div id="refPreviewLoading" class="d-none text-center py-2">
+            <span class="spinner-border spinner-border-sm me-1" style="color:#e8355a"></span>
+            <span class="text-muted small">이전 글 내용 불러오는 중...</span>
+          </div>
         </div>
 
         <button type="submit" id="step1Btn" class="btn w-100 fw-semibold py-2"
@@ -300,6 +326,61 @@
       <h6 class="mb-0 fw-bold">블로그 완성본</h6>
     </div>
     <div class="card-body p-4" id="finalContent" style="font-size:.9rem;line-height:1.9;color:#1a2332">
+    </div>
+  </div>
+</div>
+
+<!-- ── Blog 이미지 수정 새로생성 모달 ───────────────────── -->
+<div class="modal fade" id="blogRegenModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold">이미지 수정 새로생성</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-5 text-center">
+            <div class="text-muted small mb-1">현재 이미지</div>
+            <img id="blogRegenCurrentImg" src=""
+                 style="max-width:100%;border-radius:8px;max-height:220px;object-fit:contain">
+          </div>
+          <div class="col-md-7">
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">프롬프트 <span class="text-muted fw-normal">(영문 권장)</span></label>
+              <textarea id="blogRegenPrompt" class="form-control form-control-sm" rows="4"
+                        placeholder="수정할 이미지 설명을 입력하세요"></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1">스타일</label>
+              <select id="blogRegenStyle" class="form-select form-select-sm">
+                <option value="realistic">사실적 (Realistic)</option>
+                <option value="illustration" selected>일러스트 (Illustration)</option>
+                <option value="webtoon">웹툰 (Webtoon)</option>
+                <option value="minimal">미니멀 (Minimal)</option>
+              </select>
+            </div>
+            <button id="blogRegenGenBtn" class="btn btn-sm fw-semibold w-100"
+                    style="background:#e8355a;color:#fff;border-radius:8px"
+                    onclick="blogRegenGenerate()">
+              <i class="bi bi-image me-1"></i>새로 생성
+            </button>
+          </div>
+        </div>
+        <div id="blogRegenPreview" class="d-none mt-3 text-center">
+          <div class="text-muted small mb-1">생성된 이미지</div>
+          <img id="blogRegenPreviewImg" src=""
+               style="max-width:100%;border-radius:8px;max-height:260px;object-fit:contain">
+        </div>
+      </div>
+      <div class="modal-footer gap-2">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">그대로 사용하기</button>
+        <button id="blogRegenReplaceBtn" class="btn btn-sm fw-semibold" disabled
+                style="background:#e8355a;color:#fff;border-radius:8px"
+                onclick="blogRegenReplace()">
+          <i class="bi bi-check2 me-1"></i>교체하기
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -914,6 +995,7 @@ async function renderFinalContent() {
   const text      = document.getElementById('blogTextArea').value;
   const container = document.getElementById('finalContent');
   const validImgs = generatedImages.filter(g => g.url);
+  window._validImgs = validImgs;
 
   // 로딩 표시
   container.innerHTML = `
@@ -968,14 +1050,14 @@ async function renderFinalContent() {
       appendTextBlock(container, para);
       (placementMap[i] || []).forEach(imgIdx => {
         if (validImgs[imgIdx]) {
-          appendImageBlock(container, validImgs[imgIdx]);
+          appendImageBlock(container, validImgs[imgIdx], imgIdx);
           placed.add(imgIdx);
         }
       });
     });
     // 배치 안 된 이미지 — 맨 마지막에 추가
     validImgs.forEach((img, i) => {
-      if (!placed.has(i)) appendImageBlock(container, img);
+      if (!placed.has(i)) appendImageBlock(container, img, i);
     });
 
   } else {
@@ -985,10 +1067,11 @@ async function renderFinalContent() {
     sections.forEach((section, i) => {
       appendTextBlock(container, section.trim());
       if (imgIdx < validImgs.length && i < sections.length - 1) {
-        appendImageBlock(container, validImgs[imgIdx++]);
+        const ci = imgIdx++;
+        appendImageBlock(container, validImgs[ci], ci);
       }
     });
-    while (imgIdx < validImgs.length) appendImageBlock(container, validImgs[imgIdx++]);
+    while (imgIdx < validImgs.length) { const ci = imgIdx++; appendImageBlock(container, validImgs[ci], ci); }
   }
 
   // ── 완성본 DB 저장 (Haiku 성공/폴백 무관하게 항상 저장) ──────
@@ -1015,17 +1098,49 @@ function appendTextBlock(container, text) {
   container.appendChild(div);
 }
 
-function appendImageBlock(container, img) {
+function appendImageBlock(container, img, vidx) {
   const wrap = document.createElement('div');
+  wrap.id = `imgwrap_${vidx}`;
   wrap.style.cssText = 'margin:2rem 0;text-align:center';
+
+  const allProductImgsFlat = Object.values(PRODUCT_IMAGES).flat().slice(0, 8);
+  const productThumbsHtml = allProductImgsFlat.map((u, pi) => `
+    <img src="${u}" title="상품 이미지 ${pi+1}"
+         style="width:52px;height:52px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid transparent"
+         onclick="replaceFinalImg(${vidx},'${u}')"
+         onmouseover="this.style.borderColor='#e8355a'"
+         onmouseout="this.style.borderColor='transparent'">`).join('');
+
   wrap.innerHTML = `
-    <img src="${img.url}" alt="${img.role}"
+    <img id="finalImg_${vidx}" src="${img.url}" alt="${img.role}"
          style="max-width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.12)">
     <div class="text-muted small mt-2">${img.role}</div>
-    <a href="${img.url}" target="_blank" download
-       class="btn btn-sm btn-outline-secondary mt-1">
-      <i class="bi bi-download me-1"></i>이미지 저장
-    </a>`;
+    <div class="d-flex justify-content-center gap-2 mt-2 flex-wrap">
+      <a href="${img.url}" target="_blank" download id="finalDl_${vidx}"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download me-1"></i>이미지 저장
+      </a>
+      <button class="btn btn-sm btn-outline-primary"
+              onclick="openBlogRegenModal(${vidx})">
+        <i class="bi bi-arrow-repeat me-1"></i>수정 새로생성
+      </button>
+      <button class="btn btn-sm btn-outline-success"
+              onclick="document.getElementById('insertPanel_${vidx}').classList.toggle('d-none')">
+        <i class="bi bi-upload me-1"></i>이미지 삽입
+      </button>
+    </div>
+    <div id="insertPanel_${vidx}" class="d-none mt-2 p-3 rounded" style="background:#f8f9fa;text-align:left;max-width:480px;margin-left:auto;margin-right:auto">
+      <div class="mb-2">
+        <label class="form-label small fw-semibold mb-1">파일 업로드</label>
+        <input type="file" class="form-control form-control-sm" accept="image/*"
+               onchange="insertFinalImgFile(${vidx},this)">
+      </div>
+      ${allProductImgsFlat.length ? `
+      <div>
+        <div class="small fw-semibold mb-1 text-muted">상품 이미지에서 선택</div>
+        <div class="d-flex flex-wrap gap-1">${productThumbsHtml}</div>
+      </div>` : ''}
+    </div>`;
   container.appendChild(wrap);
 }
 
@@ -1134,6 +1249,84 @@ function _updateTotalCostBadge() {
   if (manualCount > 0) parts.push(`수동 ${manualCount}장`);
   if (aiCount > 0)     parts.push(`AI ${aiCount}장 (${cost}P)`);
   el.textContent = parts.join(' + ');
+}
+
+// ── Step 5: 이미지 교체 (삽입/수정) ─────────────────────────
+function replaceFinalImg(vidx, url) {
+  const imgEl = document.getElementById(`finalImg_${vidx}`);
+  if (imgEl) imgEl.src = url;
+  const dlEl = document.getElementById(`finalDl_${vidx}`);
+  if (dlEl) dlEl.href = url;
+  if (window._validImgs?.[vidx]) window._validImgs[vidx].url = url;
+  document.getElementById(`insertPanel_${vidx}`)?.classList.add('d-none');
+}
+
+async function insertFinalImgFile(vidx, input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/create/upload-asset', {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: fd
+    });
+    const data = await res.json();
+    if (data.ok) replaceFinalImg(vidx, data.url);
+    else alert('업로드 실패: ' + data.message);
+  } catch (e) { alert('업로드 오류: ' + e.message); }
+}
+
+// ── Blog 이미지 수정 새로생성 모달 ───────────────────────────
+let _blogRegenIdx    = -1;
+let _blogRegenNewUrl = null;
+
+function openBlogRegenModal(vidx) {
+  _blogRegenIdx    = vidx;
+  _blogRegenNewUrl = null;
+  const img        = window._validImgs?.[vidx];
+  const promptObj  = window._prompts?.[vidx];
+  const promptHint = promptObj?.en || promptObj?.prompt || '';
+  document.getElementById('blogRegenCurrentImg').src = img?.url || '';
+  document.getElementById('blogRegenPrompt').value    = promptHint;
+  document.getElementById('blogRegenPreview').classList.add('d-none');
+  document.getElementById('blogRegenReplaceBtn').disabled = true;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('blogRegenModal')).show();
+}
+
+async function blogRegenGenerate() {
+  const prompt = document.getElementById('blogRegenPrompt').value.trim();
+  if (!prompt) { alert('프롬프트를 입력하세요.'); return; }
+  const style     = document.getElementById('blogRegenStyle').value;
+  const styleQ    = STYLE_MODIFIERS[style] || '';
+  const fullPrompt = styleQ ? `${prompt}, ${styleQ}` : prompt;
+  const size       = ASPECT_SIZE[document.getElementById('imgAspect')?.value || '1:1'] || '1024x1024';
+  const genBtn     = document.getElementById('blogRegenGenBtn');
+  genBtn.disabled  = true;
+  genBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>생성 중...';
+  try {
+    const res  = await fetch('/create/image/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ engine: 'flux_preview', prompt: fullPrompt, size })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    _blogRegenNewUrl = data.image_url;
+    document.getElementById('blogRegenPreviewImg').src = data.image_url;
+    document.getElementById('blogRegenPreview').classList.remove('d-none');
+    document.getElementById('blogRegenReplaceBtn').disabled = false;
+  } catch (e) {
+    alert('생성 실패: ' + e.message);
+  } finally {
+    genBtn.disabled  = false;
+    genBtn.innerHTML = '<i class="bi bi-image me-1"></i>새로 생성';
+  }
+}
+
+function blogRegenReplace() {
+  if (!_blogRegenNewUrl || _blogRegenIdx < 0) return;
+  replaceFinalImg(_blogRegenIdx, _blogRegenNewUrl);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('blogRegenModal')).hide();
 }
 </script>
 {% endblock %}
