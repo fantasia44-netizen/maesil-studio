@@ -149,3 +149,43 @@ def remove_bg():
     except Exception as e:
         logger.error(f'[BG] remove_bg error: {e}')
         return jsonify(ok=False, message=str(e))
+
+
+# ──────────────────────────────────────────
+# 에셋 업로드 (패널 수동 이미지)
+# ──────────────────────────────────────────
+@create_bp.route('/upload-asset', methods=['POST'])
+@login_required
+def upload_asset():
+    """스토리 패널 등에서 실제 이미지를 직접 업로드할 때 사용.
+    multipart/form-data: file=<image>
+    반환: { ok: true, url: "https://..." }
+    """
+    file = request.files.get('file')
+    if not file:
+        return jsonify(ok=False, message='파일을 선택해주세요.')
+
+    allowed = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+    mime = file.mimetype or 'image/jpeg'
+    if mime not in allowed:
+        return jsonify(ok=False, message='JPG, PNG, WEBP, GIF만 업로드 가능합니다.')
+
+    image_bytes = file.read()
+    if len(image_bytes) > 10 * 1024 * 1024:
+        return jsonify(ok=False, message='파일 크기는 10MB 이하여야 합니다.')
+
+    try:
+        import uuid
+        _EXT_MAP = {
+            'image/jpeg': '.jpg', 'image/png': '.png',
+            'image/webp': '.webp', 'image/gif': '.gif',
+        }
+        ext = _EXT_MAP.get(mime, '.jpg')
+        filename = f'assets/{current_user.id}/{uuid.uuid4().hex}{ext}'
+        supabase = current_app.supabase
+        supabase.storage.from_('creations').upload(filename, image_bytes, {'content-type': mime})
+        public_url = supabase.storage.from_('creations').get_public_url(filename)
+        return jsonify(ok=True, url=public_url)
+    except Exception as e:
+        logger.error(f'[UPLOAD] upload_asset error: {e}')
+        return jsonify(ok=False, message=f'업로드 실패: {e}')

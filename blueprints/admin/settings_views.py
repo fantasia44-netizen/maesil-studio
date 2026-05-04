@@ -130,14 +130,21 @@ def _test_anthropic(api_key: str):
     if not api_key:
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        msg = client.messages.create(
-            model='claude-haiku-4-5-20251001',
-            max_tokens=10,
-            messages=[{'role': 'user', 'content': 'hi'}],
+        import requests as req_lib
+        # GET /v1/models — 인증 확인만, 토큰 소모 없음
+        r = req_lib.get(
+            'https://api.anthropic.com/v1/models',
+            headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01'},
+            timeout=8,
         )
-        return jsonify(ok=True, message=f'연결 성공 — 모델: {msg.model}')
+        if r.status_code == 200:
+            models = r.json().get('data', [])
+            names = [m['id'] for m in models[:3]]
+            return jsonify(ok=True, message=f'연결 성공 — 사용 가능 모델: {", ".join(names)}')
+        elif r.status_code == 401:
+            return jsonify(ok=False, message='인증 실패 — API 키를 확인하세요.')
+        else:
+            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')
 
@@ -147,26 +154,18 @@ def _test_fal(api_key: str):
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
         import requests as req_lib
-        r = req_lib.post(
+        # GET 요청 — 모델 정보만 조회, 이미지 생성 없음 (크레딧 소모 없음)
+        r = req_lib.get(
             'https://fal.run/fal-ai/flux/schnell',
-            headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
-            json={
-                'prompt': 'a red apple',
-                'image_size': {'width': 256, 'height': 256},
-                'num_images': 1,
-                'num_inference_steps': 1,
-            },
-            timeout=30,
+            headers={'Authorization': f'Key {api_key}'},
+            timeout=8,
         )
-        if r.status_code == 200:
-            return jsonify(ok=True, message='연결 성공 — 이미지 생성 가능')
-        elif r.status_code in (400, 422):
-            return jsonify(ok=True, message='인증 성공 — 키 유효')
+        if r.status_code in (200, 405):
+            return jsonify(ok=True, message='연결 성공 — 키 유효')
         elif r.status_code == 401:
             return jsonify(ok=False, message='인증 실패 — 키를 확인하세요.')
         elif r.status_code == 403:
-            # 키는 유효하나 해당 모델 접근 제한 (플랜 문제일 수 있음)
-            return jsonify(ok=True, message=f'키 인식됨 — 모델 접근 제한(403), fal.ai 플랜 확인 필요')
+            return jsonify(ok=True, message='키 인식됨 — 모델 접근 제한(403), fal.ai 플랜 확인 필요')
         else:
             return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
     except Exception as e:

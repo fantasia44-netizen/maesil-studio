@@ -295,13 +295,13 @@ def instagram_story_plan():
     STYLE_INFO = {
         'realistic_banner': {
             'name':       '실사 라이프스타일 배너',
-            'img_guide':  '실사 사진 스타일. 사람/라이프스타일 장면. 텍스트 포함 금지.',
+            'img_guide':  '실사 사진 스타일. 사람/라이프스타일 장면. 텍스트 포함 금지. 인물이 등장할 경우 기본적으로 동아시아인(Korean/East Asian appearance)으로 묘사하세요.',
             'text_field': 'title(메인 한글 문구 15자 이내), subtitle(서브 20자 이내, 없으면 빈 문자열)',
             'story_hint': '각 컷은 홍보 스토리텔링: 공감→문제→해결→제품→CTA 흐름으로',
         },
         'webtoon': {
             'name':       '웹툰 만화 컷',
-            'img_guide':  '한국 웹툰 스타일. 귀엽고 디테일한 캐릭터. 말풍선 공간 확보. 텍스트 배경 없이.',
+            'img_guide':  '한국 웹툰 스타일. 귀엽고 디테일한 캐릭터. 말풍선 공간 확보. 텍스트 배경 없이. 캐릭터는 동아시아인(Korean/East Asian features) 외모로 묘사하세요.',
             'text_field': 'dialogue1(첫 번째 말풍선 20자 이내), dialogue2(두 번째 말풍선 20자 이내, 없으면 빈 문자열)',
             'story_hint': '연속 만화 스토리: 도입→문제→발견→해결→마무리 형식으로 자연스럽게 연결',
         },
@@ -406,8 +406,8 @@ def instagram_image_prompt():
     angle_hook  = angle.get('hook',  '') if isinstance(angle, dict) else ''
 
     STYLE_GUIDE = {
-        'realistic_banner': '실사 라이프스타일 사진 스타일. 제품 없이 분위기/감성 장면. 텍스트 없이.',
-        'webtoon':          '한국 웹툰 스타일. 귀여운 캐릭터·장면. 텍스트 없이. 말풍선 공간 남기기.',
+        'realistic_banner': '실사 라이프스타일 사진 스타일. 제품 없이 분위기/감성 장면. 텍스트 없이. 인물이 등장할 경우 기본적으로 East Asian/Korean appearance으로.',
+        'webtoon':          '한국 웹툰 스타일. 귀여운 캐릭터·장면. 텍스트 없이. 말풍선 공간 남기기. 캐릭터는 East Asian/Korean features.',
         'typography':       '타이포그래피 디자인 카드. 한글 텍스트를 이미지에 직접 포함. 브랜드 컬러 활용.',
     }
     style_guide = STYLE_GUIDE.get(style, STYLE_GUIDE['realistic_banner'])

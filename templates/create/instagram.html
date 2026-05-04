@@ -369,8 +369,12 @@
                  class="btn btn-sm btn-outline-secondary flex-fill">
                 <i class="bi bi-download me-1"></i>저장
               </a>
-              <button class="btn btn-sm btn-outline-primary flex-fill" onclick="goStep(4)">
-                <i class="bi bi-arrow-repeat me-1"></i>재구성
+              <button class="btn btn-sm btn-outline-primary flex-fill"
+                      onclick="openRegenModal(carouselIdx)">
+                <i class="bi bi-pencil-square me-1"></i>이 컷 수정생성
+              </button>
+              <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="goStep(4)">
+                <i class="bi bi-arrow-repeat me-1"></i>전체 재구성
               </button>
             </div>
           </div>
@@ -441,7 +445,10 @@ let productImageUrl    = '';
 let selectedBrandColor = '{{ (default_brand.primary_color if default_brand and default_brand.primary_color else "#e8355a") }}';
 let panelPlans         = [];
 let generatedImages    = [];
+let panelManualImages  = [];   // 각 패널의 수동 업로드 이미지 URL (null = AI 생성)
 let carouselIdx        = 0;
+let regenModalIdx      = -1;   // 수정생성 팝업 대상 패널 인덱스
+let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
 
 // ── 스텝 UI ──────────────────────────────────────────────────
 function updateStepIndicator(step) {
@@ -756,9 +763,17 @@ function _updateImgSections() {
   const isSingle = selectedQuantity === 1;
   document.getElementById('singleImgSection').classList.toggle('d-none', !isSingle);
   document.getElementById('multiImgSection').classList.toggle('d-none', isSingle);
-  if (!isSingle && panelPlans.length === 0) {
-    document.getElementById('storyPlanBtn').classList.remove('d-none');
-    document.getElementById('genAllSection').classList.add('d-none');
+  if (!isSingle) {
+    // 장 수나 스타일이 바뀌면 기존 플랜 초기화 → 재구성 필요
+    const planMatchesQty = panelPlans.length === selectedQuantity;
+    if (!planMatchesQty) {
+      panelPlans = [];
+      generatedImages = [];
+      panelManualImages = [];
+      document.getElementById('panelCards').innerHTML = '';
+      document.getElementById('storyPlanBtn').classList.remove('d-none');
+      document.getElementById('genAllSection').classList.add('d-none');
+    }
   }
   _updateCostHints();
 }
@@ -786,6 +801,7 @@ function selectRatio(ratio, el) {
 }
 
 function selectStyle(styleId, el) {
+  const styleChanged = selectedStyle !== styleId;
   selectedStyle = styleId;
   document.querySelectorAll('.style-card').forEach(c => {
     c.style.borderColor=''; c.style.background='';
@@ -793,6 +809,15 @@ function selectStyle(styleId, el) {
   });
   el.style.borderColor='#d63384'; el.style.background='#fff0f8';
   el.querySelector('i').style.color='#d63384';
+
+  // 스타일 바뀌면 멀티 플랜 초기화
+  if (styleChanged && panelPlans.length > 0) {
+    panelPlans = [];
+    generatedImages = [];
+    panelManualImages = [];
+    document.getElementById('panelCards').innerHTML = '';
+    document.getElementById('genAllSection').classList.add('d-none');
+  }
 
   // 단일/멀티 섹션 전환
   _updateImgSections();
@@ -810,8 +835,10 @@ function selectStyle(styleId, el) {
 
 async function refreshImagePrompt() {
   if (!selectedStyle) return;
+  const promptEl = document.getElementById('fluxPrompt');
+  const prevPrompt = promptEl.value;
+  promptEl.value = '';
   document.getElementById('promptLoading').classList.remove('d-none');
-  document.getElementById('fluxPrompt').value = '';
 
   try {
     const res  = await fetch('{{ url_for("create.instagram_image_prompt") }}', {
@@ -827,8 +854,8 @@ async function refreshImagePrompt() {
       })
     });
     const data = await res.json();
-    if (data.ok) {
-      document.getElementById('fluxPrompt').value = data.flux_prompt || '';
+    if (data.ok && data.flux_prompt) {
+      promptEl.value = data.flux_prompt;
       if (selectedStyle === 'realistic_banner' || selectedStyle === 'typography') {
         if (data.title)    document.getElementById('imgTitle').value    = data.title;
         if (data.subtitle) document.getElementById('imgSubtitle').value = data.subtitle;
@@ -836,8 +863,13 @@ async function refreshImagePrompt() {
         if (data.dialogue1) document.getElementById('dialogue1').value = data.dialogue1;
         if (data.dialogue2) document.getElementById('dialogue2').value = data.dialogue2 || '';
       }
+    } else {
+      // 응답 실패 시 기존 프롬프트 복원
+      promptEl.value = prevPrompt;
+      if (!data.ok) console.warn('프롬프트 자동생성 실패:', data.message);
     }
   } catch (err) {
+    promptEl.value = prevPrompt;
     console.warn('프롬프트 자동생성 실패:', err);
   } finally {
     document.getElementById('promptLoading').classList.add('d-none');
@@ -920,8 +952,9 @@ async function generateStoryPlan() {
   document.getElementById('panelCards').innerHTML = '';
   document.getElementById('genAllSection').classList.add('d-none');
   document.getElementById('step4Error').classList.add('d-none');
-  panelPlans      = [];
-  generatedImages = new Array(selectedQuantity).fill(null);
+  panelPlans        = [];
+  generatedImages   = new Array(selectedQuantity).fill(null);
+  panelManualImages = new Array(selectedQuantity).fill(null);
 
   try {
     const res = await fetch('{{ url_for("create.instagram_story_plan") }}', {
@@ -987,12 +1020,43 @@ function renderPanelCards(panels) {
           <span class="fw-bold" style="color:${roleColors[i%roleColors.length]};min-width:18px">${p.panel}</span>
           <span class="badge" style="background:#f0f0ff;color:#6366f1;font-size:.72rem">${p.role||''}</span>
           <span class="small text-muted" style="font-size:.76rem">${p.scene_ko||''}</span>
-          <span id="panelStatus_${i}" class="ms-auto badge"
+          <button class="btn btn-sm ms-auto py-0 px-2" id="p${i}_toggleManual"
+                  style="font-size:.7rem;border:1px dashed #aaa;color:#666;background:#fafafa"
+                  onclick="toggleManualMode(${i})">
+            <i class="bi bi-upload me-1"></i>직접 업로드
+          </button>
+          <span id="panelStatus_${i}" class="badge"
                 style="background:#f5f5f5;color:#999;font-size:.68rem">미생성</span>
         </div>
-        <textarea class="form-control form-control-sm" id="p${i}_prompt" rows="2"
-                  style="font-size:.75rem;font-family:monospace;resize:none">${_esc(p.flux_prompt||'')}</textarea>
-        ${textFields}
+
+        <!-- AI 생성 모드 -->
+        <div id="p${i}_aiSection">
+          <textarea class="form-control form-control-sm" id="p${i}_prompt" rows="2"
+                    style="font-size:.75rem;font-family:monospace;resize:none">${_esc(p.flux_prompt||'')}</textarea>
+          ${textFields}
+        </div>
+
+        <!-- 수동 업로드 모드 (기본 숨김) -->
+        <div id="p${i}_manualSection" class="d-none">
+          <div id="p${i}_manualPreview" class="d-none mb-2 text-center">
+            <img id="p${i}_manualImg" src="" style="max-height:100px;border-radius:6px;border:2px solid #d63384">
+            <div class="mt-1">
+              <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.72rem"
+                      onclick="clearManualImage(${i})">
+                <i class="bi bi-x me-1"></i>제거
+              </button>
+            </div>
+          </div>
+          <label class="btn btn-sm w-100 py-2" id="p${i}_uploadLabel"
+                 style="border:2px dashed #ccc;border-radius:8px;color:#666;cursor:pointer;font-size:.8rem">
+            <i class="bi bi-image me-1"></i>이미지 선택 (JPG/PNG/WEBP)
+            <input type="file" accept="image/*" class="d-none" id="p${i}_fileInput"
+                   onchange="uploadManualImage(${i}, this)">
+          </label>
+          <div id="p${i}_uploadProgress" class="text-center text-muted small mt-1 d-none">
+            <span class="spinner-border spinner-border-sm me-1"></span>업로드 중...
+          </div>
+        </div>
       </div>`;
     container.appendChild(card);
   });
@@ -1030,6 +1094,16 @@ async function generateAllImages() {
     if (statusEl) {
       statusEl.style.background='#fef9c3'; statusEl.style.color='#92400e';
       statusEl.textContent='생성 중';
+    }
+
+    // 수동 업로드된 패널은 생성 건너뜀
+    if (panelManualImages[i]) {
+      generatedImages[i] = panelManualImages[i];
+      if (statusEl) {
+        statusEl.style.background='#e0f2fe'; statusEl.style.color='#0369a1';
+        statusEl.textContent='✓ 수동';
+      }
+      continue;
     }
 
     const flux_prompt = document.getElementById(`p${i}_prompt`)?.value.trim() || p.flux_prompt || '';
@@ -1154,5 +1228,192 @@ function carouselShowImage(idx) {
 function carouselGo(dir) {
   carouselShowImage(carouselIdx + dir);
 }
+
+// ── 패널 수동 업로드 ─────────────────────────────────────────
+function toggleManualMode(idx) {
+  const aiSec  = document.getElementById(`p${idx}_aiSection`);
+  const manSec = document.getElementById(`p${idx}_manualSection`);
+  const btn    = document.getElementById(`p${idx}_toggleManual`);
+  const isManual = !manSec.classList.contains('d-none');
+  if (isManual) {
+    manSec.classList.add('d-none');
+    aiSec.classList.remove('d-none');
+    btn.style.background = '#fafafa'; btn.style.color = '#666';
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>직접 업로드';
+    panelManualImages[idx] = null;
+    const statusEl = document.getElementById(`panelStatus_${idx}`);
+    if (statusEl) { statusEl.style.background='#f5f5f5'; statusEl.style.color='#999'; statusEl.textContent='미생성'; }
+  } else {
+    aiSec.classList.add('d-none');
+    manSec.classList.remove('d-none');
+    btn.style.background = '#fff0f8'; btn.style.color = '#d63384';
+    btn.innerHTML = '<i class="bi bi-robot me-1"></i>AI 생성';
+  }
+}
+
+async function uploadManualImage(idx, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const progressEl = document.getElementById(`p${idx}_uploadProgress`);
+  const labelEl    = document.getElementById(`p${idx}_uploadLabel`);
+  progressEl.classList.remove('d-none');
+  labelEl.style.opacity = '0.5';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res  = await fetch('{{ url_for("create.upload_asset") }}', {
+      method: 'POST', headers: {'X-CSRFToken': CSRF}, body: formData,
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    panelManualImages[idx] = data.url;
+    document.getElementById(`p${idx}_manualImg`).src = data.url;
+    document.getElementById(`p${idx}_manualPreview`).classList.remove('d-none');
+    labelEl.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i>다른 이미지 선택<input type="file" accept="image/*" class="d-none" id="p${idx}_fileInput" onchange="uploadManualImage(${idx}, this)">`;
+    const statusEl = document.getElementById(`panelStatus_${idx}`);
+    if (statusEl) { statusEl.style.background='#e0f2fe'; statusEl.style.color='#0369a1'; statusEl.textContent='✓ 업로드됨'; }
+  } catch (err) {
+    alert('업로드 실패: ' + err.message);
+  } finally {
+    progressEl.classList.add('d-none'); labelEl.style.opacity = '1';
+  }
+}
+
+function clearManualImage(idx) {
+  panelManualImages[idx] = null;
+  document.getElementById(`p${idx}_manualImg`).src = '';
+  document.getElementById(`p${idx}_manualPreview`).classList.add('d-none');
+  const statusEl = document.getElementById(`panelStatus_${idx}`);
+  if (statusEl) { statusEl.style.background='#f5f5f5'; statusEl.style.color='#999'; statusEl.textContent='미생성'; }
+}
+
+// ── 개별 컷 수정생성 모달 ────────────────────────────────────
+function openRegenModal(idx) {
+  regenModalIdx = idx; regenPreviewUrl = null;
+  const p = panelPlans[idx] || {};
+  document.getElementById('regenModalTitle').textContent = `${idx + 1}컷 수정생성 — ${p.role || ''}`;
+  document.getElementById('regenSceneInfo').textContent  = p.scene_ko ? `장면: ${p.scene_ko}` : '';
+  const editedPrompt = document.getElementById(`p${idx}_prompt`)?.value.trim() || p.flux_prompt || '';
+  document.getElementById('regenPrompt').value = editedPrompt;
+  const isBanner  = selectedStyle === 'realistic_banner' || selectedStyle === 'typography';
+  const isWebtoon = selectedStyle === 'webtoon';
+  document.getElementById('regenBannerFields').classList.toggle('d-none', !isBanner);
+  document.getElementById('regenWebtoonFields').classList.toggle('d-none', !isWebtoon);
+  if (isBanner) {
+    document.getElementById('regenTitle').value    = document.getElementById(`p${idx}_title`)?.value    || p.title    || '';
+    document.getElementById('regenSubtitle').value = document.getElementById(`p${idx}_subtitle`)?.value || p.subtitle || '';
+  } else if (isWebtoon) {
+    document.getElementById('regenDialogue1').value = document.getElementById(`p${idx}_dialogue1`)?.value || p.dialogue1 || '';
+    document.getElementById('regenDialogue2').value = document.getElementById(`p${idx}_dialogue2`)?.value || p.dialogue2 || '';
+  }
+  document.getElementById('regenPreviewArea').classList.add('d-none');
+  document.getElementById('regenGenerating').classList.add('d-none');
+  document.getElementById('regenError').classList.add('d-none');
+  document.getElementById('regenFooterGenerate').classList.remove('d-none');
+  document.getElementById('regenFooterReplace').classList.add('d-none');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('regenModal')).show();
+}
+
+async function regenModalGenerate() {
+  const prompt = document.getElementById('regenPrompt').value.trim();
+  if (!prompt) { alert('프롬프트를 입력해주세요.'); return; }
+  document.getElementById('regenGenerating').classList.remove('d-none');
+  document.getElementById('regenPreviewArea').classList.add('d-none');
+  document.getElementById('regenError').classList.add('d-none');
+  document.getElementById('regenFooterGenerate').querySelector('button:last-child').disabled = true;
+  const title     = document.getElementById('regenTitle')?.value.trim()     || '';
+  const subtitle  = document.getElementById('regenSubtitle')?.value.trim()  || '';
+  const dialogue1 = document.getElementById('regenDialogue1')?.value.trim() || '';
+  const dialogue2 = document.getElementById('regenDialogue2')?.value.trim() || '';
+  try {
+    const res  = await fetch('{{ url_for("create.instagram_image_generate") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({ style: selectedStyle, flux_prompt: prompt, size: selectedRatio,
+        brand_color: selectedBrandColor || '#e8355a', title, subtitle, dialogue1, dialogue2 })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    regenPreviewUrl = data.image_url;
+    document.getElementById('regenPreviewImg').src = regenPreviewUrl;
+    document.getElementById('regenPreviewArea').classList.remove('d-none');
+    document.getElementById('regenFooterGenerate').classList.add('d-none');
+    document.getElementById('regenFooterReplace').classList.remove('d-none');
+  } catch (err) {
+    document.getElementById('regenError').textContent = '생성 실패: ' + err.message;
+    document.getElementById('regenError').classList.remove('d-none');
+  } finally {
+    document.getElementById('regenGenerating').classList.add('d-none');
+    document.getElementById('regenFooterGenerate').querySelector('button:last-child').disabled = false;
+  }
+}
+
+function regenModalReplace() {
+  if (!regenPreviewUrl || regenModalIdx < 0) return;
+  generatedImages[regenModalIdx] = regenPreviewUrl;
+  _buildThumbStrip();
+  carouselShowImage(regenModalIdx);
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('regenModal')).hide();
+}
+
+function regenModalKeep() {
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('regenModal')).hide();
+}
 </script>
+
+<!-- ══════ 개별 컷 수정생성 모달 ══════ -->
+<div class="modal fade" id="regenModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:500px">
+    <div class="modal-content">
+      <div class="modal-header py-2 px-3">
+        <span class="fw-bold small" id="regenModalTitle">컷 수정생성</span>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-2 small text-muted" id="regenSceneInfo"></div>
+        <label class="form-label fw-semibold small mb-1">이미지 프롬프트 <span class="text-muted fw-normal">(영문 수정 가능)</span></label>
+        <textarea id="regenPrompt" class="form-control form-control-sm mb-3" rows="4"
+                  style="font-size:.8rem;font-family:monospace;resize:vertical"
+                  placeholder="English prompt..."></textarea>
+        <div id="regenBannerFields">
+          <div class="d-flex gap-2 mb-3">
+            <input type="text" id="regenTitle" class="form-control form-control-sm" placeholder="메인 문구 (15자)" maxlength="20">
+            <input type="text" id="regenSubtitle" class="form-control form-control-sm" placeholder="서브 문구 (20자)" maxlength="25">
+          </div>
+        </div>
+        <div id="regenWebtoonFields" class="d-none">
+          <div class="d-flex gap-2 mb-3">
+            <input type="text" id="regenDialogue1" class="form-control form-control-sm" placeholder="첫 번째 말풍선 (20자)" maxlength="25">
+            <input type="text" id="regenDialogue2" class="form-control form-control-sm" placeholder="두 번째 말풍선 (선택)" maxlength="25">
+          </div>
+        </div>
+        <div id="regenPreviewArea" class="d-none text-center mb-2">
+          <div class="small text-muted mb-1 fw-semibold">생성 결과 미리보기</div>
+          <img id="regenPreviewImg" src="" style="max-width:100%;max-height:220px;border-radius:8px;border:2px solid #d63384">
+        </div>
+        <div id="regenGenerating" class="text-center py-3 d-none">
+          <div class="spinner-border" style="color:#d63384;width:1.8rem;height:1.8rem"></div>
+          <div class="small text-muted mt-2">이미지 생성 중...</div>
+        </div>
+        <div id="regenError" class="alert alert-danger py-2 small d-none"></div>
+      </div>
+      <div class="modal-footer py-2 px-3">
+        <div id="regenFooterGenerate" class="d-flex gap-2 w-100">
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" data-bs-dismiss="modal">취소</button>
+          <button type="button" class="btn btn-sm fw-semibold flex-fill" style="background:#d63384;color:#fff"
+                  onclick="regenModalGenerate()">
+            <i class="bi bi-magic me-1"></i>생성하기
+          </button>
+        </div>
+        <div id="regenFooterReplace" class="d-flex gap-2 w-100 d-none">
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" onclick="regenModalKeep()">그대로 사용하기</button>
+          <button type="button" class="btn btn-sm fw-semibold flex-fill" style="background:#d63384;color:#fff"
+                  onclick="regenModalReplace()">
+            <i class="bi bi-arrow-left-right me-1"></i>교체하기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
