@@ -143,14 +143,14 @@ def create_banner_image(bg_url: str,
     is_center = text_gravity.startswith('center')
 
     if is_top:
-        gs_top_ratio, gs_bot_ratio = 0.0,  0.35
-        y_start,      x_start      = 0.06, 0.06 if 'left' in text_gravity else 0.25
+        gs_top_ratio, gs_bot_ratio = 0.0,  0.45
+        y_start,      x_start      = 0.05, 0.06 if 'left' in text_gravity else 0.25
     elif is_center:
-        gs_top_ratio, gs_bot_ratio = 0.25, 0.70
-        y_start,      x_start      = 0.38, 0.06
-    else:  # bottom-left / bottom-center
-        gs_top_ratio, gs_bot_ratio = 0.55, 1.0
-        y_start,      x_start      = 0.59, 0.06 if 'left' in text_gravity else 0.25
+        gs_top_ratio, gs_bot_ratio = 0.20, 0.75
+        y_start,      x_start      = 0.32, 0.06
+    else:  # bottom-left / bottom-center — 본문 텍스트 여유 공간 확보
+        gs_top_ratio, gs_bot_ratio = 0.42, 1.0
+        y_start,      x_start      = 0.45, 0.06 if 'left' in text_gravity else 0.25
 
     # ── 그라디언트 오버레이 ──────────────────────────────
     ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
@@ -180,28 +180,28 @@ def create_banner_image(bg_url: str,
     # ── 폰트 ────────────────────────────────────────────
     try:
         fp = _font(bold=True)
-        f1 = ImageFont.truetype(fp, int(H * 0.076 * text_scale))
-        f2 = ImageFont.truetype(fp, int(H * 0.045 * text_scale))
-        f3 = ImageFont.truetype(fp, int(H * 0.034 * text_scale))
+        f1 = ImageFont.truetype(fp, int(H * 0.068 * text_scale))  # 헤드라인
+        f2 = ImageFont.truetype(fp, int(H * 0.038 * text_scale))  # 본문
     except Exception:
-        f1 = f2 = f3 = ImageFont.load_default()
+        f1 = f2 = ImageFont.load_default()
 
-    fonts = [f1, f2, f3]
     y = int(H * y_start)
     x = int(W * x_start)
+    max_w = int(W * 0.88)
 
-    for i, text in enumerate(texts[:3]):
+    for i, text in enumerate(texts[:2]):
         if not text:
             continue
-        font  = fonts[min(i, 2)]
-        lines = _wrap(text, font, int(W * 0.87))[:2]
+        font      = f1 if i == 0 else f2
+        max_lines = 2 if i == 0 else 6   # 본문은 최대 6줄
+        lines = _wrap(text, font, max_w)[:max_lines]
         for ln in lines:
             # 드롭 섀도
-            d.text((x + 2, y + 2), ln, font=font, fill=(0, 0, 0, 160))
+            d.text((x + 2, y + 2), ln, font=font, fill=(0, 0, 0, 180))
             d.text((x,     y    ), ln, font=font, fill=(255, 255, 255, 255))
             bb = font.getbbox(ln)
-            y += int((bb[3] - bb[1]) * 1.35)
-        y += int(H * 0.008)
+            y += int((bb[3] - bb[1]) * 1.40)
+        y += int(H * 0.012)
 
     return _jpeg_b64(combined)
 

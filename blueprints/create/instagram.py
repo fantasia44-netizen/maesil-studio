@@ -352,11 +352,18 @@ def instagram_story_plan():
         else:
             story_arc, arc_flow = '고민공감형', '공감→심화→전환→해결→희망'
 
+    _ILLUST_TEXT = (
+        'title(헤드라인 한글 15자 이내), '
+        'body_text(이 컷의 핵심 내용을 2~4문장으로 서술, 한글 80자 이내. 이 슬라이드가 전달할 핵심 메시지를 독자에게 직접 말하듯이 작성)'
+    )
     STYLE_INFO = {
         'realistic_banner': {
             'name':       '실사 라이프스타일 배너',
             'img_guide':  '실사 사진 스타일. 사람/라이프스타일 장면. 텍스트 포함 금지. 인물이 등장할 경우 기본적으로 동아시아인(Korean/East Asian appearance)으로 묘사하세요.',
-            'text_field': 'title(메인 한글 문구 15자 이내), subtitle(서브 20자 이내, 없으면 빈 문자열)',
+            'text_field': (
+                'title(헤드라인 한글 15자 이내), '
+                'body_text(이 슬라이드의 본문 내용을 2~4문장으로, 한글 80자 이내. 독자에게 직접 말하듯 작성)'
+            ),
             'story_hint': '각 컷은 홍보 스토리텔링: 공감→문제→해결→제품→CTA 흐름으로',
         },
         'webtoon': {
@@ -365,12 +372,14 @@ def instagram_story_plan():
             'text_field': 'dialogue1(첫 번째 말풍선 20자 이내), dialogue2(두 번째 말풍선 20자 이내, 없으면 빈 문자열)',
             'story_hint': '연속 만화 스토리: 도입→문제→발견→해결→마무리 형식으로 자연스럽게 연결',
         },
-        'typography': {
-            'name':       '타이포그래피 카드',
-            'img_guide':  '텍스트 중심 감성 디자인 카드. 브랜드 컬러 배경. 한글 텍스트 직접 포함.',
-            'text_field': 'title(메인 15자 이내), subtitle(서브 20자 이내)',
-            'story_hint': '메시지 카드 시리즈: 각 카드가 하나의 메시지를 전달. 시리즈로 읽히도록',
-        },
+        'ghibli':        {'name':'지브리 일러스트', 'img_guide':'Studio Ghibli style, hand-painted watercolor, warm soft pastel colors, detailed natural backgrounds. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'감성 스토리: 일상→발견→감동→변화→여운'},
+        'watercolor':    {'name':'수채화 일러스트', 'img_guide':'Soft watercolor illustration, dreamy pastel tones, translucent color layers. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'감성 스토리: 공감→심화→전환→해결→희망'},
+        'pastel_cute':   {'name':'파스텔 귀여운',  'img_guide':'Cute pastel illustration, kawaii aesthetic, gentle pink and mint tones. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'공감형 스토리: 공감→심화→전환→해결→희망'},
+        'nordic':        {'name':'북유럽 일러스트', 'img_guide':'Scandinavian illustration style, hygge cozy aesthetic, muted earth tones. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'정보형 스토리: 후킹→정보1→정보2→정보3→정리'},
+        'flat_modern':   {'name':'모던 플랫',      'img_guide':'Modern flat design illustration, bold geometric color blocks, clean editorial style. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'정보형 스토리: 후킹→정보1→정보2→정보3→CTA'},
+        'disney':        {'name':'디즈니 3D',      'img_guide':'Pixar Disney 3D animation style, vibrant polished render, expressive characters. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'감성 스토리: 공감→심화→전환→해결→희망'},
+        'pencil_sketch': {'name':'펜화 스케치',    'img_guide':'Hand-drawn pencil sketch illustration, fine detailed line art, warm sepia tones. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'감성 스토리: 일상→발견→감동→변화→여운'},
+        'retro_pop':     {'name':'레트로 팝아트',  'img_guide':'Retro pop art illustration, bold halftone dot pattern, vintage poster palette. No text in image.', 'text_field':_ILLUST_TEXT, 'story_hint':'유머형 스토리: 웃긴상황→공감→더웃김→반전→제품연결'},
     }
     info = STYLE_INFO.get(style, STYLE_INFO['realistic_banner'])
 
@@ -412,16 +421,17 @@ def instagram_story_plan():
 - panel: 번호 (1~{quantity})
 - role: 이 컷의 역할 — 위 흐름 단계명 그대로 (8자 이내)
 - scene_ko: 이 장면 한국어 요약 (15자 이내)
-- flux_prompt: 영문 FLUX 프롬프트 (50~80단어, 이 패널 장면에 맞게 구체적으로. 직전 패널과 달라야 함)
+- flux_prompt: 영문 FLUX 프롬프트 (60~90단어, 이 패널 장면에 맞게 구체적으로. 조명·각도·분위기·피사체를 모두 포함. 직전 패널과 달라야 함)
 - {info['text_field']}
-- title, subtitle, dialogue1, dialogue2 — 해당 스타일에 쓰지 않는 필드는 반드시 빈 문자열
+- title, body_text, dialogue1, dialogue2 — 해당 스타일에 쓰지 않는 필드는 반드시 빈 문자열
+- body_text는 웹툰 스타일이 아닌 경우 반드시 3~4문장(70~120자)으로 충실하게 작성. 독자에게 직접 말하듯, 공감·정보·행동을 유도하는 내용으로
 
 순수 JSON 배열만:
-[{{"panel":1,"role":"공감","scene_ko":"...","flux_prompt":"...","title":"...","subtitle":"...","dialogue1":"","dialogue2":""}},...]"""
+[{{"panel":1,"role":"공감","scene_ko":"...","flux_prompt":"...","title":"...","body_text":"...","dialogue1":"","dialogue2":""}},...]"""
 
     try:
         raw    = generate_text(system, prompt,
-                               max_tokens=quantity * 350,
+                               max_tokens=quantity * 500,
                                model='claude-haiku-4-5-20251001')
         clean  = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e   = clean.find('['), clean.rfind(']') + 1
@@ -479,11 +489,7 @@ def instagram_image_prompt():
     }
     style_guide = STYLE_GUIDE.get(style, STYLE_GUIDE['realistic_banner'])
 
-    TEXT_FIELD_GUIDE = {
-        'realistic_banner': '이미지 하단 배너에 들어갈 텍스트: title(메인 한글 문구), subtitle(서브 한글 문구)',
-        'webtoon':          '말풍선 대사: dialogue1(첫 번째 대사), dialogue2(두 번째 대사, 선택)',
-        'typography':       '이미지에 들어갈 한글 텍스트: title(메인), subtitle(서브) — Ideogram이 이미지에 직접 렌더링',
-    }
+    is_webtoon = (style == 'webtoon')
 
     system = '당신은 AI 이미지 프롬프트 엔지니어입니다. 순수 JSON만 출력하세요.'
     prompt = f"""인스타그램 이미지 프롬프트와 추천 텍스트를 JSON으로 생성하세요.
@@ -502,12 +508,14 @@ def instagram_image_prompt():
 
 [출력 형식 — 순수 JSON]
 {{
-  "flux_prompt": "영문 이미지 생성 프롬프트 (60~90단어, 구체적·상세)",
+  "flux_prompt": "영문 이미지 생성 프롬프트 (60~90단어, 구체적·상세. 조명·각도·분위기·피사체 모두 포함)",
   "title":     "이미지 안 메인 한글 문구 (15자 이내)",
-  "subtitle":  "이미지 안 서브 한글 문구 (20자 이내, 선택)",
-  "dialogue1": "첫 번째 말풍선 대사 (웹툰용, 20자 이내)",
-  "dialogue2": "두 번째 말풍선 대사 (웹툰용, 선택)"
+  "body_text": "{'웹툰이 아닌 경우 이미지 위에 오버레이될 본문 — 3~4문장, 70~120자. 독자에게 직접 말하듯 공감·정보·행동 유도 내용으로 충실하게 작성' if not is_webtoon else '웹툰 스타일에서는 빈 문자열'}",
+  "dialogue1": "{'첫 번째 말풍선 대사 (웹툰용, 20자 이내)' if is_webtoon else '웹툰 아니면 빈 문자열'}",
+  "dialogue2": "{'두 번째 말풍선 대사 (웹툰용, 선택)' if is_webtoon else '웹툰 아니면 빈 문자열'}"
 }}
+
+{"body_text는 3~4문장(70~120자)으로 충실하게 작성하세요. 공감→정보→행동 유도 흐름으로." if not is_webtoon else "dialogue1/dialogue2에 집중하고 body_text는 빈 문자열로 두세요."}
 
 스타일: {style}
 비율: {img_size}"""
@@ -541,7 +549,7 @@ def instagram_image_generate():
     img_size     = (data.get('size')         or '1:1').strip()
     brand_color  = (data.get('brand_color')  or '#e8355a').strip()
     title        = (data.get('title')        or '').strip()
-    subtitle     = (data.get('subtitle')     or '').strip()
+    body_text    = (data.get('body_text')    or '').strip()
     dialogue1    = (data.get('dialogue1')    or '').strip()
     dialogue2    = (data.get('dialogue2')    or '').strip()
 
@@ -585,30 +593,28 @@ def instagram_image_generate():
         _ILLUST_STYLES = {'ghibli', 'watercolor', 'pastel_cute', 'nordic',
                           'flat_modern', 'disney', 'pencil_sketch', 'retro_pop'}
 
-        if style in _ILLUST_STYLES:
-            # 순수 FLUX — PIL 합성 없음
-            from services.imagen_service import _generate_flux
-            img_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
-            final_url = upload_to_supabase(img_url, current_user.id,
-                                           f'insta_{style}_{creation_id[:8]}.jpg')
+        from services.imagen_service import _generate_flux
+        from services.instagram_service import create_banner_image, create_webtoon_image
 
-        elif style == 'webtoon':
-            from services.imagen_service import _generate_flux
-            from services.instagram_service import create_webtoon_image
+        if style == 'webtoon':
             bg_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
             dialogues = [d for d in [dialogue1, dialogue2] if d]
             data_url  = create_webtoon_image(bg_url, dialogues, pil_size)
             final_url = upload_to_supabase(data_url, current_user.id,
                                            f'insta_webtoon_{creation_id[:8]}.jpg')
 
-        else:  # realistic_banner (기본)
-            from services.imagen_service import _generate_flux
-            from services.instagram_service import create_banner_image
-            bg_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
-            texts     = [t for t in [title, subtitle] if t]
-            data_url  = create_banner_image(bg_url, texts, brand_color, pil_size)
-            final_url = upload_to_supabase(data_url, current_user.id,
-                                           f'insta_banner_{creation_id[:8]}.jpg')
+        else:
+            # 실사배너 + 모든 일러스트 스타일 — FLUX 후 PIL 텍스트 오버레이
+            img_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
+            bg_url = img_url
+            texts = [t for t in [title, body_text] if t]
+            if texts:
+                data_url  = create_banner_image(img_url, texts, brand_color, pil_size)
+                final_url = upload_to_supabase(data_url, current_user.id,
+                                               f'insta_{style}_{creation_id[:8]}.jpg')
+            else:
+                final_url = upload_to_supabase(img_url, current_user.id,
+                                               f'insta_{style}_{creation_id[:8]}.jpg')
 
         # 포인트 차감
         use_points(current_user.id, cost_key, creation_id)
@@ -638,7 +644,7 @@ def instagram_recomposite_banner():
     data         = request.get_json(force=True) or {}
     base_url     = (data.get('base_image_url') or '').strip()
     title        = (data.get('title')          or '').strip()
-    subtitle     = (data.get('subtitle')       or '').strip()
+    body_text    = (data.get('body_text')      or data.get('subtitle') or '').strip()
     brand_color  = (data.get('brand_color')    or '#e8355a').strip()
     img_size     = (data.get('size')           or '1:1').strip()
     text_gravity = (data.get('text_gravity')   or 'bottom-left').strip()
@@ -652,7 +658,7 @@ def instagram_recomposite_banner():
     import uuid
 
     _, pil_size = SIZE_MAP.get(img_size, SIZE_MAP['1:1'])
-    texts = [t for t in [title, subtitle] if t]
+    texts = [t for t in [title, body_text] if t]
     try:
         data_url  = create_banner_image(base_url, texts, brand_color, pil_size, text_gravity, text_scale)
         filename  = f'insta_banner_r_{uuid.uuid4().hex[:8]}.jpg'
@@ -673,7 +679,7 @@ def instagram_product_slide():
     product_image_url = (data.get('product_image_url') or '').strip()
     bg_prompt         = (data.get('bg_prompt')         or '').strip()
     title             = (data.get('title')             or '').strip()
-    subtitle          = (data.get('subtitle')          or '').strip()
+    body_text         = (data.get('body_text')         or data.get('subtitle') or '').strip()
     brand_color       = (data.get('brand_color')       or '#e8355a').strip()
     img_size          = (data.get('size')              or '1:1').strip()
 
@@ -719,7 +725,7 @@ def instagram_product_slide():
         replaced_url = replace_background(product_image_url, eng_prompt)
 
         # 2. 텍스트 오버레이 (있을 때만)
-        texts = [t for t in [title, subtitle] if t]
+        texts = [t for t in [title, body_text] if t]
         if texts:
             data_url = create_banner_image(replaced_url, texts, brand_color, pil_size)
         else:

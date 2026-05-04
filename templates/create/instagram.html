@@ -300,62 +300,21 @@
         </div>
       </div>
 
-      <!-- ③-B 서브 화풍 선택 (realistic_banner / webtoon 전용) -->
-      <div id="subStyleSection" class="d-none mt-1">
-        <hr class="my-2">
-        <label class="form-label fw-semibold small mb-2" id="subStyleLabel">세부 화풍 <span class="text-muted fw-normal">(같은 화풍으로 전 컷 일관성 유지)</span></label>
-        <!-- 실사 배너 서브 -->
-        <div id="bannerSubStyles" class="d-none">
-          <div class="d-flex flex-wrap gap-2">
-            {% for ssid, ssemoji, sslabel, ssdesc in [
-              ('lifestyle_warm',  '🌅', '라이프스타일', '따뜻한 자연광'),
-              ('editorial_clean', '📸', '에디토리얼',  '잡지 화보, 클린'),
-              ('outdoor_fresh',   '🌿', '아웃도어',    '야외 자연광'),
-              ('indoor_cozy',     '🕯️', '인테리어',    '카페·홈 감성'),
-              ('film_grain',      '🎞️', '필름 감성',   '빈티지 grain'),
-            ] %}
-            <div class="substyle-card border rounded p-2 text-center"
-                 style="cursor:pointer;transition:all .2s;min-width:90px;flex:1" data-substyle="{{ ssid }}"
-                 onclick="selectSubStyle('{{ ssid }}',this)">
-              <div style="font-size:1.2rem">{{ ssemoji }}</div>
-              <div class="fw-semibold" style="font-size:.75rem;margin-top:2px">{{ sslabel }}</div>
-              <div class="text-muted" style="font-size:.62rem">{{ ssdesc }}</div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-        <!-- 웹툰 서브 -->
-        <div id="webtoonSubStyles" class="d-none">
-          <div class="d-flex flex-wrap gap-2">
-            {% for ssid, ssemoji, sslabel, ssdesc in [
-              ('kr_webtoon',  '📖', '한국 웹툰',    '선명한 선화'),
-              ('ghibli',      '🌿', '지브리풍',      '수채화 느낌'),
-              ('pastel_cute', '🍬', '파스텔 귀여운', 'SD 캐릭터'),
-              ('retro_anime', '📺', '레트로 애니',   '90년대 스타일'),
-              ('minimal_bw',  '🖊️', '미니멀 라인',   '흑백 선화'),
-            ] %}
-            <div class="substyle-card border rounded p-2 text-center"
-                 style="cursor:pointer;transition:all .2s;min-width:90px;flex:1" data-substyle="{{ ssid }}"
-                 onclick="selectSubStyle('{{ ssid }}',this)">
-              <div style="font-size:1.2rem">{{ ssemoji }}</div>
-              <div class="fw-semibold" style="font-size:.75rem;margin-top:2px">{{ sslabel }}</div>
-              <div class="text-muted" style="font-size:.62rem">{{ ssdesc }}</div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-
       <!-- ④-A 단일 이미지 모드 (qty=1) -->
       <div id="singleImgSection" class="d-none">
         <hr class="my-3">
-        <!-- 텍스트 합성형(배너/웹툰)만 표시 -->
+        <!-- 텍스트 입력 -->
         <div id="textSection">
           <label class="form-label fw-semibold small mb-2" id="textInputLabel">이미지에 들어갈 텍스트</label>
+          <!-- 배너/일러스트: 헤드라인 + 본문 -->
           <div id="bannerTextFields">
-            <input type="text" id="imgTitle" class="form-control form-control-sm mb-2" placeholder="메인 문구 (15자 이내)" maxlength="20">
-            <input type="text" id="imgSubtitle" class="form-control form-control-sm" placeholder="서브 문구 (20자 이내, 선택)" maxlength="25">
+            <input type="text" id="imgTitle" class="form-control form-control-sm mb-2"
+                   placeholder="헤드라인 (15자 이내)" maxlength="20">
+            <textarea id="imgBody" class="form-control form-control-sm" rows="3"
+                      style="resize:vertical;font-size:.85rem;line-height:1.7"
+                      placeholder="본문 내용 (3~4문장, 이 슬라이드가 전달할 핵심 내용을 독자에게 직접 말하듯 작성)"></textarea>
           </div>
+          <!-- 웹툰: 말풍선 대사 -->
           <div id="webtoonTextFields" class="d-none">
             <input type="text" id="dialogue1" class="form-control form-control-sm mb-2" placeholder="첫 번째 말풍선 대사 (20자 이내)" maxlength="25">
             <input type="text" id="dialogue2" class="form-control form-control-sm" placeholder="두 번째 말풍선 대사 (선택)" maxlength="25">
@@ -712,7 +671,7 @@ let panelManualImages  = [];   // 각 패널의 수동 업로드 이미지 URL (
 let carouselIdx        = 0;
 let regenModalIdx      = -1;   // 수정생성 팝업 대상 패널 인덱스
 let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
-let selectedSubStyle   = null; // 서브 화풍
+// selectedSubStyle removed — 세부화풍 섹션 삭제됨
 let currentCaptionTab  = 'short'; // Step 5 현재 캡션 탭
 let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
 let selectedGravity    = 'bottom-left';
@@ -1303,15 +1262,6 @@ function selectStyle(styleId, el) {
       styleId === 'webtoon' ? '말풍선 대사' : '이미지 배너 텍스트';
   }
 
-  // 서브스타일 섹션 show/hide (배너/웹툰만)
-  const subSec = document.getElementById('subStyleSection');
-  const hasSub = (styleId === 'realistic_banner' || styleId === 'webtoon');
-  subSec.classList.toggle('d-none', !hasSub);
-  document.getElementById('bannerSubStyles').classList.toggle('d-none', styleId !== 'realistic_banner');
-  document.getElementById('webtoonSubStyles').classList.toggle('d-none', styleId !== 'webtoon');
-  selectedSubStyle = null;
-  document.querySelectorAll('.substyle-card').forEach(c => { c.style.borderColor=''; c.style.background=''; });
-
   if (selectedQuantity === 1) refreshImagePrompt();
 }
 
@@ -1338,12 +1288,12 @@ async function refreshImagePrompt() {
     const data = await res.json();
     if (data.ok && data.flux_prompt) {
       promptEl.value = data.flux_prompt;
-      if (selectedStyle === 'realistic_banner' || selectedStyle === 'typography') {
-        if (data.title)    document.getElementById('imgTitle').value    = data.title;
-        if (data.subtitle) document.getElementById('imgSubtitle').value = data.subtitle;
-      } else if (selectedStyle === 'webtoon') {
+      if (selectedStyle === 'webtoon') {
         if (data.dialogue1) document.getElementById('dialogue1').value = data.dialogue1;
         if (data.dialogue2) document.getElementById('dialogue2').value = data.dialogue2 || '';
+      } else {
+        if (data.title)     document.getElementById('imgTitle').value = data.title;
+        if (data.body_text) document.getElementById('imgBody').value  = data.body_text;
       }
     } else {
       // 응답 실패 시 기존 프롬프트 복원
@@ -1371,11 +1321,9 @@ async function generateImage() {
   goStep(5);
   _showStep5Single(true);
 
-  // 감성 스타일 or 서브스타일 수식어 추가
+  // 일러스트 스타일 수식어
   const illustMod = INSTA_STYLE_MODIFIERS[selectedStyle] || '';
-  const subMod    = _subStyleMod();
-  const modPart   = illustMod || subMod;
-  const finalPrompt = modPart ? `${prompt}, ${modPart}` : prompt;
+  const finalPrompt = illustMod ? `${prompt}, ${illustMod}` : prompt;
 
   const body = {
     style:       selectedStyle,
@@ -1383,7 +1331,7 @@ async function generateImage() {
     size:        selectedRatio,
     brand_color: selectedBrandColor || '#e8355a',
     title:       document.getElementById('imgTitle')?.value.trim()    || '',
-    subtitle:    document.getElementById('imgSubtitle')?.value.trim() || '',
+    body_text:   document.getElementById('imgBody')?.value.trim()     || '',
     dialogue1:   document.getElementById('dialogue1')?.value.trim()   || '',
     dialogue2:   document.getElementById('dialogue2')?.value.trim()   || '',
   };
@@ -1507,11 +1455,12 @@ function renderPanelCards(panels) {
         <input type="text" class="form-control form-control-sm" id="p${i}_dialogue2"
                value="${_esc(p.dialogue2||'')}" placeholder="두 번째 말풍선 (선택)" maxlength="25">
       </div>` : `
-      <div class="d-flex gap-2 mt-2">
-        <input type="text" class="form-control form-control-sm" id="p${i}_title"
-               value="${_esc(p.title||'')}" placeholder="메인 문구 (15자)" maxlength="20">
-        <input type="text" class="form-control form-control-sm" id="p${i}_subtitle"
-               value="${_esc(p.subtitle||'')}" placeholder="서브 문구 (20자)" maxlength="25">
+      <div class="mt-2">
+        <input type="text" class="form-control form-control-sm mb-1" id="p${i}_title"
+               value="${_esc(p.title||'')}" placeholder="헤드라인 (15자)" maxlength="20">
+        <textarea class="form-control form-control-sm" id="p${i}_body_text" rows="2"
+                  style="resize:vertical;font-size:.8rem;line-height:1.6"
+                  placeholder="본문 내용 (3~4문장)">${_esc(p.body_text||'')}</textarea>
       </div>`;
 
     card.innerHTML = `
@@ -1608,13 +1557,11 @@ async function generateAllImages() {
 
     const rawPrompt   = document.getElementById(`p${i}_prompt`)?.value.trim() || p.flux_prompt || '';
     const illustMod   = INSTA_STYLE_MODIFIERS[selectedStyle] || '';
-    const subMod      = _subStyleMod();
-    const modPart     = illustMod || subMod;
-    const flux_prompt = modPart ? `${rawPrompt}, ${modPart}` : rawPrompt;
-    const title       = document.getElementById(`p${i}_title`)?.value.trim()    || p.title    || '';
-    const subtitle    = document.getElementById(`p${i}_subtitle`)?.value.trim() || p.subtitle || '';
-    const dialogue1   = document.getElementById(`p${i}_dialogue1`)?.value.trim()|| p.dialogue1|| '';
-    const dialogue2   = document.getElementById(`p${i}_dialogue2`)?.value.trim()|| p.dialogue2|| '';
+    const flux_prompt = illustMod ? `${rawPrompt}, ${illustMod}` : rawPrompt;
+    const title       = document.getElementById(`p${i}_title`)?.value.trim()     || p.title     || '';
+    const body_text   = document.getElementById(`p${i}_body_text`)?.value.trim() || p.body_text || '';
+    const dialogue1   = document.getElementById(`p${i}_dialogue1`)?.value.trim() || p.dialogue1 || '';
+    const dialogue2   = document.getElementById(`p${i}_dialogue2`)?.value.trim() || p.dialogue2 || '';
 
     try {
       const res = await fetch('{{ url_for("create.instagram_image_generate") }}', {
@@ -1625,7 +1572,7 @@ async function generateAllImages() {
           flux_prompt,
           size:        selectedRatio,
           brand_color: selectedBrandColor || '#e8355a',
-          title, subtitle, dialogue1, dialogue2,
+          title, body_text, dialogue1, dialogue2,
         })
       });
       const data = await res.json();
@@ -1851,8 +1798,8 @@ function openRegenModal(idx) {
   document.getElementById('regenBannerFields').classList.toggle('d-none', !isBanner);
   document.getElementById('regenWebtoonFields').classList.toggle('d-none', !isWebtoon);
   if (isBanner) {
-    document.getElementById('regenTitle').value    = document.getElementById(`p${idx}_title`)?.value    || p.title    || '';
-    document.getElementById('regenSubtitle').value = document.getElementById(`p${idx}_subtitle`)?.value || p.subtitle || '';
+    document.getElementById('regenTitle').value    = document.getElementById(`p${idx}_title`)?.value     || p.title     || '';
+    document.getElementById('regenBodyText').value = document.getElementById(`p${idx}_body_text`)?.value || p.body_text || '';
   } else if (isWebtoon) {
     document.getElementById('regenDialogue1').value = document.getElementById(`p${idx}_dialogue1`)?.value || p.dialogue1 || '';
     document.getElementById('regenDialogue2').value = document.getElementById(`p${idx}_dialogue2`)?.value || p.dialogue2 || '';
@@ -1872,16 +1819,16 @@ async function regenModalGenerate() {
   document.getElementById('regenPreviewArea').classList.add('d-none');
   document.getElementById('regenError').classList.add('d-none');
   document.getElementById('regenFooterGenerate').querySelector('button:last-child').disabled = true;
-  const title     = document.getElementById('regenTitle')?.value.trim()     || '';
-  const subtitle  = document.getElementById('regenSubtitle')?.value.trim()  || '';
-  const dialogue1 = document.getElementById('regenDialogue1')?.value.trim() || '';
-  const dialogue2 = document.getElementById('regenDialogue2')?.value.trim() || '';
+  const title     = document.getElementById('regenTitle')?.value.trim()    || '';
+  const body_text = document.getElementById('regenBodyText')?.value.trim() || '';
+  const dialogue1 = document.getElementById('regenDialogue1')?.value.trim()|| '';
+  const dialogue2 = document.getElementById('regenDialogue2')?.value.trim()|| '';
   try {
     const res  = await fetch('{{ url_for("create.instagram_image_generate") }}', {
       method: 'POST',
       headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
       body: JSON.stringify({ style: selectedStyle, flux_prompt: prompt, size: selectedRatio,
-        brand_color: selectedBrandColor || '#e8355a', title, subtitle, dialogue1, dialogue2 })
+        brand_color: selectedBrandColor || '#e8355a', title, body_text, dialogue1, dialogue2 })
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
@@ -2207,9 +2154,11 @@ function _fillInsertThumbs(containerId, onSelect) {
           <span class="fw-semibold">🔤 번역:</span> <span id="regenTranslatedText"></span>
         </div>
         <div id="regenBannerFields">
-          <div class="d-flex gap-2 mb-3">
-            <input type="text" id="regenTitle" class="form-control form-control-sm" placeholder="메인 문구 (15자)" maxlength="20">
-            <input type="text" id="regenSubtitle" class="form-control form-control-sm" placeholder="서브 문구 (20자)" maxlength="25">
+          <div class="mb-2">
+            <input type="text" id="regenTitle" class="form-control form-control-sm mb-1" placeholder="헤드라인 (15자)" maxlength="20">
+            <textarea id="regenBodyText" class="form-control form-control-sm" rows="2"
+                      style="resize:vertical;font-size:.85rem;line-height:1.7"
+                      placeholder="본문 내용 (3~4문장)"></textarea>
           </div>
         </div>
         <div id="regenWebtoonFields" class="d-none">
