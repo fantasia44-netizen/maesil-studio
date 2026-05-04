@@ -5,7 +5,7 @@ from flask import current_app, jsonify
 from flask_login import current_user
 from services.tz_utils import now_kst
 from services.point_service import use_points, InsufficientPoints
-from models import POINT_COSTS
+from models import POINT_COSTS, CREATION_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,8 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
                         ledger_note: str | None = None,
                         extra_creation_fields: dict | None = None,
                         post_process=None,
-                        max_tokens: int = 4096) -> dict:
+                        max_tokens: int = 4096,
+                        model: str | None = None) -> dict:
     """텍스트 생성 공통 플로우 (포인트 차감 + DB 저장).
 
     Args:
@@ -94,6 +95,9 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
     supabase = current_app.supabase
     creation_id = str(uuid.uuid4())
     cost = point_cost if point_cost is not None else POINT_COSTS.get(creation_type, 0)
+    # 모델 결정: 명시적 지정 > CREATION_MODELS 매핑 > DEFAULT
+    from services.claude_service import DEFAULT_MODEL
+    resolved_model = model or CREATION_MODELS.get(creation_type, DEFAULT_MODEL)
 
     # creation 행 생성 (generating) — operator 모드면 operator_id 도 채움
     insert_row = {
@@ -105,7 +109,7 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
         'output_data': {},
         'points_used': cost,
         'status': 'generating',
-        'model_used': 'claude-sonnet-4-6',
+        'model_used': resolved_model,
         'created_at': now_kst().isoformat(),
     }
     if getattr(current_user, 'operator_id', None):
@@ -132,7 +136,8 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
 
         # Claude 호출
         from services.claude_service import generate_text
-        output_text = generate_text(system_prompt, user_prompt, max_tokens=max_tokens)
+        output_text = generate_text(system_prompt, user_prompt,
+                                    max_tokens=max_tokens, model=resolved_model)
 
         # 후처리 (디스클레이머 부착 등)
         if callable(post_process):

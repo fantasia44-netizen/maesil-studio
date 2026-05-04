@@ -123,6 +123,29 @@ def get_blog_cost(length: int, relation_mode: str = 'new') -> int:
         return max(1, base // 2)
     return base
 
+# ──────────────────────────────────────────
+# 생성 유형별 모델 지정
+# ──────────────────────────────────────────
+_HAIKU  = 'claude-haiku-4-5-20251001'
+_SONNET = 'claude-sonnet-4-6'
+
+CREATION_MODELS = {
+    # Haiku — 단순 구조형 텍스트
+    'blog':           _HAIKU,
+    'instagram':      _HAIKU,
+    'thumbnail_text': _HAIKU,
+    'ad_copy':        _HAIKU,
+    # Sonnet — 고품질 / 설득형 문서
+    'detail_page':          _SONNET,
+    'press_release':        _SONNET,
+    'shorts_script':        _SONNET,
+    'business_proposal':    _SONNET,
+    'sponsorship_proposal': _SONNET,
+    'catalog':              _SONNET,
+    'leaflet':              _SONNET,
+    'flyer':                _SONNET,
+}
+
 CREATION_LABELS = {
     # 텍스트
     'blog':            '블로그 포스트',

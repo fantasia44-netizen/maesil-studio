@@ -12,12 +12,34 @@ from models import POINT_COSTS
 
 
 def _brand_block(brand: dict) -> str:
-    return (
-        f"브랜드명: {brand.get('name', '')}\n"
-        f"업종/카테고리: {brand.get('industry', '')}\n"
-        f"타겟 고객: {brand.get('target_customer', '')}\n"
-        f"브랜드 소개: {brand.get('extra_context', '')}"
-    )
+    lines = [
+        f"브랜드명: {brand.get('name', '')}",
+        f"업종/카테고리: {brand.get('industry', '')}",
+        f"타겟 고객: {brand.get('target_customer', '')}",
+        f"브랜드 소개: {brand.get('extra_context', '')}",
+    ]
+    # 확장 필드 — 값이 있을 때만 추가
+    if brand.get('founded_year'):
+        lines.append(f"창업 연도: {brand['founded_year']}년")
+    if brand.get('ceo_name'):
+        lines.append(f"대표자: {brand['ceo_name']}")
+    if brand.get('employee_count'):
+        lines.append(f"직원 규모: {brand['employee_count']}")
+    if brand.get('address'):
+        lines.append(f"주소: {brand['address']}")
+    if brand.get('contact_phone'):
+        lines.append(f"연락처: {brand['contact_phone']}")
+    if brand.get('contact_email'):
+        lines.append(f"이메일: {brand['contact_email']}")
+    if brand.get('website'):
+        lines.append(f"홈페이지: {brand['website']}")
+    if brand.get('certifications'):
+        lines.append(f"인증·수상 이력: {brand['certifications']}")
+    if brand.get('key_stats'):
+        lines.append(f"핵심 성과 수치: {brand['key_stats']}")
+    if brand.get('references_text'):
+        lines.append(f"주요 거래처·납품처: {brand['references_text']}")
+    return '\n'.join(lines)
 
 
 def _product_block(product: dict) -> str:
