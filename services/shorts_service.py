@@ -1,7 +1,7 @@
 """쇼츠/릴스 영상 자동 생성 파이프라인
 
 구조: 훅 → 공감 → 해결 → 핵심혜택 → CTA  (5씬, 7~20초)
-엔진: FLUX Schnell(이미지) + Google TTS(나레이션) + FFmpeg(조립)
+엔진: FLUX Schnell(이미지) + Google TTS(나레이션) + FFmpeg(조립) + Suno BGM(배경음)
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import base64
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 import tempfile
@@ -50,6 +51,195 @@ _NO_ANATOMY = (
     ', no extra limbs, no extra arms, no extra hands, no extra legs'
     ', no duplicate body parts, realistic body structure'
 )
+
+
+# ════════════════════════════════════════════════════════
+# BGM 분위기 정의 (Suno 생성 폴더 구조)
+# static/sounds/bgm/{mood_key}/ 에 MP3 파일 보관
+# ════════════════════════════════════════════════════════
+
+BGM_MOODS: dict[str, dict] = {
+    'energetic': {
+        'label': '에너지틱',
+        'desc': '역동적·트렌디 — 스포츠·건강기능식품·다이어트',
+        'suno_prompt': (
+            'upbeat energetic pop electronic, driving synth bass, '
+            'punchy drums, motivational vibe, no lyrics, instrumental, '
+            '120-128 BPM, Korean commercial ad style, 30 seconds'
+        ),
+    },
+    'emotional': {
+        'label': '감성적',
+        'desc': '따뜻하고 공감되는 — 화장품·라이프스타일·육아',
+        'suno_prompt': (
+            'warm emotional acoustic pop, soft piano melody, '
+            'gentle strings, heartfelt mood, no lyrics, instrumental, '
+            '80-90 BPM, cinematic warmth, 30 seconds'
+        ),
+    },
+    'upbeat_pop': {
+        'label': '경쾌한 팝',
+        'desc': '밝고 신나는 — 식품·음료·일상 소비재',
+        'suno_prompt': (
+            'bright cheerful K-pop style, light guitar strum, '
+            'happy whistling, summer vibes, no lyrics, instrumental, '
+            '100-110 BPM, fresh and fun, 30 seconds'
+        ),
+    },
+    'luxury': {
+        'label': '고급스러운',
+        'desc': '우아하고 세련된 — 럭셔리 뷰티·패션·프리미엄',
+        'suno_prompt': (
+            'elegant cinematic luxury, soft jazz piano, '
+            'subtle orchestral sweep, sophisticated mood, no lyrics, '
+            'instrumental, 70-80 BPM, premium brand feel, 30 seconds'
+        ),
+    },
+    'playful': {
+        'label': '귀엽고 재미있는',
+        'desc': '캐릭터·어린이·캐주얼 앱·게임',
+        'suno_prompt': (
+            'cute playful cartoon style, xylophone melody, '
+            'bouncy ukulele, fun quirky sound effects, no lyrics, '
+            'instrumental, 115-125 BPM, light and whimsical, 30 seconds'
+        ),
+    },
+    'dramatic': {
+        'label': '드라마틱',
+        'desc': '강렬한 훅·문제 제시 — 보험·법률·솔루션 서비스',
+        'suno_prompt': (
+            'dramatic cinematic tension, pulsing low synth, '
+            'building percussion, suspenseful mood, no lyrics, '
+            'instrumental, 90-100 BPM, problem-aware tone, 30 seconds'
+        ),
+    },
+    'calm_ambient': {
+        'label': '차분한 앰비언트',
+        'desc': '힐링·웰니스·명상·수면',
+        'suno_prompt': (
+            'calm lo-fi ambient, soft pad chords, '
+            'gentle nature sounds, relaxing meditation vibe, no lyrics, '
+            'instrumental, 60-70 BPM, peaceful and serene, 30 seconds'
+        ),
+    },
+    'trendy_hiphop': {
+        'label': '트렌디 힙합',
+        'desc': '패션·뷰티·MZ세대 타겟',
+        'suno_prompt': (
+            'trendy lo-fi hip hop beat, warm vinyl crackle, '
+            'chill boom-bap, modern Korean street vibe, no lyrics, '
+            'instrumental, 85-95 BPM, cool and stylish, 30 seconds'
+        ),
+    },
+    'inspiring': {
+        'label': '영감·동기부여',
+        'desc': '교육·비즈니스·자기계발·SaaS',
+        'suno_prompt': (
+            'inspiring uplifting corporate, light piano arpeggios, '
+            'rising strings, motivational crescendo, no lyrics, '
+            'instrumental, 95-105 BPM, forward momentum, 30 seconds'
+        ),
+    },
+    'korean_vibe': {
+        'label': '한국 감성',
+        'desc': 'K-뷰티·전통·한식·국내 정서',
+        'suno_prompt': (
+            'modern K-indie acoustic, soft gayageum-inspired melody, '
+            'gentle acoustic guitar, nostalgic Korean sentiment, no lyrics, '
+            'instrumental, 80-90 BPM, warm and familiar, 30 seconds'
+        ),
+    },
+}
+
+# 이미지 스타일 → BGM 분위기 매핑
+STYLE_TO_MOOD: dict[str, list[str]] = {
+    'realistic_banner': ['emotional', 'inspiring', 'luxury'],
+    'webtoon':          ['playful',   'upbeat_pop', 'trendy_hiphop'],
+    'ghibli':           ['calm_ambient', 'emotional', 'korean_vibe'],
+    'flat_modern':      ['trendy_hiphop', 'energetic', 'upbeat_pop'],
+    'disney':           ['playful',   'upbeat_pop', 'inspiring'],
+}
+
+_BGM_ROOT: str = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'static', 'sounds', 'bgm'
+)
+
+
+def _list_bgm_files(mood: str | None = None) -> list[str]:
+    """지정 mood 폴더(또는 전체)에서 MP3 파일 목록 반환."""
+    root = os.path.normpath(_BGM_ROOT)
+    if mood:
+        folder = os.path.join(root, mood)
+        if os.path.isdir(folder):
+            return [
+                os.path.join(folder, f)
+                for f in os.listdir(folder)
+                if f.lower().endswith(('.mp3', '.wav', '.ogg'))
+            ]
+    # 전체 탐색 (하위 폴더 포함)
+    result = []
+    if not os.path.isdir(root):
+        return result
+    for dirpath, _, files in os.walk(root):
+        for f in files:
+            if f.lower().endswith(('.mp3', '.wav', '.ogg')):
+                result.append(os.path.join(dirpath, f))
+    return result
+
+
+def pick_bgm(style: str | None = None) -> str | None:
+    """스타일에 맞는 BGM 파일 경로 랜덤 반환. 없으면 None."""
+    candidates: list[str] = []
+
+    # 1) 스타일 → mood 우선 탐색
+    if style and style in STYLE_TO_MOOD:
+        for mood in STYLE_TO_MOOD[style]:
+            candidates = _list_bgm_files(mood)
+            if candidates:
+                break
+
+    # 2) mood 폴더에 파일 없으면 전체 탐색
+    if not candidates:
+        candidates = _list_bgm_files()
+
+    if not candidates:
+        return None
+    return random.choice(candidates)
+
+
+def mix_bgm_into_video(
+    raw_mp4: str,
+    bgm_path: str,
+    output_mp4: str,
+    volume: float = 0.20,
+) -> str:
+    """TTS가 포함된 영상에 BGM을 낮은 볼륨으로 믹싱해 새 MP4 반환.
+
+    - BGM은 영상 길이에 맞춰 자동 루프/트림
+    - volume: 0.0 ~ 1.0 (기본 0.20 = 20%)
+    """
+    vol = max(0.01, min(1.0, volume))
+    # amix duration=first → TTS 음성 끝나면 BGM도 종료
+    filter_str = (
+        f'[1:a]volume={vol:.2f},aloop=loop=-1:size=2147483647[bgm];'
+        f'[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]'
+    )
+    cmd = [
+        'ffmpeg', '-y',
+        '-i', raw_mp4,
+        '-stream_loop', '-1', '-i', bgm_path,
+        '-filter_complex', filter_str,
+        '-map', '0:v',
+        '-map', '[aout]',
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-shortest',
+        output_mp4,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    if result.returncode != 0:
+        raise RuntimeError(f'BGM 믹싱 오류:\n{result.stderr[-1500:]}')
+    return output_mp4
 
 
 # ════════════════════════════════════════════════════════
@@ -420,8 +610,12 @@ def run_shorts_pipeline(
     voice_key: str,
     tts_speed: float,
     supabase,
+    bgm_volume: float = 0.20,
 ) -> None:
-    """백그라운드 스레드에서 실행. Supabase creation 상태 업데이트."""
+    """백그라운드 스레드에서 실행. Supabase creation 상태 업데이트.
+
+    bgm_volume: 0.0 = BGM 없음, 0.01~1.0 = 볼륨 (기본 0.20)
+    """
     tmp_dir = os.path.join(tempfile.gettempdir(), f'maesil_shorts_{creation_id}')
     os.makedirs(tmp_dir, exist_ok=True)
 
@@ -478,10 +672,34 @@ def run_shorts_pipeline(
 
             clip_data.append({'image_path': img_path, 'audio_path': audio_path})
 
-        # FFmpeg 조립
+        # FFmpeg 조립 (TTS만)
         _update('generating', {'progress': len(scenes), 'step': 'FFmpeg 영상 조립 중'})
+        raw_mp4    = os.path.join(tmp_dir, 'shorts_raw.mp4')
         output_mp4 = os.path.join(tmp_dir, 'shorts.mp4')
-        assemble_shorts_video(clip_data, output_mp4)
+        assemble_shorts_video(clip_data, raw_mp4)
+
+        # BGM 믹싱
+        if bgm_volume > 0:
+            bgm_path = pick_bgm(style)
+            if bgm_path:
+                _update('generating', {
+                    'progress': len(scenes),
+                    'step': f'BGM 믹싱 중 ({os.path.basename(bgm_path)})',
+                })
+                try:
+                    mix_bgm_into_video(raw_mp4, bgm_path, output_mp4, bgm_volume)
+                    logger.info('[shorts] BGM 믹싱 완료: %s', bgm_path)
+                except Exception as bgm_err:
+                    logger.warning('[shorts] BGM 믹싱 실패 (BGM 없이 진행): %s', bgm_err)
+                    import shutil as _sh
+                    _sh.copy2(raw_mp4, output_mp4)
+            else:
+                logger.info('[shorts] BGM 파일 없음 (static/sounds/bgm/ 폴더를 확인하세요)')
+                import shutil as _sh
+                _sh.copy2(raw_mp4, output_mp4)
+        else:
+            import shutil as _sh
+            _sh.copy2(raw_mp4, output_mp4)
 
         # Supabase Storage 업로드
         _update('generating', {'progress': len(scenes) + 1, 'step': '업로드 중'})
@@ -519,6 +737,7 @@ def start_shorts_pipeline(
     tts_speed: float,
     supabase,
     app=None,
+    bgm_volume: float = 0.20,
 ) -> None:
     def _run():
         if app:
@@ -527,12 +746,14 @@ def start_shorts_pipeline(
                     creation_id=creation_id, user_id=user_id, scenes=scenes,
                     style=style, brand_color=brand_color, voice_key=voice_key,
                     tts_speed=tts_speed, supabase=supabase,
+                    bgm_volume=bgm_volume,
                 )
         else:
             run_shorts_pipeline(
                 creation_id=creation_id, user_id=user_id, scenes=scenes,
                 style=style, brand_color=brand_color, voice_key=voice_key,
                 tts_speed=tts_speed, supabase=supabase,
+                bgm_volume=bgm_volume,
             )
 
     t = threading.Thread(target=_run, daemon=True)

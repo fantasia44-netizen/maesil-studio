@@ -176,7 +176,7 @@
       </div>
 
       <!-- 브랜드 컬러 -->
-      <div class="mb-3">
+      <div class="mb-4">
         <label class="form-label fw-semibold small">브랜드 컬러</label>
         <div class="d-flex gap-2 flex-wrap align-items-center">
           {% for c in ['#e8355a','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#111111'] %}
@@ -189,6 +189,35 @@
                  class="form-control form-control-color" style="width:36px;height:26px;padding:0;border:none;cursor:pointer">
         </div>
         <input type="hidden" id="selectedColor" value="#e8355a">
+      </div>
+
+      <!-- BGM 배경음 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small d-flex align-items-center gap-2">
+          <i class="bi bi-music-note-beamed" style="color:#d63384"></i>배경음 (BGM)
+          <span class="badge bg-light text-muted fw-normal" style="font-size:.65rem">스타일에 맞게 자동 선택</span>
+        </label>
+        <div class="card border p-3" style="background:#fafafa">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="bgmToggle"
+                       checked onchange="onBgmToggle(this.checked)">
+                <label class="form-check-label small fw-semibold" for="bgmToggle">BGM 사용</label>
+              </div>
+            </div>
+            <span class="text-muted small" id="bgmMoodLabel" style="font-size:.72rem">스타일 선택 시 분위기 자동 결정</span>
+          </div>
+          <div id="bgmVolumeRow">
+            <label class="form-label mb-1 small">볼륨 <span id="bgmVolDisplay" class="fw-semibold text-primary">20%</span></label>
+            <input type="range" class="form-range" id="bgmVolume"
+                   min="5" max="50" value="20" step="5"
+                   oninput="document.getElementById('bgmVolDisplay').textContent = this.value + '%'">
+            <div class="d-flex justify-content-between text-muted" style="font-size:.65rem;margin-top:-4px">
+              <span>작게 (5%)</span><span>보통 (20%)</span><span>크게 (50%)</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="d-flex justify-content-between mt-4">
@@ -320,6 +349,15 @@ let selectedVoice    = 'female_natural';
 let selectedBrandColor = '#e8355a';
 let currentCreationId  = null;
 let pollTimer          = null;
+
+// BGM 분위기 레이블 (스타일 → 대표 분위기)
+const STYLE_MOOD_LABEL = {
+  realistic_banner: '감성적·영감',
+  webtoon:          '경쾌·트렌디',
+  ghibli:           '차분·힐링',
+  flat_modern:      '트렌디·에너지',
+  disney:           '귀엽고 신나는',
+};
 
 const ROLE_COLORS = {hook:'hook', empathy:'empathy', solution:'solution', benefit:'benefit', cta:'cta'};
 const ROLE_LABELS = {hook:'훅', empathy:'공감', solution:'해결', benefit:'핵심혜택', cta:'CTA'};
@@ -487,7 +525,17 @@ function selectStyle(sid, el) {
   document.querySelectorAll('.style-card').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   selectedStyle = sid;
+  // BGM 분위기 레이블 업데이트
+  const moodLabel = document.getElementById('bgmMoodLabel');
+  if (moodLabel && STYLE_MOOD_LABEL[sid]) {
+    moodLabel.textContent = '분위기: ' + STYLE_MOOD_LABEL[sid];
+    moodLabel.style.color = '#d63384';
+  }
   checkStep4Ready();
+}
+
+function onBgmToggle(on) {
+  document.getElementById('bgmVolumeRow').style.display = on ? '' : 'none';
 }
 
 function selectVoice(vk, el) {
@@ -524,6 +572,9 @@ async function startGenerate() {
 
   const scenes = collectScenes();
 
+  const bgmOn  = document.getElementById('bgmToggle').checked;
+  const bgmVol = bgmOn ? parseFloat(document.getElementById('bgmVolume').value) / 100 : 0;
+
   const res  = await fetch('/create/shorts/generate', {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({
@@ -533,6 +584,7 @@ async function startGenerate() {
       voice:       selectedVoice,
       tts_speed:   parseFloat(document.getElementById('ttsSpeed').value),
       brand_id:    document.getElementById('brandSelect').value,
+      bgm_volume:  bgmVol,
     })
   });
   const data = await res.json();
