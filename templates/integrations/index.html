@@ -31,6 +31,13 @@
 
         {% if connection %}
           <!-- 현재 연결 상태 -->
+          {% if not can_manage %}
+          <div class="alert alert-light border-start border-4 border-warning py-2 mb-3 small">
+            <i class="bi bi-info-circle me-1 text-warning"></i>
+            팀 관리자가 등록한 연결입니다. 상품 가져오기는 사용할 수 있지만, 연결 변경은 관리자만 가능합니다.
+          </div>
+          {% endif %}
+
           <dl class="row mb-3 small">
             <dt class="col-sm-4 text-muted fw-normal">연결된 운영사</dt>
             <dd class="col-sm-8 fw-semibold">{{ connection.insight_operator_name or '-' }}</dd>
@@ -74,16 +81,19 @@
                class="btn fw-semibold px-4" style="background:#e8355a;color:#fff">
               <i class="bi bi-download me-1"></i>인사이트 상품 가져오기
             </a>
+            {% if can_manage %}
             <form method="POST" action="{{ url_for('integrations.disconnect') }}"
                   class="ms-auto"
                   onsubmit="return confirm('연결을 해제하시겠습니까?\n저장된 토큰이 삭제되고 가져오기 기능이 비활성화됩니다.');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline-danger px-4">연결 해제</button>
             </form>
+            {% endif %}
           </div>
 
         {% else %}
           <!-- 토큰 입력 -->
+          {% if can_manage %}
           <p class="small text-muted mb-3">
             매실 인사이트의 상품 데이터를 가져와 콘텐츠 자동 생성에 활용할 수 있습니다.
           </p>
@@ -91,7 +101,7 @@
           <div class="alert alert-light border small mb-3">
             <strong>토큰 발급 방법</strong>
             <ol class="mb-0 ps-3 mt-1">
-              <li><a href="https://maesil-insight.com/app/settings/integrations" target="_blank" rel="noopener">매실 인사이트 [설정 → 외부 API 연동]</a> 진입</li>
+              <li><a href="https://maesil-insight.com/app/settings/integrations" target="_blank" rel="noopener">매실 인사이트 [계정 관리 → 외부 연동 → 설정하기]</a> 진입</li>
               <li>"새 토큰 발급" 클릭 → 라벨 입력 ("매실 스튜디오") → 발급</li>
               <li>1회 노출되는 토큰 (<code>mi_...</code>)을 복사해 아래에 붙여넣기</li>
             </ol>
@@ -112,6 +122,15 @@
               <i class="bi bi-check-lg me-1"></i>연결 확인
             </button>
           </form>
+
+          {% else %}
+          {# 팀 일반 직원 — 연결이 없는 상태 #}
+          <div class="alert alert-warning py-2 small">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            아직 매실 인사이트가 연결되지 않았습니다.
+            팀 관리자에게 연결 설정을 요청하세요.
+          </div>
+          {% endif %}
         {% endif %}
       </div>
     </div>

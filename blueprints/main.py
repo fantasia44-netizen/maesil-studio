@@ -22,14 +22,20 @@ def _scoped_creations_query(supabase, *, columns: str = '*'):
     return q.is_('operator_id', 'null').eq('user_id', current_user.id)
 
 
-def _scoped_brands_query(supabase, *, columns: str = 'id', count: str | None = None):
-    if count:
-        q = supabase.table('brand_profiles').select(columns, count=count)
-    else:
-        q = supabase.table('brand_profiles').select(columns)
-    if current_user.operator_id:
-        return q.eq('operator_id', current_user.operator_id)
-    return q.eq('user_id', current_user.id)
+def _get_brand_count(supabase) -> int:
+    """operator OR logic 으로 접근 가능한 브랜드 수 반환.
+
+    _scoped_creations_query 와 달리 brand_profiles 는 OR 매칭이 필요
+    (operator_id 없이 user_id 만 있는 구형 브랜드도 포함).
+    get_accessible_brands() 와 동일한 로직을 재사용.
+    """
+    from blueprints.create._base import get_accessible_brands
+    try:
+        brands = get_accessible_brands(supabase)
+        return len(brands)
+    except Exception as e:
+        logger.debug(f'[DASHBOARD] brand count 실패: {e}')
+        return 0
 
 
 @main_bp.route('/dashboard')
@@ -50,8 +56,7 @@ def dashboard():
         ).order('created_at', desc=True).limit(6).execute()
         recent_creations = recent.data or []
 
-        bp = _scoped_brands_query(supabase, columns='id', count='exact').execute()
-        brand_count = bp.count or 0
+        brand_count = _get_brand_count(supabase)
     except Exception as e:
         logger.error(f'[DASHBOARD] error: {e}')
 
@@ -189,9 +194,14 @@ def history():
 def history_detail(creation_id):
     supabase = current_app.supabase
     try:
-        result = supabase.table('creations').select('*').eq(
-            'id', creation_id
-        ).eq('user_id', current_user.id).execute()
+        # 팀 모드: operator 풀 전체에서 조회 (팀원도 관리자 생성물 열람 가능)
+        # 개인 모드: user_id 로만 조회
+        q = supabase.table('creations').select('*').eq('id', creation_id)
+        if current_user.operator_id:
+            q = q.eq('operator_id', current_user.operator_id)
+        else:
+            q = q.eq('user_id', current_user.id)
+        result = q.execute()
         if not result.data:
             flash('생성물을 찾을 수 없습니다.', 'warning')
             return redirect(url_for('main.history'))

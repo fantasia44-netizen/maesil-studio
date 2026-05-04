@@ -101,33 +101,60 @@ integrations_bp = Blueprint('integrations', __name__, url_prefix='/integrations'
 # 설정 페이지
 # ─────────────────────────────────────────────────────────────
 
+def _op_id():
+    """현재 사용자의 operator_id (없으면 None)."""
+    return getattr(current_user, 'operator_id', None)
+
+
+def _can_manage() -> bool:
+    """연결 설정(등록/해제) 권한.
+    - 개인 사용자: 본인만
+    - 팀 모드: operator_admin 만 (일반 팀원은 읽기 전용)
+    """
+    op_id = _op_id()
+    if not op_id:
+        return True
+    return getattr(current_user, 'is_operator_admin', False)
+
+
 @integrations_bp.route('/')
 @login_required
 def index():
-    conn = get_connection(current_user.id)
-    return render_template('integrations/index.html', connection=conn)
+    conn = get_connection(current_user.id, operator_id=_op_id())
+    return render_template(
+        'integrations/index.html',
+        connection=conn,
+        can_manage=_can_manage(),
+    )
 
 
 @integrations_bp.route('/connect', methods=['POST'])
 @login_required
 def connect():
-    """토큰 입력 → /me 검증 → 저장."""
+    """토큰 입력 → /me 검증 → 저장.
+
+    팀 모드: operator_admin 만 연결 가능 (팀원 공유).
+    """
+    if not _can_manage():
+        flash('토큰 연결은 팀 관리자만 설정할 수 있습니다.', 'warning')
+        return redirect(url_for('integrations.index'))
+
     token = (request.form.get('token') or '').strip()
     if not token:
         flash('토큰을 입력해주세요.', 'warning')
         return redirect(url_for('integrations.index'))
 
+    op_id = _op_id()
     try:
-        conn = verify_and_save(current_user.id, token)
+        conn = verify_and_save(current_user.id, token, operator_id=op_id)
         flash(
             f'{conn.get("insight_operator_name") or "운영사"} 계정과 연결되었습니다.',
             'success',
         )
     except MaesilInsightError as e:
         logger.warning(f'[Integrations] connect 실패 user={current_user.id}: {e}')
-        # 실패도 last_error 기록 (사용자가 이전 연결 보유 시 진단용)
         try:
-            mark_error(current_user.id, str(e))
+            mark_error(current_user.id, str(e), operator_id=op_id)
         except Exception:
             pass
         flash(friendly_error_message(e), 'danger')
@@ -141,9 +168,14 @@ def connect():
 @integrations_bp.route('/disconnect', methods=['POST'])
 @login_required
 def disconnect():
-    """연결 해제."""
+    """연결 해제. 팀 모드: operator_admin 만 가능."""
+    if not _can_manage():
+        flash('연결 해제는 팀 관리자만 할 수 있습니다.', 'warning')
+        return redirect(url_for('integrations.index'))
+
+    op_id = _op_id()
     try:
-        conn_disconnect(current_user.id)
+        conn_disconnect(current_user.id, operator_id=op_id)
         flash('연결이 해제되었습니다.', 'success')
     except Exception as e:
         logger.error(f'[Integrations] disconnect 예외: {e}')
@@ -158,9 +190,9 @@ def disconnect():
 def _require_client():
     """클라이언트 반환 또는 (None, redirect_response).
 
-    연결이 없으면 설정 페이지로 리다이렉트.
+    팀 모드도 operator 단위 공유 연결 사용.
     """
-    client = get_client_for_user(current_user.id)
+    client = get_client_for_user(current_user.id, operator_id=_op_id())
     if not client:
         flash('먼저 매실 인사이트 토큰을 등록해주세요.', 'warning')
         return None, redirect(url_for('integrations.index'))
@@ -196,10 +228,10 @@ def import_list():
         )
         products = result.get('products') or []
         pagination = result.get('pagination') or {}
-        mark_used(current_user.id)
+        mark_used(current_user.id, operator_id=_op_id())
     except MaesilInsightError as e:
         logger.warning(f'[Integrations] list_products 실패: {e}')
-        mark_error(current_user.id, str(e))
+        mark_error(current_user.id, str(e), operator_id=_op_id())
         error_msg = friendly_error_message(e)
     except Exception as e:
         logger.error(f'[Integrations] list_products 예외: {e}')
@@ -339,7 +371,7 @@ def import_apply():
             failed += 1
             last_err = err_str
 
-    mark_used(current_user.id)
+    mark_used(current_user.id, operator_id=_op_id())
 
     parts = [f'{inserted}건 가져왔습니다.']
     if skipped_dup:
