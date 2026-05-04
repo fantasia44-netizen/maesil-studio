@@ -313,11 +313,12 @@ const CSRF = document.getElementById('csrfToken').value;
 let currentStep  = 1;
 let selectedAngle = null;
 let selectedStyle = null;
-let generatedImages = [];   // [{role, url}]
+let generatedImages = [];     // [{role, url}]
 let blogText = '';
-let productImageUrl  = '';   // 선택된 제품 이미지 URL
-let selectedImgCount = 5;    // 총 이미지 수 (기본 5)
-let blogCreationId   = null; // 블로그 텍스트 creation ID (save-final에 사용)
+let productImageUrl  = '';    // 선택된 제품 이미지 URL
+let selectedImgCount = 5;     // 총 이미지 수 (기본 5)
+let blogCreationId   = null;  // 블로그 텍스트 creation ID (save-final에 사용)
+let slotManualImages = [];    // 슬롯별 수동 삽입 이미지 URL (null = AI 생성)
 
 // 제품별 이미지 목록 (서버에서 주입)
 const PRODUCT_IMAGES = {{ products_images_map | tojson }};
@@ -637,6 +638,7 @@ function selectImageStyle(styleId, el) {
 }
 
 async function generateImagePrompts() {
+  slotManualImages = [];
   document.getElementById('promptSection').style.display = 'none';
   document.getElementById('promptLoading').classList.remove('d-none');
   document.getElementById('step4Error').classList.add('d-none');
@@ -729,25 +731,78 @@ function renderPromptCards(prompts) {
     container.appendChild(productCard);
   }
 
+  // slotManualImages를 prompts 수에 맞게 초기화
+  slotManualImages = new Array(prompts.length).fill(null);
+
+  // 제품 이미지 전체 목록 (모든 상품 이미지 플랫 리스트)
+  const allProductImgs = Object.values(PRODUCT_IMAGES).flat();
+
   // ── AI 프롬프트 슬롯 (prompts 배열 전체 사용) ───────────────
   prompts.forEach((item, i) => {
-    const num  = productImageUrl ? i + 2 : i + 1;  // 제품이 슬롯1이면 AI는 2번부터
+    const num  = productImageUrl ? i + 2 : i + 1;
     const card = document.createElement('div');
     card.className = 'p-3 rounded';
     card.style.background = '#f8f9fa';
+    card.id = `slotCard_${i}`;
+
+    const productImgHtml = allProductImgs.length ? `
+      <div class="mt-2">
+        <div class="small text-muted mb-1">제품 이미지에서 선택</div>
+        <div class="d-flex flex-wrap gap-1">
+          ${allProductImgs.slice(0, 12).map(url => `
+            <img src="${url}" onclick="selectSlotProductImg(${i}, '${url}')"
+                 style="width:48px;height:48px;object-fit:cover;border-radius:6px;
+                        border:2px solid #dee2e6;cursor:pointer;transition:all .15s"
+                 id="slotProdImg_${i}_${allProductImgs.indexOf(url)}">`
+          ).join('')}
+        </div>
+      </div>` : '';
+
     card.innerHTML = `
       <div class="d-flex gap-3 align-items-start">
         <div class="rounded d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-             style="width:32px;height:32px;background:#e8355a;color:#fff;font-size:.85rem">${num}</div>
+             style="width:32px;height:32px;background:#e8355a;color:#fff;font-size:.85rem" id="slotNum_${i}">${num}</div>
         <div class="flex-fill">
           <div class="d-flex align-items-center gap-2 mb-1">
             <span class="fw-semibold small">${item.role || '라이프스타일 이미지'}</span>
             <span class="badge bg-light text-muted">${item.aspect || '16:9'}</span>
-            <span class="text-muted small">${item.style_note || ''}</span>
+            <span class="text-muted small" style="font-size:.72rem">${item.style_note || ''}</span>
+            <button class="btn btn-sm ms-auto py-0 px-2" id="slotToggle_${i}"
+                    style="font-size:.7rem;border:1px dashed #aaa;color:#666;background:#fff"
+                    onclick="toggleSlotManual(${i})">
+              <i class="bi bi-upload me-1"></i>직접 삽입
+            </button>
           </div>
-          <textarea class="form-control form-control-sm prompt-input" rows="3"
-                    data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
-                    style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
+
+          <!-- AI 생성 모드 -->
+          <div id="slotAI_${i}">
+            <textarea class="form-control form-control-sm prompt-input" rows="3"
+                      data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
+                      style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
+          </div>
+
+          <!-- 수동 삽입 모드 (기본 숨김) -->
+          <div id="slotManual_${i}" class="d-none">
+            <!-- 선택된 이미지 미리보기 -->
+            <div id="slotPreview_${i}" class="d-none mb-2 d-flex align-items-center gap-2">
+              <img id="slotPreviewImg_${i}" src="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid #e8355a">
+              <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.72rem"
+                      onclick="clearSlotManual(${i})">
+                <i class="bi bi-x me-1"></i>제거
+              </button>
+            </div>
+            <!-- 파일 업로드 -->
+            <label class="btn btn-sm w-100 py-2 mb-2" id="slotUploadLabel_${i}"
+                   style="border:2px dashed #ccc;border-radius:8px;color:#666;cursor:pointer;font-size:.8rem">
+              <i class="bi bi-image me-1"></i>파일 업로드 (JPG / PNG / WEBP)
+              <input type="file" accept="image/*" class="d-none" id="slotFile_${i}"
+                     onchange="uploadSlotImage(${i}, this)">
+            </label>
+            <div id="slotUploadProgress_${i}" class="text-center text-muted small mb-2 d-none">
+              <span class="spinner-border spinner-border-sm me-1"></span>업로드 중...
+            </div>
+            ${productImgHtml}
+          </div>
         </div>
       </div>`;
     container.appendChild(card);
@@ -807,7 +862,15 @@ async function generateAllImages() {
 
   for (let i = 0; i < total; i++) {
     const genIdx  = i + 1;
-    const slotNum = productImageUrl ? i + 2 : i + 1;  // 화면 표시 번호
+    const slotNum = productImageUrl ? i + 2 : i + 1;
+    const role    = window._prompts?.[i]?.role || `이미지 ${slotNum}`;
+
+    // 수동 삽입 슬롯은 생성 건너뜀
+    if (slotManualImages[i]) {
+      generatedImages.push({ role, url: slotManualImages[i], isManual: true });
+      continue;
+    }
+
     document.getElementById('imgLoadingText').textContent =
       `이미지 열심히 작업중이에요... (${genIdx}/${total})`;
 
@@ -823,12 +886,12 @@ async function generateAllImages() {
       });
       const data = await res.json();
       generatedImages.push({
-        role:  window._prompts?.[i]?.role || `이미지 ${slotNum}`,  // _prompts는 AI 전용 배열
+        role,
         url:   data.ok ? data.image_url : null,
         error: data.ok ? null : data.message,
       });
     } catch (err) {
-      generatedImages.push({ role: `이미지 ${slotNum}`, url: null, error: err.message });
+      generatedImages.push({ role, url: null, error: err.message });
     }
   }
 
@@ -969,6 +1032,108 @@ function appendImageBlock(container, img) {
 function copyFinalText() {
   navigator.clipboard.writeText(document.getElementById('blogTextArea').value);
   alert('글 전체가 복사되었습니다.');
+}
+
+// ── 슬롯 수동 이미지 삽입 ────────────────────────────────────
+function toggleSlotManual(idx) {
+  const aiEl     = document.getElementById(`slotAI_${idx}`);
+  const manEl    = document.getElementById(`slotManual_${idx}`);
+  const toggleEl = document.getElementById(`slotToggle_${idx}`);
+  const isManual = !manEl.classList.contains('d-none');
+  if (isManual) {
+    // AI 모드로 복귀
+    manEl.classList.add('d-none');
+    aiEl.classList.remove('d-none');
+    toggleEl.style.borderColor = '#aaa';
+    toggleEl.style.color = '#666';
+    toggleEl.style.background = '#fff';
+    toggleEl.innerHTML = '<i class="bi bi-upload me-1"></i>직접 삽입';
+    slotManualImages[idx] = null;
+    document.getElementById(`slotNum_${idx}`).style.background = '#e8355a';
+  } else {
+    // 수동 모드로 전환
+    aiEl.classList.add('d-none');
+    manEl.classList.remove('d-none');
+    toggleEl.style.borderColor = '#e8355a';
+    toggleEl.style.color = '#e8355a';
+    toggleEl.style.background = '#fff8f9';
+    toggleEl.innerHTML = '<i class="bi bi-robot me-1"></i>AI 생성';
+  }
+  _updateTotalCostBadge();
+}
+
+async function uploadSlotImage(idx, inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const progressEl = document.getElementById(`slotUploadProgress_${idx}`);
+  const labelEl    = document.getElementById(`slotUploadLabel_${idx}`);
+  progressEl.classList.remove('d-none');
+  labelEl.style.opacity = '0.5';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res  = await fetch('{{ url_for("create.upload_asset") }}', {
+      method: 'POST', headers: {'X-CSRFToken': CSRF}, body: formData,
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    _applySlotManualImage(idx, data.url);
+    labelEl.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i>다른 파일 선택<input type="file" accept="image/*" class="d-none" id="slotFile_${idx}" onchange="uploadSlotImage(${idx}, this)">`;
+  } catch (err) {
+    alert('업로드 실패: ' + err.message);
+  } finally {
+    progressEl.classList.add('d-none');
+    labelEl.style.opacity = '1';
+  }
+}
+
+function selectSlotProductImg(idx, url) {
+  // 이전 선택 테두리 초기화
+  const allProductImgs = Object.values(PRODUCT_IMAGES).flat();
+  allProductImgs.forEach((_, j) => {
+    const el = document.getElementById(`slotProdImg_${idx}_${j}`);
+    if (el) el.style.borderColor = '#dee2e6';
+  });
+  // 선택된 이미지 테두리 강조
+  const clickedIdx = allProductImgs.indexOf(url);
+  const el = document.getElementById(`slotProdImg_${idx}_${clickedIdx}`);
+  if (el) el.style.borderColor = '#e8355a';
+  _applySlotManualImage(idx, url);
+}
+
+function _applySlotManualImage(idx, url) {
+  slotManualImages[idx] = url;
+  document.getElementById(`slotPreviewImg_${idx}`).src = url;
+  document.getElementById(`slotPreview_${idx}`).classList.remove('d-none');
+  document.getElementById(`slotNum_${idx}`).style.background = '#0369a1';
+  _updateTotalCostBadge();
+}
+
+function clearSlotManual(idx) {
+  slotManualImages[idx] = null;
+  document.getElementById(`slotPreviewImg_${idx}`).src = '';
+  document.getElementById(`slotPreview_${idx}`).classList.add('d-none');
+  document.getElementById(`slotNum_${idx}`).style.background = '#e8355a';
+  // 제품 이미지 테두리도 초기화
+  const allProductImgs = Object.values(PRODUCT_IMAGES).flat();
+  allProductImgs.forEach((_, j) => {
+    const el = document.getElementById(`slotProdImg_${idx}_${j}`);
+    if (el) el.style.borderColor = '#dee2e6';
+  });
+  _updateTotalCostBadge();
+}
+
+function _updateTotalCostBadge() {
+  const manualCount = slotManualImages.filter(Boolean).length;
+  const aiCount     = (window._prompts?.length || 0) - manualCount;
+  const cost        = aiCount * 50;
+  const el          = document.getElementById('totalImgCost');
+  if (!el) return;
+  const parts = [];
+  if (productImageUrl) parts.push('원본 1장');
+  if (manualCount > 0) parts.push(`수동 ${manualCount}장`);
+  if (aiCount > 0)     parts.push(`AI ${aiCount}장 (${cost}P)`);
+  el.textContent = parts.join(' + ');
 }
 </script>
 {% endblock %}
