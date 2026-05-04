@@ -27,32 +27,82 @@
 
     <!-- 구독 현황 -->
     <div class="card mb-3">
-      <div class="card-header py-3"><h6 class="mb-0 fw-bold">현재 구독</h6></div>
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold">현재 구독</h6>
+        {% if subscription and subscription.status == 'active' %}
+        <span class="badge bg-success">구독 중</span>
+        {% else %}
+        <span class="badge bg-secondary">무료</span>
+        {% endif %}
+      </div>
       <div class="card-body">
         {% if subscription and subscription.status == 'active' %}
-          <div class="d-flex align-items-center justify-content-between mb-2">
-            <span class="fw-bold">{{ PLAN_PRICES[subscription.plan_type].label if subscription.plan_type in PLAN_PRICES else subscription.plan_type }}</span>
-            <span class="badge bg-success">구독 중</span>
+          {% set plan = PLAN_PRICES[subscription.plan_type] if subscription.plan_type in PLAN_PRICES else None %}
+
+          <!-- 플랜명 + 월 포인트 -->
+          <div class="text-center mb-3 pb-3 border-bottom">
+            <div class="fw-bold mb-1" style="font-size:1.15rem">
+              {{ plan.label if plan else subscription.plan_type }}
+            </div>
+            <div class="text-muted small">
+              매월 <strong class="text-success">{{ plan.points | number if plan else '-' }}P</strong> 자동 지급
+            </div>
+            <div class="text-muted small">
+              월 <strong>{{ plan.price | number if plan else '-' }}원</strong>
+            </div>
           </div>
-          <div class="text-muted small mb-1">
-            매월 <strong>{{ PLAN_PRICES[subscription.plan_type].points | number if subscription.plan_type in PLAN_PRICES else '-' }}P</strong> 지급
+
+          <!-- 구독 상세 정보 -->
+          <div style="font-size:.82rem">
+            {% if subscription.current_period_start %}
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted">구독 시작일</span>
+              <span class="fw-semibold">{{ subscription.current_period_start[:10] }}</span>
+            </div>
+            {% endif %}
+            {% if subscription.current_period_end %}
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted">다음 결제일</span>
+              <span class="fw-semibold">{{ subscription.current_period_end[:10] }}</span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted">남은 기간</span>
+              <span class="fw-semibold {% if days_left is not none and days_left <= 5 %}text-danger{% else %}text-primary{% endif %}">
+                {% if days_left is not none %}{{ days_left }}일{% else %}-{% endif %}
+              </span>
+            </div>
+            {% endif %}
+            <div class="d-flex justify-content-between py-1">
+              <span class="text-muted">자동갱신</span>
+              {% if subscription.auto_renewal %}
+              <span class="text-success fw-semibold">ON</span>
+              {% else %}
+              <span class="text-danger fw-semibold">OFF (만료 후 무료 전환)</span>
+              {% endif %}
+            </div>
           </div>
-          {% if subscription.current_period_end %}
-          <div class="text-muted small mb-3">다음 갱신: {{ subscription.current_period_end[:10] }}</div>
-          {% endif %}
-          {% if subscription.auto_renewal %}
-          <form method="POST" action="{{ url_for('billing.cancel_subscription') }}"
-                onsubmit="return confirm('자동갱신을 해제하시겠습니까?\n현재 구독 기간은 계속 유지됩니다.')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-outline-danger w-100">자동갱신 해제</button>
-          </form>
-          {% else %}
-          <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.8rem">
-            자동갱신 해제됨 — 기간 만료 후 무료 전환
+
+          <!-- 자동갱신 해제 / 경고 -->
+          <div class="mt-3">
+            {% if subscription.auto_renewal %}
+            <form method="POST" action="{{ url_for('billing.cancel_subscription') }}"
+                  onsubmit="return confirm('자동갱신을 해제하시겠습니까?\n현재 구독 기간은 계속 유지됩니다.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger w-100">자동갱신 해제</button>
+            </form>
+            {% else %}
+            <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.78rem">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              자동갱신 해제 상태 — {{ subscription.current_period_end[:10] if subscription.current_period_end else '' }} 이후 무료 전환
+            </div>
+            {% endif %}
           </div>
-          {% endif %}
+
         {% else %}
-          <div class="text-muted small text-center py-2">구독 없음 (무료)</div>
+          <div class="text-center py-3">
+            <div class="text-muted small mb-2">현재 구독 플랜이 없습니다.</div>
+            <div class="text-muted" style="font-size:.78rem">아래에서 구독을 시작하면<br>매달 포인트가 자동 지급됩니다.</div>
+          </div>
         {% endif %}
       </div>
     </div>

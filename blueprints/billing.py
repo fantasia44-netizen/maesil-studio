@@ -32,11 +32,18 @@ def index():
 
     # 구독 정보
     subscription = None
+    days_left = None
     try:
         sub = supabase.table('subscriptions').select('*').eq(
             'user_id', current_user.id
         ).order('created_at', desc=True).limit(1).execute()
         subscription = sub.data[0] if sub.data else None
+        if subscription and subscription.get('current_period_end'):
+            from datetime import datetime, timezone
+            end_str = subscription['current_period_end']
+            end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+            diff = end_dt - datetime.now(timezone.utc)
+            days_left = max(0, diff.days)
     except Exception:
         pass
 
@@ -56,6 +63,7 @@ def index():
                            balance=balance,
                            ledger=ledger,
                            subscription=subscription,
+                           days_left=days_left,
                            payments=payments,
                            PLAN_FEATURES=PLAN_FEATURES,
                            PLAN_PRICES=PLAN_PRICES,
