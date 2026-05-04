@@ -3,18 +3,156 @@
 {% block breadcrumb %}생성 이력{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4">
-  <h5 class="fw-bold mb-0">생성 이력</h5>
-  <form class="d-flex gap-2" method="GET">
-    <select name="type" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
-      <option value="">전체 유형</option>
-      {% for key, label in CREATION_LABELS.items() %}
-      <option value="{{ key }}" {{ 'selected' if type_filter == key }}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </form>
+
+{# ── 유형별 메타: 아이콘/색상 ── #}
+{% set TYPE_META = {
+  'blog':            {'icon':'bi-file-text',           'color':'#e8355a', 'tone':'#fde7ee'},
+  'instagram':       {'icon':'bi-instagram',           'color':'#c13584', 'tone':'#fce8f1'},
+  'detail_page':     {'icon':'bi-layout-text-sidebar', 'color':'#0d6efd', 'tone':'#e7f0ff'},
+  'thumbnail_text':  {'icon':'bi-card-heading',        'color':'#fd7e14', 'tone':'#fff1e0'},
+  'ad_copy':         {'icon':'bi-megaphone',           'color':'#198754', 'tone':'#e2f5ec'},
+  'press_release':   {'icon':'bi-newspaper',           'color':'#6c757d', 'tone':'#f0f0f2'},
+  'thumbnail_image': {'icon':'bi-image',               'color':'#6610f2', 'tone':'#eee2fc'},
+  'detail_image':    {'icon':'bi-images',              'color':'#0dcaf0', 'tone':'#dffaff'},
+  'card_news':       {'icon':'bi-card-image',          'color':'#d63384', 'tone':'#fce4f0'},
+  'logo':            {'icon':'bi-palette',             'color':'#6f42c1', 'tone':'#ede5fa'},
+  'brand_package':   {'icon':'bi-box-seam',            'color':'#20c997', 'tone':'#dcf6ee'},
+  'product_launch':  {'icon':'bi-rocket-takeoff',      'color':'#dc3545', 'tone':'#fbe1e3'},
+} %}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-bold mb-1">생성 이력</h5>
+    <div class="text-muted small">
+      {% if is_team_mode %}
+        <i class="bi bi-people me-1"></i>팀 공유 — 팀 전체의 생성물을 함께 봅니다
+      {% else %}
+        총 {{ type_total }}건
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <!-- 유형 필터 -->
+    <form method="GET" class="d-flex gap-2">
+      <input type="hidden" name="view" value="{{ view_mode }}">
+      <select name="type" class="form-select form-select-sm" style="width:auto"
+              onchange="this.form.submit()">
+        <option value="">전체 유형</option>
+        {% for key, label in CREATION_LABELS.items() %}
+        <option value="{{ key }}" {{ 'selected' if type_filter == key }}>
+          {{ label }}{% if type_counts.get(key) %} ({{ type_counts[key] }}){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+
+    <!-- 뷰 토글 -->
+    <div class="btn-group btn-group-sm" role="group" aria-label="뷰 모드">
+      <a href="?view=grouped{% if type_filter %}&type={{ type_filter }}{% endif %}"
+         class="btn {% if view_mode == 'grouped' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-grid-3x3-gap me-1"></i>유형별
+      </a>
+      <a href="?view=flat{% if type_filter %}&type={{ type_filter }}{% endif %}"
+         class="btn {% if view_mode == 'flat' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-list-ul me-1"></i>전체 시간순
+      </a>
+    </div>
+  </div>
 </div>
 
+
+{# ────────────────────────────────────────────────────────── #}
+{# 그룹 뷰 — 유형별 섹션                                        #}
+{# ────────────────────────────────────────────────────────── #}
+{% if view_mode == 'grouped' and grouped %}
+{% for g in grouped %}
+{% set meta = TYPE_META.get(g.type, {'icon':'bi-square','color':'#888','tone':'#f1f1f1'}) %}
+<div class="card mb-3 border-0 shadow-sm">
+  <div class="card-header py-2 d-flex align-items-center justify-content-between"
+       style="background:{{ meta.tone }};border-bottom:1px solid {{ meta.color }}22">
+    <h6 class="mb-0 fw-bold d-flex align-items-center" style="color:{{ meta.color }}">
+      <i class="bi {{ meta.icon }} me-2"></i>
+      {{ CREATION_LABELS.get(g.type, g.type) }}
+      <span class="badge bg-white text-muted ms-2 fw-normal" style="font-size:.7rem">{{ g.count }}건</span>
+    </h6>
+    {% if g.has_more %}
+    <a href="?view=flat&type={{ g.type }}" class="btn btn-sm btn-outline-secondary">
+      전체 보기 <i class="bi bi-chevron-right ms-1"></i>
+    </a>
+    {% endif %}
+  </div>
+  <div class="card-body p-3">
+    <div class="row g-2">
+      {% for c in g.rows %}
+      {% set od = c.output_data or {} %}
+      {% set ind = c.input_data or {} %}
+      <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+        <a href="{{ url_for('main.history_detail', creation_id=c.id) }}"
+           class="text-decoration-none text-body">
+          <div class="border rounded p-2 h-100 d-flex gap-2 hover-shadow"
+               style="transition:.15s">
+            <!-- 썸네일 -->
+            <div class="flex-shrink-0">
+              {% if od.image_url %}
+                <img src="{{ od.image_url }}" alt="썸네일"
+                     style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #eee">
+              {% elif od.images and od.images | length > 0 and od.images[0] %}
+                <img src="{{ od.images[0] }}" alt="썸네일"
+                     style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #eee">
+              {% else %}
+                <div style="width:54px;height:54px;border-radius:6px;background:{{ meta.tone }};
+                            display:flex;align-items:center;justify-content:center">
+                  <i class="bi {{ meta.icon }}" style="color:{{ meta.color }};font-size:1.3rem"></i>
+                </div>
+              {% endif %}
+            </div>
+            <!-- 본문 -->
+            <div class="flex-grow-1 min-width-0">
+              <div class="small fw-semibold text-truncate" title="{{ ind.topic or '' }}">
+                {% if ind.topic %}{{ ind.topic }}
+                {% if ind.keyword %}<span class="text-muted fw-normal"> · {{ ind.keyword }}</span>{% endif %}
+                {% elif od.text %}{{ od.text | truncate(40) }}
+                {% else %}—{% endif %}
+              </div>
+              <div class="text-muted" style="font-size:.72rem">
+                {% if c.status == 'done' %}
+                  <span class="text-success"><i class="bi bi-check-circle"></i></span>
+                {% elif c.status == 'failed' %}
+                  <span class="text-danger"><i class="bi bi-x-circle"></i></span>
+                {% else %}
+                  <span class="text-warning"><i class="bi bi-arrow-repeat"></i></span>
+                {% endif %}
+                {{ c.created_at | kst }} · {{ c.points_used | number }}P
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% if not grouped %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-clock-history fs-1 d-block mb-2" style="opacity:.3"></i>
+    아직 생성한 콘텐츠가 없습니다.
+    <div class="mt-3">
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm" style="background:#e8355a;color:#fff">
+        콘텐츠 생성하기
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+{# ────────────────────────────────────────────────────────── #}
+{# 평면 뷰 — 시간순 표                                          #}
+{# ────────────────────────────────────────────────────────── #}
+{% else %}
 <div class="card">
   <div class="card-body p-0">
     {% if creations %}
@@ -34,8 +172,8 @@
         <tbody>
           {% for c in creations %}
           {% set od = c.output_data or {} %}
+          {% set meta = TYPE_META.get(c.creation_type, {'icon':'bi-square','color':'#888','tone':'#f1f1f1'}) %}
           <tr>
-            <!-- 썸네일 -->
             <td class="ps-3">
               {% if od.image_url %}
                 <img src="{{ od.image_url }}" alt="썸네일"
@@ -43,23 +181,14 @@
               {% elif od.images and od.images | length > 0 and od.images[0] %}
                 <img src="{{ od.images[0] }}" alt="썸네일"
                      style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #eee">
-              {% elif od.text %}
-                <div style="width:48px;height:48px;border-radius:6px;background:#f8f0fb;
-                            display:flex;align-items:center;justify-content:center">
-                  <i class="bi bi-file-text" style="color:#e8355a;font-size:1.1rem"></i>
-                </div>
               {% else %}
-                <div style="width:48px;height:48px;border-radius:6px;background:#f5f5f5;
+                <div style="width:48px;height:48px;border-radius:6px;background:{{ meta.tone }};
                             display:flex;align-items:center;justify-content:center">
-                  <i class="bi bi-dash" style="color:#ccc"></i>
+                  <i class="bi {{ meta.icon }}" style="color:{{ meta.color }};font-size:1.1rem"></i>
                 </div>
               {% endif %}
             </td>
-
-            <!-- 유형 -->
             <td class="fw-semibold small">{{ CREATION_LABELS.get(c.creation_type, c.creation_type) }}</td>
-
-            <!-- 내용 요약 -->
             <td class="d-none d-md-table-cell text-muted small" style="max-width:260px">
               {% if od.text %}
                 <span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
@@ -77,21 +206,13 @@
                 —
               {% endif %}
             </td>
-
-            <!-- 포인트 -->
             <td class="d-none d-sm-table-cell small text-muted">{{ c.points_used | number }}P</td>
-
-            <!-- 상태 -->
             <td>
               <span class="badge {% if c.status == 'done' %}bg-success{% elif c.status == 'failed' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
                 {{ '완료' if c.status == 'done' else ('실패' if c.status == 'failed' else '생성 중') }}
               </span>
             </td>
-
-            <!-- 날짜 -->
             <td class="d-none d-md-table-cell small text-muted">{{ c.created_at | kst }}</td>
-
-            <!-- 보기 -->
             <td class="text-end pe-3">
               <a href="{{ url_for('main.history_detail', creation_id=c.id) }}"
                  class="btn btn-sm btn-outline-secondary">
@@ -103,26 +224,23 @@
         </tbody>
       </table>
     </div>
-
-    <!-- 페이지네이션 -->
     <div class="d-flex justify-content-center py-3">
       <nav>
         <ul class="pagination pagination-sm mb-0">
           {% if page > 1 %}
           <li class="page-item">
-            <a class="page-link" href="?page={{ page-1 }}&type={{ type_filter or '' }}">이전</a>
+            <a class="page-link" href="?view=flat&page={{ page-1 }}&type={{ type_filter or '' }}">이전</a>
           </li>
           {% endif %}
           <li class="page-item active"><a class="page-link" href="#">{{ page }}</a></li>
           {% if creations | length == per_page %}
           <li class="page-item">
-            <a class="page-link" href="?page={{ page+1 }}&type={{ type_filter or '' }}">다음</a>
+            <a class="page-link" href="?view=flat&page={{ page+1 }}&type={{ type_filter or '' }}">다음</a>
           </li>
           {% endif %}
         </ul>
       </nav>
     </div>
-
     {% else %}
     <div class="text-center py-5 text-muted">
       <i class="bi bi-clock-history fs-1 d-block mb-2" style="opacity:.3"></i>
@@ -136,4 +254,10 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
+
+<style>
+  .hover-shadow:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); transform: translateY(-1px); }
+  .min-width-0 { min-width: 0; }
+</style>
 {% endblock %}

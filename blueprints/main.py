@@ -14,6 +14,24 @@ def require_auth():
     pass
 
 
+def _scoped_creations_query(supabase, *, columns: str = '*'):
+    """현재 사용자 풀(operator 또는 user) 의 creations 쿼리."""
+    q = supabase.table('creations').select(columns)
+    if current_user.operator_id:
+        return q.eq('operator_id', current_user.operator_id)
+    return q.is_('operator_id', 'null').eq('user_id', current_user.id)
+
+
+def _scoped_brands_query(supabase, *, columns: str = 'id', count: str | None = None):
+    if count:
+        q = supabase.table('brand_profiles').select(columns, count=count)
+    else:
+        q = supabase.table('brand_profiles').select(columns)
+    if current_user.operator_id:
+        return q.eq('operator_id', current_user.operator_id)
+    return q.eq('user_id', current_user.id)
+
+
 @main_bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -24,18 +42,15 @@ def dashboard():
 
     try:
         from services.point_service import get_balance
-        balance = get_balance(current_user.id)
+        balance = get_balance(current_user)
 
-        recent = supabase.table('creations').select(
-            'id, creation_type, status, points_used, created_at, output_data'
-        ).eq('user_id', current_user.id).order(
-            'created_at', desc=True
-        ).limit(6).execute()
+        recent = _scoped_creations_query(
+            supabase,
+            columns='id, creation_type, status, points_used, created_at, output_data, user_id',
+        ).order('created_at', desc=True).limit(6).execute()
         recent_creations = recent.data or []
 
-        bp = supabase.table('brand_profiles').select(
-            'id', count='exact'
-        ).eq('user_id', current_user.id).execute()
+        bp = _scoped_brands_query(supabase, columns='id', count='exact').execute()
         brand_count = bp.count or 0
     except Exception as e:
         logger.error(f'[DASHBOARD] error: {e}')
@@ -43,7 +58,8 @@ def dashboard():
     return render_template('dashboard/index.html',
                            balance=balance,
                            recent_creations=recent_creations,
-                           brand_count=brand_count)
+                           brand_count=brand_count,
+                           is_team_mode=bool(current_user.operator_id))
 
 
 @main_bp.route('/onboarding', methods=['GET', 'POST'])
@@ -83,28 +99,88 @@ def onboarding():
 @main_bp.route('/history')
 @login_required
 def history():
+    """생성 이력 — 유형별 그룹 뷰.
+
+    뷰 모드:
+      grouped (기본): 유형별 섹션으로 묶어서 표시.
+      flat: 평면 시간순 (선택 시 한 유형으로 필터해서 봄).
+    """
     supabase = current_app.supabase
+    type_filter = request.args.get('type', '').strip()
+    view_mode = request.args.get('view', 'grouped').strip()
     page = request.args.get('page', 1, type=int)
-    type_filter = request.args.get('type', '')
     per_page = 20
-    offset = (page - 1) * per_page
+
+    # 유형별 표시 우선순위 (대시보드/생성 메뉴 순서와 일치)
+    TYPE_ORDER = [
+        'blog', 'instagram', 'detail_page', 'thumbnail_text', 'ad_copy',
+        'press_release', 'thumbnail_image', 'detail_image', 'card_news',
+        'logo', 'brand_package', 'product_launch',
+    ]
+    GROUP_LIMIT_PER_TYPE = 12
+
+    creations: list = []
+    grouped: list = []
+    type_counts: dict = {}
 
     try:
-        q = supabase.table('creations').select('*').eq('user_id', current_user.id)
-        if type_filter:
-            q = q.eq('creation_type', type_filter)
-        result = q.order('created_at', desc=True).range(offset, offset + per_page - 1).execute()
-        creations = result.data or []
+        # 유형별 카운트 (전체 기간 — 운영자 풀)
+        try:
+            cnt = _scoped_creations_query(supabase, columns='creation_type').execute()
+            for r in (cnt.data or []):
+                k = r.get('creation_type') or ''
+                if k:
+                    type_counts[k] = type_counts.get(k, 0) + 1
+        except Exception as e:
+            logger.debug(f'[HISTORY] count 실패: {e}')
+
+        if view_mode == 'flat' or type_filter:
+            # 평면 모드 (유형 필터링 시 자동으로 평면 표시)
+            offset = (page - 1) * per_page
+            q = _scoped_creations_query(supabase)
+            if type_filter:
+                q = q.eq('creation_type', type_filter)
+            result = (q.order('created_at', desc=True)
+                       .range(offset, offset + per_page - 1).execute())
+            creations = result.data or []
+            view_mode = 'flat'
+        else:
+            # 그룹 모드 — 유형별로 최근 N건만
+            for t in TYPE_ORDER:
+                if t not in type_counts:
+                    continue
+                try:
+                    rs = (_scoped_creations_query(supabase)
+                          .eq('creation_type', t)
+                          .order('created_at', desc=True)
+                          .limit(GROUP_LIMIT_PER_TYPE)
+                          .execute())
+                    rows = rs.data or []
+                except Exception as e:
+                    logger.debug(f'[HISTORY] group({t}) 실패: {e}')
+                    rows = []
+                if rows:
+                    grouped.append({
+                        'type':     t,
+                        'count':    type_counts.get(t, 0),
+                        'rows':     rows,
+                        'has_more': type_counts.get(t, 0) > GROUP_LIMIT_PER_TYPE,
+                    })
+
     except Exception as e:
         logger.error(f'[HISTORY] error: {e}')
-        creations = []
 
     from models import CREATION_LABELS
     return render_template('history/index.html',
                            creations=creations,
+                           grouped=grouped,
+                           type_counts=type_counts,
+                           type_total=sum(type_counts.values()),
+                           view_mode=view_mode,
                            page=page,
                            per_page=per_page,
                            type_filter=type_filter,
+                           is_team_mode=bool(current_user.operator_id),
                            CREATION_LABELS=CREATION_LABELS)
 
 

@@ -1,4 +1,4 @@
-"""구독 / 포인트 충전 / 결제 관리"""
+"""구독 / 포인트 충전 / 결제 관리 — 팀(Operator) 풀 지원."""
 import logging
 import uuid
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
@@ -22,21 +22,51 @@ PLAN_PRICES = {
 }
 
 
+# ─────────────────────────────────────────────────────────────
+# 헬퍼 — operator 모드 분기
+# ─────────────────────────────────────────────────────────────
+
+def _scoped_subscription_query(supabase):
+    """현재 사용자 풀(operator 또는 user) 의 구독 행 조회 쿼리."""
+    q = supabase.table('subscriptions').select('*')
+    if current_user.operator_id:
+        return q.eq('operator_id', current_user.operator_id)
+    return q.is_('operator_id', 'null').eq('user_id', current_user.id)
+
+
+def _scoped_payments_query(supabase):
+    q = supabase.table('payments').select('*')
+    if current_user.operator_id:
+        return q.eq('operator_id', current_user.operator_id)
+    return q.is_('operator_id', 'null').eq('user_id', current_user.id)
+
+
+def _can_manage_subscription() -> bool:
+    """결제/구독 관리 권한 — 개인 사용자 또는 operator_admin/superadmin."""
+    if not current_user.operator_id:
+        return True
+    return current_user.is_operator_admin
+
+
+# ─────────────────────────────────────────────────────────────
+# 라우트
+# ─────────────────────────────────────────────────────────────
+
 @billing_bp.route('/')
 @login_required
 def index():
     supabase = current_app.supabase
     from services.point_service import get_balance, get_ledger
-    balance = get_balance(current_user.id)
-    ledger = get_ledger(current_user.id, limit=10)
+    balance = get_balance(current_user)
+    ledger = get_ledger(current_user, limit=10)
 
-    # 구독 정보
+    # 구독 정보 (팀 풀 우선)
     subscription = None
     days_left = None
     try:
-        sub = supabase.table('subscriptions').select('*').eq(
-            'user_id', current_user.id
-        ).order('created_at', desc=True).limit(1).execute()
+        sub = _scoped_subscription_query(supabase).order(
+            'created_at', desc=True
+        ).limit(1).execute()
         subscription = sub.data[0] if sub.data else None
         if subscription and subscription.get('current_period_end'):
             from datetime import datetime, timezone
@@ -44,18 +74,18 @@ def index():
             end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
             diff = end_dt - datetime.now(timezone.utc)
             days_left = max(0, diff.days)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f'[BILLING] subscription 조회 실패: {e}')
 
-    # 결제 내역
+    # 결제 내역 (팀 풀 공유)
     payments = []
     try:
-        p = supabase.table('payments').select('*').eq(
-            'user_id', current_user.id
-        ).order('created_at', desc=True).limit(10).execute()
+        p = _scoped_payments_query(supabase).order(
+            'created_at', desc=True
+        ).limit(10).execute()
         payments = p.data or []
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f'[BILLING] payments 조회 실패: {e}')
 
     from models import PLAN_FEATURES
     from services.payment_service import _get_config
@@ -65,6 +95,8 @@ def index():
                            subscription=subscription,
                            days_left=days_left,
                            payments=payments,
+                           can_manage=_can_manage_subscription(),
+                           is_team_mode=bool(current_user.operator_id),
                            PLAN_FEATURES=PLAN_FEATURES,
                            PLAN_PRICES=PLAN_PRICES,
                            POINT_PACKAGES=POINT_PACKAGES,
@@ -77,11 +109,13 @@ def index():
 @login_required
 def points():
     from services.point_service import get_balance, get_ledger
-    balance = get_balance(current_user.id)
-    ledger = get_ledger(current_user.id, limit=30)
+    balance = get_balance(current_user)
+    ledger = get_ledger(current_user, limit=30)
     return render_template('billing/points.html',
                            balance=balance,
                            ledger=ledger,
+                           can_manage=_can_manage_subscription(),
+                           is_team_mode=bool(current_user.operator_id),
                            POINT_PACKAGES=POINT_PACKAGES)
 
 
@@ -89,7 +123,14 @@ def points():
 @billing_bp.route('/payment/complete', methods=['POST'])
 @login_required
 def payment_complete():
-    """PortOne 결제 완료 콜백 — 프론트에서 payment_id 전달"""
+    """PortOne 결제 완료 콜백 — 프론트에서 payment_id 전달.
+
+    팀 모드(operator_id 있음): operator_admin 만 결제 가능. 결제 결과는
+    operator 풀(포인트/구독)에 반영. 결제자 user_id 도 함께 기록(감사용).
+    """
+    if not _can_manage_subscription():
+        return jsonify(ok=False, message='팀 결제는 관리자만 진행할 수 있습니다.'), 403
+
     data = request.get_json() or {}
     payment_id = data.get('payment_id', '')
     payment_type = data.get('payment_type', 'point_purchase')  # 'point_purchase' | 'subscription'
@@ -100,6 +141,8 @@ def payment_complete():
         return jsonify(ok=False, message='payment_id가 없습니다.'), 400
 
     supabase = current_app.supabase
+    operator_id = current_user.operator_id  # str | None
+
     try:
         from services.payment_service import get_payment
         resp = get_payment(payment_id)
@@ -116,8 +159,8 @@ def payment_complete():
             if amount != pkg['price']:
                 return jsonify(ok=False, message='결제금액 불일치'), 400
 
-            # 결제 기록
-            supabase.table('payments').insert({
+            # 결제 기록 — operator 모드면 풀 키 같이 저장
+            pay_row = {
                 'id': str(uuid.uuid4()),
                 'user_id': current_user.id,
                 'payment_id': payment_id,
@@ -127,12 +170,15 @@ def payment_complete():
                 'status': 'paid',
                 'paid_at': now_kst().isoformat(),
                 'created_at': now_kst().isoformat(),
-            }).execute()
+            }
+            if operator_id:
+                pay_row['operator_id'] = operator_id
+            supabase.table('payments').insert(pay_row).execute()
 
-            # 포인트 충전
+            # 포인트 충전 — current_user 객체 전달 (operator 풀 자동 라우팅)
             from services.point_service import add_points
             new_balance = add_points(
-                current_user.id, pkg['points'], 'purchase',
+                current_user, pkg['points'], 'purchase',
                 ref_id=payment_id,
                 note=f'포인트 충전 {pkg["label"]}',
             )
@@ -147,7 +193,7 @@ def payment_complete():
                 return jsonify(ok=False, message='결제금액 불일치'), 400
 
             # 결제 기록
-            supabase.table('payments').insert({
+            pay_row = {
                 'id': str(uuid.uuid4()),
                 'user_id': current_user.id,
                 'payment_id': payment_id,
@@ -158,18 +204,30 @@ def payment_complete():
                 'status': 'paid',
                 'paid_at': now_kst().isoformat(),
                 'created_at': now_kst().isoformat(),
-            }).execute()
+            }
+            if operator_id:
+                pay_row['operator_id'] = operator_id
+            supabase.table('payments').insert(pay_row).execute()
 
-            # 플랜 변경
-            supabase.table('users').update({
-                'plan_type': plan_type,
-                'updated_at': now_kst().isoformat(),
-            }).eq('id', current_user.id).execute()
+            # 플랜 변경 — 팀 모드면 operators 테이블, 개인이면 users
+            if operator_id:
+                try:
+                    supabase.table('operators').update({
+                        'plan_type': plan_type,
+                        'updated_at': now_kst().isoformat(),
+                    }).eq('id', operator_id).execute()
+                except Exception as e:
+                    logger.warning(f'[BILLING] operators.plan_type 업데이트 실패: {e}')
+            else:
+                supabase.table('users').update({
+                    'plan_type': plan_type,
+                    'updated_at': now_kst().isoformat(),
+                }).eq('id', current_user.id).execute()
 
-            # 구독 기록
+            # 구독 기록 — operator 풀 또는 user 풀
             from datetime import timedelta
             period_end = (now_kst() + timedelta(days=30)).isoformat()
-            supabase.table('subscriptions').insert({
+            sub_row = {
                 'user_id': current_user.id,
                 'plan_type': plan_type,
                 'status': 'active',
@@ -179,12 +237,15 @@ def payment_complete():
                 'auto_renewal': True,
                 'created_at': now_kst().isoformat(),
                 'updated_at': now_kst().isoformat(),
-            }).execute()
+            }
+            if operator_id:
+                sub_row['operator_id'] = operator_id
+            supabase.table('subscriptions').insert(sub_row).execute()
 
-            # 구독 포인트 지급
+            # 구독 포인트 지급 (팀 풀로)
             from services.point_service import add_points
             new_balance = add_points(
-                current_user.id, plan_info['points'], 'subscription_grant',
+                current_user, plan_info['points'], 'subscription_grant',
                 ref_id=payment_id,
                 note=f'{plan_info["label"]} 구독 포인트 지급',
             )
@@ -201,13 +262,26 @@ def payment_complete():
 @billing_bp.route('/cancel-subscription', methods=['POST'])
 @login_required
 def cancel_subscription():
+    if not _can_manage_subscription():
+        flash('팀 구독 해제는 관리자만 진행할 수 있습니다.', 'warning')
+        return redirect(url_for('billing.index'))
+
     supabase = current_app.supabase
     try:
-        supabase.table('subscriptions').update({
+        upd = {
             'auto_renewal': False,
             'cancelled_at': now_kst().isoformat(),
             'updated_at': now_kst().isoformat(),
-        }).eq('user_id', current_user.id).eq('status', 'active').execute()
+        }
+        if current_user.operator_id:
+            (supabase.table('subscriptions').update(upd)
+             .eq('operator_id', current_user.operator_id)
+             .eq('status', 'active').execute())
+        else:
+            (supabase.table('subscriptions').update(upd)
+             .is_('operator_id', 'null')
+             .eq('user_id', current_user.id)
+             .eq('status', 'active').execute())
         flash('구독 자동갱신이 해제되었습니다. 현재 구독 기간 만료 후 무료 플랜으로 전환됩니다.', 'info')
     except Exception as e:
         logger.error(f'[BILLING] cancel error: {e}')

@@ -303,16 +303,30 @@ def register():
                 }).eq('id', user_id).execute()
 
         # ── trial 구독 생성 ──
-        try:
-            supabase.table('subscriptions').insert({
-                'user_id': user_id,
-                'plan_type': 'free',
-                'status': 'trial',
-                'created_at': now_kst().isoformat(),
-                'updated_at': now_kst().isoformat(),
-            }).execute()
-        except Exception:
-            pass
+        # 팀 초대로 가입한 멤버는 자기 명의 trial 을 만들지 않는다.
+        # → 팀(operator) 차원의 구독을 공유.
+        is_invited_member = (account_type == 'biz'
+                             and biz_sub == 'invited'
+                             and operator_id is not None)
+        if not is_invited_member:
+            try:
+                sub_row = {
+                    'user_id': user_id,
+                    'plan_type': 'free',
+                    'status': 'trial',
+                    'created_at': now_kst().isoformat(),
+                    'updated_at': now_kst().isoformat(),
+                }
+                # 신규 operator 관리자 가입은 operator 풀에 trial 을 묶음
+                if account_type == 'biz' and biz_sub == 'new':
+                    # new_op_id 는 위 블록에서 op_result 로 만든 후 user 에게 매핑됨
+                    try:
+                        sub_row['operator_id'] = new_op_id
+                    except NameError:
+                        pass
+                supabase.table('subscriptions').insert(sub_row).execute()
+            except Exception:
+                pass
 
         # ── 약관 동의 이력 ──
         try:

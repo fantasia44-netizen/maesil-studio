@@ -95,7 +95,7 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
     creation_id = str(uuid.uuid4())
     cost = point_cost if point_cost is not None else POINT_COSTS.get(creation_type, 0)
 
-    # creation 행 생성 (generating)
+    # creation 행 생성 (generating) — operator 모드면 operator_id 도 채움
     insert_row = {
         'id': creation_id,
         'user_id': current_user.id,
@@ -108,12 +108,14 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
         'model_used': 'claude-sonnet-4-6',
         'created_at': now_kst().isoformat(),
     }
+    if getattr(current_user, 'operator_id', None):
+        insert_row['operator_id'] = current_user.operator_id
     if extra_creation_fields:
         insert_row.update({k: v for k, v in extra_creation_fields.items() if v is not None})
     try:
         supabase.table('creations').insert(insert_row).execute()
     except Exception as e:
-        # 신규 컬럼(product_id/angle 등)이 아직 마이그레이션 전인 환경 대비 — 기본 컬럼만 재시도
+        # 신규 컬럼(product_id/angle/operator_id 등)이 아직 마이그레이션 전인 환경 대비 — 기본 컬럼만 재시도
         logger.warning(f'[CREATE] insert with extra fields failed, retry minimal: {e}')
         minimal = {k: v for k, v in insert_row.items()
                    if k in {'id', 'user_id', 'brand_id', 'creation_type',
@@ -124,8 +126,8 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
     import time
     start = time.time()
     try:
-        # 포인트 차감
-        use_points(current_user.id, creation_type, creation_id,
+        # 포인트 차감 — User 객체 전달하여 operator 풀로 자동 라우팅
+        use_points(current_user, creation_type, creation_id,
                    cost_override=cost, note_override=ledger_note)
 
         # Claude 호출
