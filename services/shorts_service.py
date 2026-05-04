@@ -69,42 +69,58 @@ def generate_shorts_script(brand_ctx: str, angle: dict, style: str = 'realistic_
         for i, r in enumerate(SCENE_ROLES)
     )
 
-    system = '당신은 숏폼 영상 전문 크리에이터입니다. 순수 JSON만 출력하세요.'
+    angle_problem  = angle.get('problem',  '') if isinstance(angle, dict) else ''
+    angle_solution = angle.get('solution', '') if isinstance(angle, dict) else ''
+    angle_result   = angle.get('result',   '') if isinstance(angle, dict) else ''
+
+    system = (
+        '당신은 숏폼 영상 전문 크리에이터입니다. '
+        '좋은 쇼츠 광고는 ① 문제 공감 → ② 해결책 제시 → ③ 변화/결과 의 서사 흐름을 갖습니다. '
+        '각 씬의 나레이션은 실제 TTS로 읽히므로 자연스러운 구어체로 작성하세요. '
+        '순수 JSON만 출력하세요.'
+    )
     prompt = f"""인스타 릴스/유튜브 쇼츠용 5씬 대본을 JSON으로 생성하세요.
+아래 소구포인트의 문제-해결 서사를 씬 전체에 일관되게 관통시키세요.
 
 [브랜드·상품]
 {brand_ctx}
 
-[소구포인트]
-- 방향: {angle_title}
-- 이미지 분위기: {angle_vibe}
+[소구포인트 — 이 서사를 중심으로 대본을 구성하세요]
+- 제목: {angle_title}
+- 타겟의 문제/불편: {angle_problem}
 - 후킹 문구: {angle_hook}
+- 상품의 해결 방식: {angle_solution}
+- 해결 후 변화/결과: {angle_result}
+- 영상 분위기: {angle_vibe}
 
-[씬 구조 — 총 7~20초]
+[씬별 역할 — 총 15~25초]
 {scenes_desc}
 
 [이미지 스타일]
 {style_guide}
 
-[출력 형식 — 순수 JSON 배열]
+[출력 형식 — 순수 JSON 배열, 5개 씬]
 [
   {{
     "role": "hook",
-    "narration": "나레이션 텍스트 (한글, 2~4초 분량, 10~25자)",
-    "overlay_title": "화면 상단 굵은 텍스트 (한글, 12자 이내)",
-    "overlay_body": "화면 하단 자막 텍스트 (한글, narration과 동일 또는 축약)",
-    "flux_prompt": "영문 FLUX 이미지 프롬프트 (50~70단어, 9:16 vertical, 피사체·조명·분위기 구체적으로. 한글 텍스트·글자 절대 포함 금지)"
+    "narration": "나레이션 (구어체 한글, 2~4초 분량, 15~35자. 타겟의 문제 상황을 건드리는 질문·상황 묘사)",
+    "overlay_title": "화면 상단 임팩트 텍스트 (12자 이내, 시청자 시선 고정용)",
+    "overlay_body": "화면 하단 자막 (narration과 동일하거나 핵심만 축약)",
+    "flux_prompt": "FLUX 이미지 프롬프트 — 반드시 영문(English)만, 60~80단어, 9:16 vertical frame. 씬 내용과 분위기에 맞는 피사체·조명·배경을 구체적으로 묘사. 글자·텍스트·CJK 문자 절대 포함 금지"
   }},
-  ...5개 씬 모두...
+  ...5개 씬...
 ]
 
-규칙:
-- narration은 실제 TTS로 읽힐 텍스트이므로 자연스러운 구어체로
-- overlay_title은 임팩트 있는 키워드 (예: "지금 바꿔야 할 이유")
-- flux_prompt에 한글/중국어/일본어 절대 금지
-- 순수 JSON 배열만 출력"""
+씬별 작성 가이드:
+- hook: 타겟이 겪는 문제 상황을 생생하게 묘사 또는 질문 → 스크롤 멈추게
+- empathy: "맞죠? 저도 그랬어요" 톤으로 공감 깊게 — 문제의 감정적 공명
+- solution: 상품이 그 문제를 어떻게 해결하는지 구체적으로 (기능·방식 언급)
+- benefit: 해결 후 실제 변화·수치·감정 — 가장 강력한 한 가지
+- cta: 구체적 행동 유도 (링크 클릭/팔로우/댓글 등)
 
-    raw = generate_text(system, prompt, max_tokens=1200, model='claude-haiku-4-5-20251001')
+순수 JSON 배열만 출력"""
+
+    raw = generate_text(system, prompt, max_tokens=1500, model='claude-sonnet-4-6')
     clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
     s, e = clean.find('['), clean.rfind(']') + 1
     if s >= 0 and e > s:

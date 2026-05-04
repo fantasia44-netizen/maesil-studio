@@ -68,30 +68,39 @@ def shorts_angles():
     import re as _re
 
     brand_ctx = build_brand_context(brand, product)
-    system = '당신은 숏폼 영상 전문 마케터입니다. 순수 JSON만 출력하세요.'
-    prompt = f"""인스타 릴스/유튜브 쇼츠용 소구포인트 3개를 JSON으로 생성하세요.
+    system = (
+        '당신은 숏폼 영상 전문 마케터입니다. '
+        '좋은 제품 광고는 타겟의 구체적인 문제를 정확히 짚고, '
+        '그 해결책으로 상품을 자연스럽게 연결하는 서사를 가집니다. '
+        '순수 JSON만 출력하세요.'
+    )
+    prompt = f"""아래 브랜드·상품의 쇼츠/릴스용 소구포인트 3개를 생성하세요.
+각 소구포인트는 서로 다른 문제-해결 각도로 접근해야 합니다.
 
 [브랜드·상품]
 {brand_ctx}
 
 [게시 방향]
-{direction or '브랜드 전반적 인지도 향상'}
+{direction or '상품의 핵심 문제 해결력 강조'}
 
 [출력 형식 — 순수 JSON 배열]
 [
   {{
-    "title":       "소구포인트 한 줄 (15자 이내)",
-    "hook":        "훅 문구 — 시청자가 멈출 만한 첫 문장 (20자 이내)",
-    "image_vibe":  "영상 분위기 키워드 (예: 감성적·역동적·귀여운)",
-    "target_pain": "타겟의 핵심 불편/욕구 (20자 이내)"
+    "title":    "소구포인트 제목 (15자 이내)",
+    "problem":  "타겟이 실제로 겪는 구체적 불편·상황 (공감 가는 표현, 35자 이내. 예: '바쁜 아침마다 식사 챙기기가 너무 귀찮은 직장인')",
+    "hook":     "그 문제를 겪는 사람이 스크롤 멈출 첫 마디 (20자 이내. 예: '아침마다 이거 하나로 해결됩니다')",
+    "solution": "이 상품이 그 문제를 해결하는 방식 (30자 이내. 예: '5분 안에 완성되는 균형 잡힌 한 끼')",
+    "result":   "해결 후 타겟이 얻는 변화·감정 (20자 이내. 예: '여유 있는 아침이 시작됩니다')",
+    "image_vibe": "영상 분위기 키워드 (예: 따뜻한 일상·역동적·감성적·깔끔한 미니멀)"
   }},
   ...3개...
 ]
 
+핵심: problem이 구체적이고 공감될수록, solution과의 연결이 명확할수록 좋습니다.
 순수 JSON 배열만 출력."""
 
     try:
-        raw   = generate_text(system, prompt, max_tokens=600, model='claude-haiku-4-5-20251001')
+        raw   = generate_text(system, prompt, max_tokens=800, model='claude-haiku-4-5-20251001')
         clean = _re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:
