@@ -189,8 +189,9 @@ def payment_complete():
             return jsonify(ok=True, new_balance=new_balance, message=f'{plan_info["label"]} 플랜 시작!')
 
     except Exception as e:
-        logger.error(f'[BILLING] payment_complete error: {e}')
-        return jsonify(ok=False, message='결제 처리 중 오류가 발생했습니다.'), 500
+        import traceback
+        logger.error(f'[BILLING] payment_complete error: {e}\n{traceback.format_exc()}')
+        return jsonify(ok=False, message=f'결제 처리 중 오류: {str(e)}'), 500
 
     return jsonify(ok=False, message='알 수 없는 오류'), 500
 
