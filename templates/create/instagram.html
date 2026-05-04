@@ -516,38 +516,7 @@
                 <i class="bi bi-magic me-1"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
               </button>
             </div>
-            <!-- 말풍선 위치 에디터 -->
-            <div id="bubbleEditorPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#fff0f8;border:1px solid #f9a8d4">
-              <div class="small fw-semibold mb-2"><i class="bi bi-chat-square-dots me-1"></i>말풍선 드래그로 위치 조정</div>
-              <div class="text-muted mb-2" style="font-size:.75rem">버블을 드래그해서 위치를 바꾸세요. 꼬리 방향도 전환 가능합니다.</div>
-              <!-- 드래그 캔버스 -->
-              <div id="bubbleCanvas" class="position-relative mx-auto" style="width:320px;height:320px;border:2px solid #d63384;border-radius:8px;overflow:hidden;cursor:default;touch-action:none">
-                <img id="bubbleCanvasImg" src="" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none">
-                <!-- 말풍선 핸들 0 -->
-                <div id="bHandle0" class="position-absolute d-flex align-items-center gap-1 px-2 py-1"
-                     style="left:4%;top:4%;background:white;border:2px solid #111;border-radius:12px;cursor:grab;user-select:none;max-width:44%;font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.25)">
-                  <span style="color:#d63384">①</span>
-                  <span id="bPreview0" style="overflow:hidden;text-overflow:ellipsis;max-width:80px"></span>
-                  <button class="btn btn-xs p-0 ms-1" style="font-size:.68rem;line-height:1;border:none;background:none" onclick="toggleBubbleTail(0,event)" title="꼬리 방향">
-                    <span id="bTailIcon0">↓</span>
-                  </button>
-                </div>
-                <!-- 말풍선 핸들 1 -->
-                <div id="bHandle1" class="position-absolute d-flex align-items-center gap-1 px-2 py-1 d-none"
-                     style="left:53%;top:4%;background:white;border:2px solid #111;border-radius:12px;cursor:grab;user-select:none;max-width:44%;font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.25)">
-                  <span style="color:#6366f1">②</span>
-                  <span id="bPreview1" style="overflow:hidden;text-overflow:ellipsis;max-width:80px"></span>
-                  <button class="btn btn-xs p-0 ms-1" style="font-size:.68rem;line-height:1;border:none;background:none" onclick="toggleBubbleTail(1,event)" title="꼬리 방향">
-                    <span id="bTailIcon1">↓</span>
-                  </button>
-                </div>
-              </div>
-              <button class="btn btn-sm w-100 fw-semibold mt-3" style="background:#d63384;color:#fff;border-radius:8px"
-                      onclick="recompositeWebtoon()">
-                <span class="spinner-border spinner-border-sm d-none me-1" id="bubbleRecompSpin"></span>
-                <i class="bi bi-magic me-1" id="bubbleRecompIcon"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
-              </button>
-            </div>
+            <!-- 말풍선 에디터는 공용 영역으로 이동 (아래 carouselView 이후) -->
             <!-- 이미지 직접 삽입 패널 -->
             <div id="singleInsertPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
               <div class="small fw-semibold mb-2">파일 업로드</div>
@@ -594,6 +563,10 @@
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="goStep(4)">
                 <i class="bi bi-arrow-repeat me-1"></i>전체 재구성
               </button>
+              <button id="carouselBubbleEditBtn" class="btn btn-sm btn-outline-warning w-100 d-none"
+                      onclick="toggleBubbleEditor()">
+                <i class="bi bi-chat-square-dots me-1"></i>말풍선 위치·텍스트 수정
+              </button>
             </div>
             <!-- 캐러셀 이미지 삽입 패널 -->
             <div id="carouselInsertPanel" class="d-none mt-2 p-2 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
@@ -604,7 +577,58 @@
           </div>
 
         </div>
+
+        <!-- ── 공용: 말풍선 위치·텍스트 에디터 ── -->
+        <div id="bubbleEditorPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#fff0f8;border:1px solid #f9a8d4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="small fw-semibold"><i class="bi bi-chat-square-dots me-1"></i>말풍선 위치·텍스트 수정</span>
+            <button class="btn btn-xs btn-link p-0 text-muted" onclick="toggleBubbleEditor()" style="font-size:.8rem">✕ 닫기</button>
+          </div>
+          <!-- 대사 텍스트 입력 -->
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="small text-muted mb-1">① 말풍선 대사</label>
+              <input id="bubbleText0" class="form-control form-control-sm" placeholder="첫 번째 대사"
+                     oninput="document.getElementById('bPreview0').textContent=this.value||'대사 1'">
+            </div>
+            <div class="col-6">
+              <label class="small text-muted mb-1">② 말풍선 대사 (선택)</label>
+              <input id="bubbleText1" class="form-control form-control-sm" placeholder="두 번째 대사"
+                     oninput="document.getElementById('bPreview1').textContent=this.value||'대사 2'">
+            </div>
+          </div>
+          <div class="text-muted mb-2" style="font-size:.72rem">버블 핸들을 드래그해서 위치를 바꾸세요. <b>↓/↑</b> 버튼으로 꼬리 방향 전환.</div>
+          <!-- 드래그 캔버스 -->
+          <div id="bubbleCanvas" class="position-relative mx-auto" style="width:320px;height:320px;border:2px solid #d63384;border-radius:8px;overflow:hidden;cursor:default;touch-action:none">
+            <img id="bubbleCanvasImg" src="" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none">
+            <!-- 핸들 0 -->
+            <div id="bHandle0" class="position-absolute d-flex align-items-center gap-1 px-2 py-1"
+                 style="left:4%;top:4%;background:white;border:2px solid #111;border-radius:12px;cursor:grab;user-select:none;max-width:44%;font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.25)">
+              <span style="color:#d63384">①</span>
+              <span id="bPreview0" style="overflow:hidden;text-overflow:ellipsis;max-width:80px">대사 1</span>
+              <button class="btn p-0 ms-1" style="font-size:.68rem;line-height:1;border:none;background:none" onclick="toggleBubbleTail(0,event)" title="꼬리 방향">
+                <span id="bTailIcon0">↓</span>
+              </button>
+            </div>
+            <!-- 핸들 1 -->
+            <div id="bHandle1" class="position-absolute d-flex align-items-center gap-1 px-2 py-1 d-none"
+                 style="left:53%;top:4%;background:white;border:2px solid #111;border-radius:12px;cursor:grab;user-select:none;max-width:44%;font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.25)">
+              <span style="color:#6366f1">②</span>
+              <span id="bPreview1" style="overflow:hidden;text-overflow:ellipsis;max-width:80px">대사 2</span>
+              <button class="btn p-0 ms-1" style="font-size:.68rem;line-height:1;border:none;background:none" onclick="toggleBubbleTail(1,event)" title="꼬리 방향">
+                <span id="bTailIcon1">↓</span>
+              </button>
+            </div>
+          </div>
+          <button class="btn btn-sm w-100 fw-semibold mt-3" style="background:#d63384;color:#fff;border-radius:8px"
+                  onclick="recompositeWebtoon()">
+            <span class="spinner-border spinner-border-sm d-none me-1" id="bubbleRecompSpin"></span>
+            <i class="bi bi-magic me-1" id="bubbleRecompIcon"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
+          </button>
+        </div>
+
       </div>
+    </div>
     </div>
 
     <!-- 캡션 + 해시태그 -->
@@ -1641,6 +1665,9 @@ async function generateAllImages() {
 function _showStep5Carousel() {
   document.getElementById('singleImageView').classList.add('d-none');
   document.getElementById('carouselView').classList.remove('d-none');
+  // 웹툰이면 캐러셀에도 말풍선 수정 버튼 표시
+  const cbb = document.getElementById('carouselBubbleEditBtn');
+  if (cbb) cbb.classList.toggle('d-none', selectedStyle !== 'webtoon');
   carouselIdx = 0;
   _buildThumbStrip();
   carouselShowImage(0);
@@ -1907,13 +1934,26 @@ let _dragRef = { mx: 0, my: 0, lx: 0, ly: 0 };
 
 function toggleBubbleEditor() {
   const panel = document.getElementById('bubbleEditorPanel');
+  const isHidden = panel.classList.contains('d-none');
   panel.classList.toggle('d-none');
+  if (isHidden) {
+    // 현재 보고 있는 이미지로 에디터 초기화
+    const inCarousel = !document.getElementById('carouselView').classList.contains('d-none');
+    const imgUrl = inCarousel ? generatedImages[carouselIdx] : generatedImageUrl;
+    if (imgUrl) _initBubbleEditor(imgUrl);
+    setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+  }
 }
 
 function _initBubbleEditor(imageUrl) {
   document.getElementById('bubbleCanvasImg').src = imageUrl;
-  const d1 = document.getElementById('dialogue1')?.value.trim() || '';
-  const d2 = document.getElementById('dialogue2')?.value.trim() || '';
+  // 에디터 텍스트 입력란 우선, 없으면 Step 4 입력란에서 가져옴
+  const t0El = document.getElementById('bubbleText0');
+  const t1El = document.getElementById('bubbleText1');
+  const d1 = (t0El?.value.trim()) || document.getElementById('dialogue1')?.value.trim() || '';
+  const d2 = (t1El?.value.trim()) || document.getElementById('dialogue2')?.value.trim() || '';
+  if (t0El && !t0El.value && d1) t0El.value = d1;
+  if (t1El && !t1El.value && d2) t1El.value = d2;
   document.getElementById('bPreview0').textContent = d1 || '대사 1';
   document.getElementById('bPreview1').textContent = d2 || '대사 2';
   // 두 번째 버블은 대사 있을 때만 표시
@@ -1989,16 +2029,24 @@ async function recompositeWebtoon() {
   spin.classList.remove('d-none');
   icon.classList.add('d-none');
 
-  const d1 = document.getElementById('dialogue1')?.value.trim() || '';
-  const d2 = document.getElementById('dialogue2')?.value.trim() || '';
+  // 에디터 입력란 우선, 없으면 Step 4 입력란 폴백
+  const d1 = document.getElementById('bubbleText0')?.value.trim()
+          || document.getElementById('dialogue1')?.value.trim() || '';
+  const d2 = document.getElementById('bubbleText1')?.value.trim()
+          || document.getElementById('dialogue2')?.value.trim() || '';
   const dialogues = [d1, d2].filter(Boolean);
+
+  const inCarousel = !document.getElementById('carouselView').classList.contains('d-none');
+  const baseUrl = inCarousel
+    ? generatedImages[carouselIdx]
+    : (bannerBaseUrl || generatedImageUrl);
 
   try {
     const res  = await fetch('{{ url_for("create.instagram_recomposite_webtoon") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({
-        base_image_url: bannerBaseUrl || generatedImageUrl,
+        base_image_url: baseUrl,
         dialogue1: d1, dialogue2: d2,
         size: selectedRatio,
         positions: _bubblePos.slice(0, dialogues.length),
@@ -2006,9 +2054,16 @@ async function recompositeWebtoon() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
-    generatedImageUrl = data.image_url;
-    document.getElementById('finalImage').src    = data.image_url;
-    document.getElementById('downloadBtn').href  = data.image_url;
+
+    // 단일/캐러셀 모두 업데이트
+    if (inCarousel) {
+      generatedImages[carouselIdx] = data.image_url;
+      carouselShowImage(carouselIdx);
+    } else {
+      generatedImageUrl = data.image_url;
+      document.getElementById('finalImage').src   = data.image_url;
+      document.getElementById('downloadBtn').href = data.image_url;
+    }
     document.getElementById('bubbleCanvasImg').src = data.image_url;
   } catch (err) {
     alert('재합성 실패: ' + err.message);
