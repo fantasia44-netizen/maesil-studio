@@ -102,7 +102,9 @@ def payment_complete():
     supabase = current_app.supabase
     try:
         from services.payment_service import get_payment
-        payment = get_payment(payment_id)
+        resp = get_payment(payment_id)
+        # PortOne v2 응답 구조: {'payment': {'status': 'PAID', ...}}
+        payment = resp.get('payment', resp)
 
         if payment.get('status') != 'PAID':
             return jsonify(ok=False, message='결제가 완료되지 않았습니다.'), 400

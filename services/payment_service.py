@@ -8,27 +8,6 @@ logger = logging.getLogger(__name__)
 
 PORTONE_BASE = 'https://api.portone.io'
 
-_token_cache = {'token': None, 'expires_at': None}
-
-
-def _get_access_token() -> str:
-    import time
-    if _token_cache['token'] and _token_cache['expires_at'] and time.time() < _token_cache['expires_at']:
-        return _token_cache['token']
-
-    api_secret = _get_config('portone_api_secret')
-    resp = requests.post(
-        f'{PORTONE_BASE}/login/api-secret',
-        json={'apiSecret': api_secret},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    token = data['accessToken']
-    _token_cache['token'] = token
-    _token_cache['expires_at'] = time.time() + 270  # 4.5분
-    return token
-
 
 def _get_config(key: str) -> str:
     """saas_config 테이블 또는 환경변수에서 설정 읽기"""
@@ -60,8 +39,9 @@ def _get_config(key: str) -> str:
 
 
 def _headers() -> dict:
+    # PortOne v2: api_secret 직접 사용 (JWT 토큰은 BILLING_KEY 권한 누락)
     return {
-        'Authorization': f'PortOne {_get_access_token()}',
+        'Authorization': f'PortOne {_get_config("portone_api_secret")}',
         'Content-Type': 'application/json',
     }
 
