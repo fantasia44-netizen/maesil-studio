@@ -439,19 +439,22 @@ def start_shorts_pipeline(
     voice_key: str,
     tts_speed: float,
     supabase,
+    app=None,
 ) -> None:
-    t = threading.Thread(
-        target=run_shorts_pipeline,
-        kwargs=dict(
-            creation_id=creation_id,
-            user_id=user_id,
-            scenes=scenes,
-            style=style,
-            brand_color=brand_color,
-            voice_key=voice_key,
-            tts_speed=tts_speed,
-            supabase=supabase,
-        ),
-        daemon=True,
-    )
+    def _run():
+        if app:
+            with app.app_context():
+                run_shorts_pipeline(
+                    creation_id=creation_id, user_id=user_id, scenes=scenes,
+                    style=style, brand_color=brand_color, voice_key=voice_key,
+                    tts_speed=tts_speed, supabase=supabase,
+                )
+        else:
+            run_shorts_pipeline(
+                creation_id=creation_id, user_id=user_id, scenes=scenes,
+                style=style, brand_color=brand_color, voice_key=voice_key,
+                tts_speed=tts_speed, supabase=supabase,
+            )
+
+    t = threading.Thread(target=_run, daemon=True)
     t.start()

@@ -15,6 +15,7 @@ _ENV_MAP = {
     'portone_store_id':      'PORTONE_STORE_ID',
     'portone_channel_card':  'PORTONE_CHANNEL_KEY_CARD',
     'portone_channel_kakao': 'PORTONE_CHANNEL_KEY_KAKAO',
+    'google_tts_api_key':    'GOOGLE_TTS_API_KEY',
     'image_provider':        'IMAGE_PROVIDER',
     'smtp_host':             'SMTP_HOST',
     'smtp_port':             'SMTP_PORT',
