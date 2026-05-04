@@ -14,6 +14,7 @@ CONFIG_KEYS = [
     ('fal_api_key',           'fal.ai API Key',         'secret', 'FLUX + Bria 이미지·배경교체',    True),
     ('ideogram_api_key',      'Ideogram API Key',       'secret', '한글 텍스트 이미지 생성',       False),
     ('openai_api_key',        'OpenAI API Key',         'secret', 'DALL-E / GPT (선택)',            False),
+    ('google_tts_api_key',    'Google TTS API Key',     'secret', '쇼츠/릴스 나레이션 음성 생성',   False),
     ('maeyo_agency_url',      '매요 Agency URL',        'text',   '매요 AI CS봇 — maesil-agency 주소', False),
     ('maeyo_cs_token',        '매요 CS Token',          'secret', 'maesil-agency MAEYO_INTERNAL_TOKEN', True),
     ('portone_api_secret',    'PortOne API Secret',     'secret', '결제 API',                      False),
