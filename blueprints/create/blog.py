@@ -237,6 +237,28 @@ def blog_products():
     })
 
 
+@create_bp.route('/blog/ref-preview', methods=['GET'])
+@login_required
+def blog_ref_preview():
+    """이전 블로그 내용 미리보기 (시리즈/변형 모드용)."""
+    supabase   = current_app.supabase
+    ref_id     = request.args.get('id', '').strip()
+    if not ref_id:
+        return jsonify(ok=False, message='id 필요')
+    try:
+        res = supabase.table('creations').select('id,output_data,input_data,created_at') \
+            .eq('id', ref_id).eq('user_id', current_user.id).limit(1).execute()
+        row = (res.data or [None])[0]
+        if not row:
+            return jsonify(ok=False, message='이전 글을 찾을 수 없습니다.')
+        title   = _extract_title(row.get('output_data') or {})
+        text    = (row.get('output_data') or {}).get('text', '')
+        excerpt = text[:400].strip() if text else ''
+        return jsonify(ok=True, title=title, excerpt=excerpt)
+    except Exception as e:
+        return jsonify(ok=False, message=str(e))
+
+
 @create_bp.route('/blog/generate', methods=['POST'])
 @login_required
 def blog_generate():

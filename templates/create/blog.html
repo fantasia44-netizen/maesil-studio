@@ -415,6 +415,8 @@ let slotManualImages = [];    // 슬롯별 수동 삽입 이미지 URL (null = A
 
 // 제품별 이미지 목록 (서버에서 주입)
 const PRODUCT_IMAGES = {{ products_images_map | tojson }};
+// 최근 블로그 이력 (회피 목록 + 시리즈 선택용)
+const RECENT_BLOGS   = {{ recent_blogs | tojson }};
 
 // 스타일별 프롬프트 수식어 — 명확한 화풍 앵커로 이미지 간 일관성 확보
 const STYLE_MODIFIERS = {
@@ -466,10 +468,61 @@ function goStep(n) {
 updateStepIndicator(1);
 
 // ── 시리즈 연동 ──────────────────────────────────────────────
+function _applyRelationMode(mode) {
+  const isRef = (mode === 'series' || mode === 'variant');
+  document.getElementById('refBlockNew').classList.toggle('d-none',  isRef);
+  document.getElementById('refBlockRef').classList.toggle('d-none', !isRef);
+  if (!isRef) _populateAvoidBadges(RECENT_BLOGS);
+}
 document.getElementById('relationMode').addEventListener('change', function() {
-  document.getElementById('refBlock').classList.toggle('d-none',
-    !(this.value === 'series' || this.value === 'variant'));
+  _applyRelationMode(this.value);
 });
+
+function _populateAvoidBadges(blogs) {
+  const badgeEl = document.getElementById('avoidBadges');
+  const emptyEl = document.getElementById('avoidListEmpty');
+  const hintEl  = document.getElementById('avoidHint');
+  if (!badgeEl) return;
+  badgeEl.innerHTML = '';
+  if (!blogs || !blogs.length) {
+    if (emptyEl) emptyEl.classList.remove('d-none');
+    if (hintEl)  hintEl.textContent = '';
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('d-none');
+  blogs.slice(0, 20).forEach(b => {
+    const badge = document.createElement('span');
+    badge.className = 'badge rounded-pill px-2 py-1';
+    badge.style.cssText = 'background:#f0f0ff;color:#333;font-size:.72rem;font-weight:400;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block';
+    badge.title = b.title;
+    badge.textContent = (b.created_at ? b.created_at.slice(0,10) + ' · ' : '') + (b.title || '제목 없음');
+    badgeEl.appendChild(badge);
+  });
+  if (hintEl) hintEl.textContent = `최근 ${blogs.length}개 글과 주제가 겹치지 않도록 새로운 방향으로 작성합니다.`;
+}
+
+async function loadRefPreview(refId) {
+  const preview  = document.getElementById('refPreview');
+  const loading  = document.getElementById('refPreviewLoading');
+  const titleEl  = document.getElementById('refPreviewTitle');
+  const excerptEl= document.getElementById('refPreviewExcerpt');
+  if (!refId) { preview?.classList.add('d-none'); return; }
+  preview?.classList.add('d-none');
+  loading?.classList.remove('d-none');
+  try {
+    const res  = await fetch(`/create/blog/ref-preview?id=${encodeURIComponent(refId)}`);
+    const data = await res.json();
+    if (data.ok) {
+      if (titleEl)   titleEl.textContent   = data.title   || '(제목 없음)';
+      if (excerptEl) excerptEl.textContent = data.excerpt || '(내용 없음)';
+      preview?.classList.remove('d-none');
+    }
+  } catch(e) { console.warn('ref preview 실패:', e); }
+  finally { loading?.classList.add('d-none'); }
+}
+
+// 초기 실행 — 기본 모드('new')에 맞게 배지 표시
+_applyRelationMode(document.getElementById('relationMode').value);
 
 // 상품 선택 시 이미지 피커 업데이트
 function updateProductImage() {
@@ -538,6 +591,9 @@ document.getElementById('brandSelect').addEventListener('change', async function
       ).join('');
     document.getElementById('refSelect').innerHTML = '<option value="">— 선택 —</option>' +
       data.recent_blogs.map(r => `<option value="${r.id}">${r.created_at} · ${r.title}</option>`).join('');
+    // new 모드라면 회피 배지도 갱신
+    const mode = document.getElementById('relationMode').value;
+    if (mode === 'new') _populateAvoidBadges(data.recent_blogs);
     updateProductImage();
   } catch {}
 });
