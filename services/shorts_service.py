@@ -40,8 +40,15 @@ SHORTS_STYLE_PRESETS = {
 }
 
 _NO_CJK = (
-    ', no Chinese characters, no Japanese characters, no kanji, no hanzi, '
-    'no CJK text, Latin alphabet only for any visible text'
+    ', no text, no letters, no words, no signs, no watermarks'
+    ', no Chinese characters, no Japanese characters, no Korean characters'
+    ', no kanji, no hanzi, no hangul, no CJK glyphs'
+    ', absolutely no writing of any kind on any surface'
+)
+_NO_ANATOMY = (
+    ', anatomically correct, natural human proportions'
+    ', no extra limbs, no extra arms, no extra hands, no extra legs'
+    ', no duplicate body parts, realistic body structure'
 )
 
 
@@ -146,6 +153,33 @@ VOICE_OPTIONS = {
 }
 
 
+# TTS 발음 교정 — 영문 약어를 한글 발음으로 치환
+_TTS_REPLACEMENTS = [
+    ('ROAS',  '로아스'),   # 광고수익률
+    ('ROI',   '알오아이'),
+    ('SNS',   '에스엔에스'),
+    ('SaaS',  '사스'),
+    ('B2B',   '비투비'),
+    ('B2C',   '비투씨'),
+    ('MOQ',   '모크'),
+    ('AI',    '에이아이'),
+    ('CTA',   '씨티에이'),
+    ('KPI',   '케이피아이'),
+    ('SEO',   '에스이오'),
+    ('CPM',   '씨피엠'),
+    ('CPC',   '씨피씨'),
+    ('URL',   '유알엘'),
+    ('QR',    '큐알'),
+]
+
+def _normalize_tts_text(text: str) -> str:
+    """TTS 발음이 어색한 영문 약어를 한글 발음으로 변환."""
+    import re as _re
+    for eng, kor in _TTS_REPLACEMENTS:
+        text = _re.sub(rf'\b{eng}\b', kor, text, flags=_re.IGNORECASE)
+    return text
+
+
 def tts_synthesize(text: str, api_key: str,
                    voice_key: str = 'female_natural',
                    speed: float = 1.1) -> bytes:
@@ -175,23 +209,52 @@ def tts_synthesize(text: str, api_key: str,
 # 3. 이미지 프레임 합성 (PIL)
 # ════════════════════════════════════════════════════════
 
+_FONT_URLS = {
+    'NanumGothic.ttf':     'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
+    'NanumGothicBold.ttf': 'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf',
+}
+
+def _ensure_font(fname: str) -> str | None:
+    """static/fonts/ 에 폰트가 없으면 자동 다운로드 후 경로 반환."""
+    here     = os.path.dirname(os.path.abspath(__file__))
+    font_dir = os.path.join(here, '..', 'static', 'fonts')
+    dest     = os.path.join(font_dir, fname)
+    if os.path.exists(dest):
+        return dest
+    url = _FONT_URLS.get(fname)
+    if not url:
+        return None
+    try:
+        os.makedirs(font_dir, exist_ok=True)
+        import urllib.request
+        urllib.request.urlretrieve(url, dest)
+        logger.info('[font] 다운로드 완료: %s', dest)
+        return dest
+    except Exception as e:
+        logger.warning('[font] 다운로드 실패 (%s): %s', fname, e)
+        return None
+
+
 def _font(bold: bool = False, size: int = 48) -> ImageFont.ImageFont:
+    fname = 'NanumGothicBold.ttf' if bold else 'NanumGothic.ttf'
     here  = os.path.dirname(os.path.abspath(__file__))
     root  = os.path.join(here, '..')
-    fname = 'NanumGothicBold.ttf' if bold else 'NanumGothic.ttf'
+
     candidates = [
-        os.path.join(root, 'static', 'fonts', fname),
+        _ensure_font(fname),                          # static/fonts/ (자동 다운로드)
+        os.path.join(root, 'static', 'fonts', fname), # 명시적 경로
         f'C:/Windows/Fonts/{"malgunbd" if bold else "malgun"}.ttf',
         f'/usr/share/fonts/truetype/nanum/{"NanumGothicBold" if bold else "NanumGothic"}.ttf',
         f'/usr/share/fonts/opentype/noto/NotoSansCJK-{"Bold" if bold else "Regular"}.ttc',
         '/System/Library/Fonts/AppleSDGothicNeo.ttc',
     ]
     for p in candidates:
-        if os.path.exists(p):
+        if p and os.path.exists(p):
             try:
                 return ImageFont.truetype(p, size)
             except Exception:
                 continue
+    logger.warning('[font] 한글 폰트를 찾지 못했습니다. 기본 폰트 사용.')
     return ImageFont.load_default()
 
 
@@ -388,7 +451,7 @@ def run_shorts_pipeline(
 
             # 이미지 생성
             style_mod = SHORTS_STYLE_PRESETS.get(style, '')
-            flux_p = scene.get('flux_prompt', '') + (f', {style_mod}' if style_mod else '') + _NO_CJK
+            flux_p = scene.get('flux_prompt', '') + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
             img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
 
             # PIL 오버레이
@@ -407,7 +470,7 @@ def run_shorts_pipeline(
                 f.write(base64.b64decode(b64data))
 
             # TTS
-            narration = scene.get('narration', '')
+            narration = _normalize_tts_text(scene.get('narration', ''))
             mp3_bytes = tts_synthesize(narration, tts_api_key, voice_key, tts_speed)
             audio_path = os.path.join(tmp_dir, f'scene_{i:02d}.mp3')
             with open(audio_path, 'wb') as f:
