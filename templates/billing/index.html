@@ -8,8 +8,9 @@
 
 {% block content %}
 <input type="hidden" id="csrfToken" value="{{ csrf_token() }}">
-<input type="hidden" id="portoneStoreId"   value="{{ portone_store_id }}">
-<input type="hidden" id="portoneChannelCard" value="{{ portone_channel_card }}">
+<input type="hidden" id="portoneStoreId"    value="{{ portone_store_id }}">
+<input type="hidden" id="portoneChannelCard"  value="{{ portone_channel_card }}">
+<input type="hidden" id="portoneChannelKakao" value="{{ portone_channel_kakao }}">
 
 <div class="row g-4">
 
@@ -234,78 +235,128 @@
   </div>
 </div>
 
+<!-- 결제수단 선택 모달 -->
+<div class="modal fade" id="pgSelectModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:340px">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold" id="pgSelectTitle">결제수단 선택</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-3 pb-4">
+        <p class="text-muted small mb-3" id="pgSelectDesc"></p>
+        <div class="d-grid gap-2">
+          <button class="btn fw-semibold py-3" id="btnKakao"
+                  style="background:#FEE500;color:#191919;font-size:.95rem"
+                  onclick="_pgPay('kakao')">
+            <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png"
+                 style="height:20px;margin-right:6px;vertical-align:middle" onerror="this.style.display='none'">
+            카카오페이로 결제
+          </button>
+          <button class="btn btn-dark fw-semibold py-3" id="btnCard"
+                  style="font-size:.95rem"
+                  onclick="_pgPay('card')">
+            <i class="bi bi-credit-card me-2"></i>신용·체크카드로 결제
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 결제 진행 모달 -->
 <div class="modal fade" id="payModal" tabindex="-1" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered" style="max-width:360px">
     <div class="modal-content">
       <div class="modal-body text-center py-5">
         <div class="spinner-border text-danger mb-3"></div>
-        <div class="fw-semibold" id="payModalMsg">결제창 연결 중...</div>
+        <div class="fw-semibold" id="payModalMsg">결제 확인 중...</div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-const CSRF         = document.getElementById('csrfToken').value;
-const STORE_ID     = document.getElementById('portoneStoreId').value;
-const CHANNEL_CARD = document.getElementById('portoneChannelCard').value;
+const CSRF          = document.getElementById('csrfToken').value;
+const STORE_ID      = document.getElementById('portoneStoreId').value;
+const CHANNEL_CARD  = document.getElementById('portoneChannelCard').value;
+const CHANNEL_KAKAO = document.getElementById('portoneChannelKakao').value;
+
+// 현재 결제 컨텍스트 (모달에서 참조)
+let _pgCtx = {};
 
 function _paymentId() {
   return 'maesil' + Date.now() + Math.random().toString(36).slice(2, 7);
 }
 
-async function startPointPurchase(pkgIdx, amount, label) {
-  const paymentId = _paymentId();
-  try {
-    const response = await PortOne.requestPayment({
-      storeId:     STORE_ID,
-      channelKey:  CHANNEL_CARD,
-      paymentId:   paymentId,
-      orderName:   '매실 스튜디오 포인트 충전 ' + label,
-      totalAmount: amount,
-      currency:    'KRW',
-      payMethod:   'CARD',
-    });
-
-    if (response.code) {
-      if (response.code !== 'FAILURE_TYPE_PG') alert('결제 실패: ' + response.message);
-      return;
-    }
-
-    await _verify(response.paymentId, {
-      payment_type: 'point_purchase',
-      package_idx:  pkgIdx,
-    });
-  } catch (e) {
-    alert('오류: ' + e.message);
-  }
+function startPointPurchase(pkgIdx, amount, label) {
+  _pgCtx = { type: 'point', pkgIdx, amount, label };
+  document.getElementById('pgSelectTitle').textContent = '포인트 충전 결제수단';
+  document.getElementById('pgSelectDesc').textContent = label + ' · ' + amount.toLocaleString() + '원';
+  new bootstrap.Modal(document.getElementById('pgSelectModal')).show();
 }
 
-async function startSubscription(planType, amount, label) {
-  if (!confirm(`${label} 구독을 시작합니다.\n${amount.toLocaleString()}원/월이 매월 자동 결제됩니다.`)) return;
+function startSubscription(planType, amount, label) {
+  _pgCtx = { type: 'subscription', planType, amount, label };
+  document.getElementById('pgSelectTitle').textContent = '구독 결제수단 선택';
+  document.getElementById('pgSelectDesc').textContent = label + ' · ' + amount.toLocaleString() + '원/월 (자동갱신)';
+  new bootstrap.Modal(document.getElementById('pgSelectModal')).show();
+}
+
+async function _pgPay(pg) {
+  // 선택 모달 닫기
+  bootstrap.Modal.getInstance(document.getElementById('pgSelectModal')).hide();
+
+  const isKakao     = pg === 'kakao';
+  const channelKey  = isKakao ? CHANNEL_KAKAO : CHANNEL_CARD;
+
+  if (!STORE_ID || !channelKey) {
+    alert('결제 설정이 완료되지 않았습니다. 관리자에게 문의해주세요.');
+    return;
+  }
+  if (typeof PortOne === 'undefined') {
+    alert('결제 SDK 로드 실패. 광고 차단 확장 프로그램을 끄고 새로고침해주세요.');
+    return;
+  }
 
   const paymentId = _paymentId();
-  try {
-    const response = await PortOne.requestPayment({
-      storeId:     STORE_ID,
-      channelKey:  CHANNEL_CARD,
-      paymentId:   paymentId,
-      orderName:   '매실 스튜디오 ' + label + ' 구독',
-      totalAmount: amount,
-      currency:    'KRW',
-      payMethod:   'CARD',
-    });
+  const ctx = _pgCtx;
 
+  const params = {
+    storeId:     STORE_ID,
+    channelKey:  channelKey,
+    paymentId:   paymentId,
+    totalAmount: ctx.amount,
+    currency:    'KRW',
+  };
+
+  if (ctx.type === 'point') {
+    params.orderName = '매실 스튜디오 포인트 충전 ' + ctx.label;
+  } else {
+    params.orderName = '매실 스튜디오 ' + ctx.label + ' 구독';
+  }
+
+  if (isKakao) {
+    params.payMethod  = 'EASY_PAY';
+    params.easyPay    = { easyPayProvider: 'KAKAOPAY' };
+  } else {
+    params.payMethod  = 'CARD';
+  }
+
+  try {
+    const response = await PortOne.requestPayment(params);
     if (response.code) {
-      if (response.code !== 'FAILURE_TYPE_PG') alert('결제 실패: ' + response.message);
+      if (response.code !== 'FAILURE_TYPE_PG' && response.code !== 'USER_CANCEL') {
+        alert('결제 실패: ' + response.message);
+      }
       return;
     }
 
-    await _verify(response.paymentId, {
-      payment_type: 'subscription',
-      plan_type:    planType,
-    });
+    const extra = ctx.type === 'point'
+      ? { payment_type: 'point_purchase', package_idx: ctx.pkgIdx }
+      : { payment_type: 'subscription',   plan_type: ctx.planType };
+
+    await _verify(response.paymentId, extra);
   } catch (e) {
     alert('오류: ' + e.message);
   }

@@ -69,7 +69,8 @@ def index():
                            PLAN_PRICES=PLAN_PRICES,
                            POINT_PACKAGES=POINT_PACKAGES,
                            portone_store_id=_get_config('portone_store_id'),
-                           portone_channel_card=_get_config('portone_channel_card'))
+                           portone_channel_card=_get_config('portone_channel_card'),
+                           portone_channel_kakao=_get_config('portone_channel_kakao'))
 
 
 @billing_bp.route('/points')
