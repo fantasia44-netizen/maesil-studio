@@ -8,11 +8,11 @@ from services.tz_utils import now_kst
 logger = logging.getLogger(__name__)
 billing_bp = Blueprint('billing', __name__)
 
-# 포인트 충전 패키지
+# 포인트 충전 패키지 (구독 플랜과 동일 단가)
 POINT_PACKAGES = [
-    {'points': 1000,  'price': 9900,  'label': '1,000P'},
-    {'points': 3000,  'price': 24900, 'label': '3,000P', 'badge': '인기'},
-    {'points': 10000, 'price': 69900, 'label': '10,000P', 'badge': '최저가/P'},
+    {'points': 3000,  'price': 9900,  'label': '3,000P'},
+    {'points': 10000, 'price': 24900, 'label': '10,000P', 'badge': '인기'},
+    {'points': 25000, 'price': 49900, 'label': '25,000P', 'badge': '최저가/P'},
 ]
 
 PLAN_PRICES = {
