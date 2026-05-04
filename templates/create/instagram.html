@@ -450,6 +450,10 @@
                       onclick="toggleBannerEditor()">
                 <i class="bi bi-arrows-move me-1"></i>텍스트 위치·크기 수정
               </button>
+              <button id="bubbleEditBtn" class="btn btn-sm btn-outline-warning d-none"
+                      onclick="toggleBubbleEditor()">
+                <i class="bi bi-chat-square-dots me-1"></i>말풍선 위치 수정
+              </button>
               <button class="btn btn-sm btn-outline-success"
                       onclick="document.getElementById('singleInsertPanel').classList.toggle('d-none')">
                 <i class="bi bi-upload me-1"></i>이미지 삽입
@@ -477,6 +481,38 @@
               <button class="btn btn-sm w-100 fw-semibold" style="background:#d63384;color:#fff;border-radius:8px" onclick="recompositeSingle()">
                 <span class="spinner-border spinner-border-sm d-none me-1" id="recompSpin"></span>
                 <i class="bi bi-magic me-1"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
+              </button>
+            </div>
+            <!-- 말풍선 위치 에디터 -->
+            <div id="bubbleEditorPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#fff0f8;border:1px solid #f9a8d4">
+              <div class="small fw-semibold mb-2"><i class="bi bi-chat-square-dots me-1"></i>말풍선 드래그로 위치 조정</div>
+              <div class="text-muted mb-2" style="font-size:.75rem">버블을 드래그해서 위치를 바꾸세요. 꼬리 방향도 전환 가능합니다.</div>
+              <!-- 드래그 캔버스 -->
+              <div id="bubbleCanvas" class="position-relative mx-auto" style="width:320px;height:320px;border:2px solid #d63384;border-radius:8px;overflow:hidden;cursor:default;touch-action:none">
+                <img id="bubbleCanvasImg" src="" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none">
+                <!-- 말풍선 핸들 0 -->
+                <div id="bHandle0" class="position-absolute d-flex align-items-center gap-1 px-2 py-1"
+                     style="left:4%;top:4%;background:white;border:2px solid #111;border-radius:12px;cursor:grab;user-select:none;max-width:44%;font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.25)">
+                  <span style="color:#d63384">①</span>
+                  <span id="bPreview0" style="overflow:hidden;text-overflow:ellipsis;max-width:80px"></span>
+                  <button class="btn btn-xs p-0 ms-1" style="font-size:.68rem;line-height:1;border:none;background:none" onclick="toggleBubbleTail(0,event)" title="꼬리 방향">
+                    <span id="bTailIcon0">↓</span>
+                  </button>
+                </div>
+                <!-- 말풍선 핸들 1 -->
+                <div id="bHandle1" class="position-absolute d-flex align-items-center gap-1 px-2 py-1 d-none"
+                     style="left:53%;top:4%;background:white;border:2px solid #111;border-radius:12px;cursor:grab;user-select:none;max-width:44%;font-size:.72rem;font-weight:600;white-space:nowrap;overflow:hidden;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.25)">
+                  <span style="color:#6366f1">②</span>
+                  <span id="bPreview1" style="overflow:hidden;text-overflow:ellipsis;max-width:80px"></span>
+                  <button class="btn btn-xs p-0 ms-1" style="font-size:.68rem;line-height:1;border:none;background:none" onclick="toggleBubbleTail(1,event)" title="꼬리 방향">
+                    <span id="bTailIcon1">↓</span>
+                  </button>
+                </div>
+              </div>
+              <button class="btn btn-sm w-100 fw-semibold mt-3" style="background:#d63384;color:#fff;border-radius:8px"
+                      onclick="recompositeWebtoon()">
+                <span class="spinner-border spinner-border-sm d-none me-1" id="bubbleRecompSpin"></span>
+                <i class="bi bi-magic me-1" id="bubbleRecompIcon"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
               </button>
             </div>
             <!-- 이미지 직접 삽입 패널 -->
@@ -1221,9 +1257,11 @@ function _showStep5Single(loading, imageUrl) {
     const actEl = document.getElementById('step5ImgActions');
     actEl.style.display = 'flex';
     actEl.style.flexDirection = 'column';
-    // 배너/웹툰일 때만 편집 버튼 표시
-    const editBtn = document.getElementById('bannerEditBtn');
-    if (editBtn) editBtn.classList.toggle('d-none', selectedStyle !== 'realistic_banner' && selectedStyle !== 'webtoon');
+    // 스타일별 편집 버튼 표시
+    document.getElementById('bannerEditBtn').classList.toggle('d-none', selectedStyle !== 'realistic_banner');
+    document.getElementById('bubbleEditBtn').classList.toggle('d-none', selectedStyle !== 'webtoon');
+    // 웹툰이면 에디터 캔버스 이미지도 업데이트
+    if (selectedStyle === 'webtoon') _initBubbleEditor(imageUrl);
     // 상품 이미지 삽입 썸네일 채우기
     _fillInsertThumbs('singleProductThumbs', url => { generatedImageUrl=url; document.getElementById('finalImage').src=url; document.getElementById('downloadBtn').href=url; document.getElementById('singleInsertPanel').classList.add('d-none'); });
   }
@@ -1661,6 +1699,127 @@ function selectSubStyle(ssid, el) {
   el.style.borderColor = '#d63384';
   el.style.background  = '#fff0f8';
   if (selectedQuantity === 1) refreshImagePrompt();
+}
+
+// ── 말풍선 에디터 ─────────────────────────────────────────────
+let _bubblePos = [
+  { x: 0.04, y: 0.04, tail: 'down' },
+  { x: 0.53, y: 0.04, tail: 'down' },
+];
+let _draggingBubble = -1;
+let _dragRef = { mx: 0, my: 0, lx: 0, ly: 0 };
+
+function toggleBubbleEditor() {
+  const panel = document.getElementById('bubbleEditorPanel');
+  panel.classList.toggle('d-none');
+}
+
+function _initBubbleEditor(imageUrl) {
+  document.getElementById('bubbleCanvasImg').src = imageUrl;
+  const d1 = document.getElementById('dialogue1')?.value.trim() || '';
+  const d2 = document.getElementById('dialogue2')?.value.trim() || '';
+  document.getElementById('bPreview0').textContent = d1 || '대사 1';
+  document.getElementById('bPreview1').textContent = d2 || '대사 2';
+  // 두 번째 버블은 대사 있을 때만 표시
+  document.getElementById('bHandle1').classList.toggle('d-none', !d2);
+  // 초기 위치 적용
+  _applyBubblePos(0);
+  _applyBubblePos(1);
+}
+
+function _applyBubblePos(idx) {
+  const handle = document.getElementById(`bHandle${idx}`);
+  const canvas = document.getElementById('bubbleCanvas');
+  if (!handle || !canvas) return;
+  const cw = canvas.offsetWidth;
+  const ch = canvas.offsetHeight;
+  const hw = handle.offsetWidth  || 100;
+  const hh = handle.offsetHeight || 28;
+  const lx = Math.min(_bubblePos[idx].x * cw, cw - hw - 4);
+  const ly = Math.min(_bubblePos[idx].y * ch, ch - hh - 4);
+  handle.style.left = lx + 'px';
+  handle.style.top  = ly + 'px';
+}
+
+function toggleBubbleTail(idx, e) {
+  e.stopPropagation();
+  _bubblePos[idx].tail = _bubblePos[idx].tail === 'down' ? 'up' : 'down';
+  document.getElementById(`bTailIcon${idx}`).textContent =
+    _bubblePos[idx].tail === 'down' ? '↓' : '↑';
+}
+
+// 드래그 이벤트 — pointer events로 터치/마우스 통합
+(function _setupBubbleDrag() {
+  [0, 1].forEach(idx => {
+    const el = () => document.getElementById(`bHandle${idx}`);
+    document.addEventListener('DOMContentLoaded', () => {
+      const h = el(); if (!h) return;
+      h.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        h.setPointerCapture(e.pointerId);
+        _draggingBubble = idx;
+        const canvas = document.getElementById('bubbleCanvas');
+        const cr = canvas.getBoundingClientRect();
+        const hr = h.getBoundingClientRect();
+        _dragRef = { mx: e.clientX, my: e.clientY,
+                     lx: hr.left - cr.left, ly: hr.top - cr.top };
+        h.style.cursor = 'grabbing';
+      });
+      h.addEventListener('pointermove', e => {
+        if (_draggingBubble !== idx) return;
+        const canvas = document.getElementById('bubbleCanvas');
+        const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+        const hw = h.offsetWidth, hh = h.offsetHeight;
+        const dx = e.clientX - _dragRef.mx;
+        const dy = e.clientY - _dragRef.my;
+        const nx = Math.max(0, Math.min(_dragRef.lx + dx, cw - hw - 2));
+        const ny = Math.max(0, Math.min(_dragRef.ly + dy, ch - hh - 2));
+        h.style.left = nx + 'px';
+        h.style.top  = ny + 'px';
+        _bubblePos[idx].x = nx / cw;
+        _bubblePos[idx].y = ny / ch;
+      });
+      h.addEventListener('pointerup', () => {
+        _draggingBubble = -1;
+        h.style.cursor = 'grab';
+      });
+    });
+  });
+})();
+
+async function recompositeWebtoon() {
+  const spin = document.getElementById('bubbleRecompSpin');
+  const icon = document.getElementById('bubbleRecompIcon');
+  spin.classList.remove('d-none');
+  icon.classList.add('d-none');
+
+  const d1 = document.getElementById('dialogue1')?.value.trim() || '';
+  const d2 = document.getElementById('dialogue2')?.value.trim() || '';
+  const dialogues = [d1, d2].filter(Boolean);
+
+  try {
+    const res  = await fetch('{{ url_for("create.instagram_recomposite_webtoon") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        base_image_url: bannerBaseUrl || generatedImageUrl,
+        dialogue1: d1, dialogue2: d2,
+        size: selectedRatio,
+        positions: _bubblePos.slice(0, dialogues.length),
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    generatedImageUrl = data.image_url;
+    document.getElementById('finalImage').src    = data.image_url;
+    document.getElementById('downloadBtn').href  = data.image_url;
+    document.getElementById('bubbleCanvasImg').src = data.image_url;
+  } catch (err) {
+    alert('재합성 실패: ' + err.message);
+  } finally {
+    spin.classList.add('d-none');
+    icon.classList.remove('d-none');
+  }
 }
 
 // ── 배너 위치·크기 컨트롤 ────────────────────────────────────

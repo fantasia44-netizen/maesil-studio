@@ -213,7 +213,8 @@ def create_banner_image(bg_url: str,
 def create_webtoon_image(bg_url: str,
                          dialogues: list[str],
                          pil_size: tuple = (1080, 1080),
-                         bubble_layout: str = 'default') -> str:
+                         bubble_layout: str = 'default',
+                         custom_positions: list | None = None) -> str:
     """웹툰 스타일 배경 + 한글 말풍선 (최대 2개)
 
     bubble_layout: 'default', 'top-right', 'bottom-both', 'top-both'
@@ -247,7 +248,14 @@ def create_webtoon_image(bg_url: str,
             {'ax': int(W * 0.04), 'ay': int(H * 0.23),  'tail': 'down'},  # 상단 좌 아래
         ],
     }
-    cfgs = LAYOUTS.get(bubble_layout, LAYOUTS['default'])
+    if custom_positions:
+        cfgs = [
+            {'ax': int(p.get('x', 0.04) * W), 'ay': int(p.get('y', 0.04) * H),
+             'tail': p.get('tail', 'down')}
+            for p in custom_positions[:2]
+        ]
+    else:
+        cfgs = LAYOUTS.get(bubble_layout, LAYOUTS['default'])
 
     for dlg, cfg in zip(dialogues[:2], cfgs):
         if dlg.strip():

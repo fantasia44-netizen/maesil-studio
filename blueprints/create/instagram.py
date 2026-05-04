@@ -667,12 +667,13 @@ def instagram_recomposite_banner():
 @login_required
 def instagram_recomposite_webtoon():
     """base_image_url + 대사 + 레이아웃 → PIL 재합성 (포인트 소모 없음)"""
-    data          = request.get_json(force=True) or {}
-    base_url      = (data.get('base_image_url') or '').strip()
-    dialogue1     = (data.get('dialogue1')      or '').strip()
-    dialogue2     = (data.get('dialogue2')      or '').strip()
-    img_size      = (data.get('size')           or '1:1').strip()
-    bubble_layout = (data.get('bubble_layout')  or 'default').strip()
+    data             = request.get_json(force=True) or {}
+    base_url         = (data.get('base_image_url') or '').strip()
+    dialogue1        = (data.get('dialogue1')      or '').strip()
+    dialogue2        = (data.get('dialogue2')      or '').strip()
+    img_size         = (data.get('size')           or '1:1').strip()
+    bubble_layout    = (data.get('bubble_layout')  or 'default').strip()
+    custom_positions = data.get('positions')  # [{x, y, tail}, ...]
 
     if not base_url:
         return jsonify(ok=False, message='base_image_url이 필요합니다.')
@@ -684,7 +685,8 @@ def instagram_recomposite_webtoon():
     _, pil_size  = SIZE_MAP.get(img_size, SIZE_MAP['1:1'])
     dialogues    = [d for d in [dialogue1, dialogue2] if d]
     try:
-        data_url  = create_webtoon_image(base_url, dialogues, pil_size, bubble_layout)
+        data_url  = create_webtoon_image(base_url, dialogues, pil_size, bubble_layout,
+                                         custom_positions or None)
         filename  = f'insta_webtoon_r_{uuid.uuid4().hex[:8]}.jpg'
         final_url = upload_to_supabase(data_url, current_user.id, filename)
         return jsonify(ok=True, image_url=final_url)
