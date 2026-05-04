@@ -67,6 +67,8 @@
             <div class="logo-type-card border rounded p-2 text-center"
                  style="cursor:pointer" data-val="{{ lid }}"
                  onclick="select('logoType', '{{ lid }}', this)">
+              <img src="{{ url_for('static', filename='img/logo_samples/type_' + lid + '.png') }}"
+                   class="img-fluid rounded mb-1" style="height:80px;object-fit:contain;background:#fafafa">
               <div class="fw-semibold small">{{ llabel }}</div>
               <div class="text-muted" style="font-size:.68rem">{{ ldesc }}</div>
             </div>
@@ -92,6 +94,8 @@
             <div class="vibe-card border rounded p-2 text-center"
                  style="cursor:pointer" data-val="{{ vid }}"
                  onclick="select('vibe', '{{ vid }}', this)">
+              <img src="{{ url_for('static', filename='img/logo_samples/vibe_' + vid + '.png') }}"
+                   class="img-fluid rounded mb-1" style="height:80px;object-fit:cover;width:100%">
               <div class="fw-semibold small">{{ vlabel }}</div>
               <div class="text-muted" style="font-size:.68rem">{{ vdesc }}</div>
             </div>
