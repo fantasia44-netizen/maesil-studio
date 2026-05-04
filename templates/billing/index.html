@@ -252,7 +252,7 @@ const STORE_ID     = document.getElementById('portoneStoreId').value;
 const CHANNEL_CARD = document.getElementById('portoneChannelCard').value;
 
 function _paymentId() {
-  return 'maesil_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  return 'maesil' + Date.now() + Math.random().toString(36).slice(2, 7);
 }
 
 async function startPointPurchase(pkgIdx, amount, label) {
