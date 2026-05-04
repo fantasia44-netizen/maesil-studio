@@ -224,27 +224,27 @@ def create_webtoon_image(bg_url: str,
 
     try:
         fp   = _font(bold=True)
-        font = ImageFont.truetype(fp, int(H * 0.050))
+        font = ImageFont.truetype(fp, int(H * 0.038))  # 54→41px: 버블 크기 축소
     except Exception:
         font = ImageFont.load_default()
 
-    # 말풍선 레이아웃
+    # 말풍선 레이아웃 — 캐릭터가 주로 중하단에 위치하므로 버블은 상단 배치
     LAYOUTS = {
         'default':     [
-            {'ax': int(W * 0.06), 'ay': int(H * 0.05),  'tail': 'down'},
-            {'ax': int(W * 0.30), 'ay': int(H * 0.50),  'tail': 'up'},
+            {'ax': int(W * 0.04), 'ay': int(H * 0.04),  'tail': 'down'},  # 상단 좌
+            {'ax': int(W * 0.53), 'ay': int(H * 0.04),  'tail': 'down'},  # 상단 우
         ],
         'top-right':   [
-            {'ax': int(W * 0.42), 'ay': int(H * 0.05),  'tail': 'down'},
-            {'ax': int(W * 0.06), 'ay': int(H * 0.50),  'tail': 'up'},
+            {'ax': int(W * 0.53), 'ay': int(H * 0.04),  'tail': 'down'},  # 상단 우
+            {'ax': int(W * 0.04), 'ay': int(H * 0.22),  'tail': 'down'},  # 상단 좌 아래
         ],
         'bottom-both': [
-            {'ax': int(W * 0.06), 'ay': int(H * 0.55),  'tail': 'up'},
-            {'ax': int(W * 0.40), 'ay': int(H * 0.70),  'tail': 'up'},
+            {'ax': int(W * 0.04), 'ay': int(H * 0.73),  'tail': 'up'},    # 하단 좌
+            {'ax': int(W * 0.53), 'ay': int(H * 0.73),  'tail': 'up'},    # 하단 우
         ],
         'top-both':    [
-            {'ax': int(W * 0.06), 'ay': int(H * 0.05),  'tail': 'down'},
-            {'ax': int(W * 0.42), 'ay': int(H * 0.10),  'tail': 'down'},
+            {'ax': int(W * 0.04), 'ay': int(H * 0.04),  'tail': 'down'},  # 상단 좌 위
+            {'ax': int(W * 0.04), 'ay': int(H * 0.23),  'tail': 'down'},  # 상단 좌 아래
         ],
     }
     cfgs = LAYOUTS.get(bubble_layout, LAYOUTS['default'])
@@ -258,8 +258,8 @@ def create_webtoon_image(bg_url: str,
 
 def _bubble(draw: ImageDraw.ImageDraw, text: str, cfg: dict,
             font: ImageFont.ImageFont, W: int, H: int):
-    PAD, TAIL, R = 26, 33, 22
-    max_w = int(W * 0.52)
+    PAD, TAIL, R = 18, 24, 18
+    max_w = int(W * 0.38)  # 0.52→0.38: 버블 너비 축소
 
     lines = _wrap(text, font, max_w)[:3]
     if not lines:

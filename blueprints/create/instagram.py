@@ -467,7 +467,7 @@ def instagram_image_prompt():
 
     STYLE_GUIDE = {
         'realistic_banner': '실사 라이프스타일 사진 스타일. 제품 없이 분위기/감성 장면. 텍스트 없이. 인물이 등장할 경우 East Asian/Korean appearance.',
-        'webtoon':          '한국 웹툰 스타일. 귀여운 캐릭터·장면. 텍스트 없이. 말풍선 공간 남기기. 캐릭터는 East Asian/Korean features.',
+        'webtoon':          '한국 웹툰 스타일. 귀여운 캐릭터·장면. 텍스트 없이. 캐릭터는 화면 하단 60%에 배치, 상단 30~40%는 배경/하늘로 말풍선 공간 확보. East Asian/Korean features.',
         'ghibli':           'Studio Ghibli 수채화 일러스트. 따뜻한 파스텔 자연 배경. 지브리 애니 감성. 텍스트 없이.',
         'watercolor':       '수채화 일러스트. 번지는 물감, 몽환적 파스텔 색감. 텍스트 없이.',
         'pastel_cute':      '파스텔 귀여운 일러스트. 동글동글한 형태, 카와이 감성, 동화책 스타일. 텍스트 없이.',
