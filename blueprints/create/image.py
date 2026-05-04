@@ -47,7 +47,7 @@ def image_generate():
     import uuid
     creation_id = str(uuid.uuid4())
     try:
-        supabase.table('creations').insert({
+        _row = {
             'id': creation_id,
             'user_id': current_user.id,
             'creation_type': cost_key,
@@ -57,7 +57,10 @@ def image_generate():
             'status': 'generating',
             'model_used': engine,
             'created_at': now_kst().isoformat(),
-        }).execute()
+        }
+        if getattr(current_user, 'operator_id', None):
+            _row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(_row).execute()
     except Exception as e:
         logger.error(f'[IMAGE] creation insert error: {e}')
 

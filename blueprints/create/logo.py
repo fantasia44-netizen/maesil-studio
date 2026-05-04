@@ -51,7 +51,7 @@ def logo_generate():
     brand = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
 
     try:
-        supabase.table('creations').insert({
+        _row = {
             'id': creation_id,
             'user_id': current_user.id,
             'brand_id': brand['id'] if brand else None,
@@ -62,7 +62,10 @@ def logo_generate():
             'status': 'generating',
             'model_used': 'ideogram-v3',
             'created_at': now_kst().isoformat(),
-        }).execute()
+        }
+        if getattr(current_user, 'operator_id', None):
+            _row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(_row).execute()
     except Exception as e:
         logger.warning('[logo] creation insert: %s', e)
 

@@ -131,7 +131,7 @@ def shorts_script():
     creation_id = str(uuid.uuid4())
 
     try:
-        supabase.table('creations').insert({
+        _row = {
             'id': creation_id,
             'user_id': current_user.id,
             'brand_id': brand['id'],
@@ -142,7 +142,10 @@ def shorts_script():
             'status': 'generating',
             'model_used': 'claude-haiku-4-5-20251001',
             'created_at': now_kst().isoformat(),
-        }).execute()
+        }
+        if getattr(current_user, 'operator_id', None):
+            _row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(_row).execute()
     except Exception as e:
         logger.warning('[shorts/script] creation insert: %s', e)
 
@@ -195,7 +198,7 @@ def shorts_generate():
 
     creation_id = str(uuid.uuid4())
     try:
-        supabase.table('creations').insert({
+        _row = {
             'id': creation_id,
             'user_id': current_user.id,
             'brand_id': brand_id or None,
@@ -206,7 +209,10 @@ def shorts_generate():
             'status': 'generating',
             'model_used': f'flux+tts+ffmpeg',
             'created_at': now_kst().isoformat(),
-        }).execute()
+        }
+        if getattr(current_user, 'operator_id', None):
+            _row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(_row).execute()
     except Exception as e:
         logger.warning('[shorts/generate] creation insert: %s', e)
 
