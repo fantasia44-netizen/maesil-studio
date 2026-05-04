@@ -64,6 +64,12 @@ POINT_COSTS = {
     'image_generation': 30,  # 스튜디오 이미지 생성 (FLUX Schnell, 장당)
     # 쇼츠/릴스 영상 (대본+이미지+TTS+조립 통합)
     'shorts_video':   300,   # FLUX 5장 + TTS + FFmpeg 조립 all-in-one
+    # 홍보 자료 (제안서·카탈로그·리플릿·전단지)
+    'business_proposal':   150,  # 거래처 제안서
+    'sponsorship_proposal':150,  # 협찬 제안서
+    'catalog':             200,  # 카탈로그
+    'leaflet':             120,  # 리플릿
+    'flyer':                80,  # 전단지
 }
 
 # ──────────────────────────────────────────
@@ -138,6 +144,12 @@ CREATION_LABELS = {
     'logo':            '브랜드 로고',
     # 영상
     'shorts_video':    '쇼츠/릴스 영상',
+    # 홍보 자료
+    'business_proposal':    '거래처 제안서',
+    'sponsorship_proposal': '협찬 제안서',
+    'catalog':              '카탈로그',
+    'leaflet':              '리플릿',
+    'flyer':                '전단지',
 }
 
 
@@ -146,21 +158,26 @@ CREATION_LABELS = {
 # ──────────────────────────────────────────
 MENU_REGISTRY = [
     # (label, icon, endpoint, required_plan_feature, group)
-    ('대시보드',    'bi-speedometer2',        'main.dashboard',     None,        '홈'),
-    ('브랜드 관리', 'bi-building',            'brand.index',        None,        '홈'),
-    ('상품 관리',   'bi-box-seam',            'product.index',      None,        '상품'),
-    ('블로그',      'bi-file-text',           'create.blog',        None,        '콘텐츠 생성'),
-    ('인스타그램',  'bi-instagram',           'create.instagram',   None,        '콘텐츠 생성'),
-    ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',      None,        '콘텐츠 생성'),
-    ('브랜드 로고', 'bi-pentagon',            'create.logo',        None,        '콘텐츠 생성'),
-    ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page', None,        '콘텐츠 생성'),
-    ('썸네일 문구', 'bi-card-heading',        'create.thumbnail',   None,        '콘텐츠 생성'),
-    ('광고 카피',   'bi-megaphone',           'create.ad_copy',     None,        '콘텐츠 생성'),
-    ('이미지 생성', 'bi-image',               'create.hub',         'image_gen', '콘텐츠 생성'),
-    ('브랜드 키트', 'bi-palette',             'create.brand_kit',   'brand_kit', '콘텐츠 생성'),
-    ('생성 이력',   'bi-clock-history',       'main.history',       None,        '관리'),
-    ('구독 관리',   'bi-credit-card',         'billing.index',      None,        '관리'),
-    ('팀 관리',     'bi-people',              'team.index',         None,        '관리'),  # operator_admin 전용 — get_menu_items() 에서 필터
+    ('대시보드',    'bi-speedometer2',        'main.dashboard',       None,  '홈'),
+    ('브랜드 관리', 'bi-building',            'brand.index',          None,  '홈'),
+    ('상품 관리',   'bi-box-seam',            'product.index',        None,  '상품'),
+    # ── 콘텐츠 생성
+    ('블로그',      'bi-file-text',           'create.blog',          None,  '콘텐츠 생성'),
+    ('인스타그램',  'bi-instagram',           'create.instagram',     None,  '콘텐츠 생성'),
+    ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
+    ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page',   None,  '콘텐츠 생성'),
+    ('브랜드 로고', 'bi-pentagon',            'create.logo',          None,  '콘텐츠 생성'),
+    # ── 홍보 자료 (제안서·카탈로그·리플릿·전단지)
+    ('제안서 만들기','bi-file-earmark-text',  'create.proposal',      None,  '홍보 자료'),
+    # ── 관리
+    ('생성 이력',   'bi-clock-history',       'main.history',         None,  '관리'),
+    ('구독 관리',   'bi-credit-card',         'billing.index',        None,  '관리'),
+    ('팀 관리',     'bi-people',              'team.index',           None,  '관리'),
+    # ── 블라인드 (미사용 — 라우트는 유지)
+    # ('썸네일 문구', 'bi-card-heading',        'create.thumbnail',     None,  '콘텐츠 생성'),
+    # ('광고 카피',   'bi-megaphone',           'create.ad_copy',       None,  '콘텐츠 생성'),
+    # ('이미지 생성', 'bi-image',               'create.hub',           'image_gen', '콘텐츠 생성'),
+    # ('브랜드 키트', 'bi-palette',             'create.brand_kit',     'brand_kit', '콘텐츠 생성'),
 ]
 
 

@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% block title %}제안서 만들기 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}홍보 자료 / 제안서 만들기{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  {# ── 좌측: 입력 폼 ── #}
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-file-earmark-text me-2" style="color:#e8355a"></i>홍보 자료 만들기</h6>
+      </div>
+      <div class="card-body p-4">
+
+        {# 유형 선택 #}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">자료 유형 <span class="text-danger">*</span></label>
+          <div class="row g-2" id="typeCards">
+            {% for key, meta in proposal_types.items() %}
+            <div class="col-6">
+              <div class="proposal-type-card border rounded p-2 h-100 text-center"
+                   data-type="{{ key }}"
+                   data-cost="{{ point_costs[key] }}"
+                   data-target-ph="{{ meta.target_placeholder }}"
+                   data-extra-ph="{{ meta.extra_placeholder }}"
+                   style="cursor:pointer;transition:.15s">
+                <i class="bi {{ meta.icon }} d-block mb-1" style="font-size:1.4rem;color:{{ meta.color }}"></i>
+                <div class="small fw-semibold" style="font-size:.78rem">{{ meta.label }}</div>
+                <div class="text-muted" style="font-size:.68rem">{{ point_costs[key] }}P</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="selectedType" value="">
+          <div class="mt-2 small text-muted" id="typeDesc"></div>
+        </div>
+
+        {# 브랜드 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">브랜드</label>
+          <select id="brandSelect" class="form-select form-select-sm">
+            <option value="">브랜드 선택</option>
+            {% for b in brands %}
+            <option value="{{ b.id }}" {{ 'selected' if b.get('is_default') }}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# 상품 (동적 로드) #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">상품 <span class="text-muted fw-normal">(선택)</span></label>
+          <select id="productSelect" class="form-select form-select-sm">
+            <option value="">상품 선택 안 함</option>
+          </select>
+        </div>
+
+        {# 제안 대상 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">제안 대상 <span class="text-muted fw-normal">(선택)</span></label>
+          <input type="text" id="targetInput" class="form-control form-control-sm"
+                 placeholder="예: ○○유통 구매팀">
+        </div>
+
+        {# 핵심 내용 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">핵심 내용 / 제안 포인트 <span class="text-danger">*</span></label>
+          <textarea id="keyPointsInput" class="form-control" rows="5"
+                    style="font-size:.88rem;line-height:1.7;resize:vertical"
+                    placeholder="예:&#10;• 주요 제안 내용&#10;• 강조할 차별점&#10;• 제공 조건 또는 혜택"></textarea>
+        </div>
+
+        {# 추가 요청 #}
+        <div class="mb-4">
+          <label class="form-label fw-semibold small">추가 요청 사항 <span class="text-muted fw-normal">(선택)</span></label>
+          <textarea id="extraInput" class="form-control" rows="2"
+                    style="font-size:.88rem;resize:vertical"
+                    placeholder="예: 특정 조건, 포함/제외할 내용 등"></textarea>
+        </div>
+
+        <button id="generateBtn" class="btn w-100 fw-semibold py-2"
+                style="background:#e8355a;color:#fff;font-size:.95rem" disabled>
+          <span id="btnText"><i class="bi bi-cpu me-2"></i>자료 생성하기</span>
+          <span id="btnLoading" class="d-none">
+            <span class="spinner-border spinner-border-sm me-2"></span>열심히 작성 중이에요 ✍️
+          </span>
+        </button>
+        <div id="errorMsg" class="alert alert-danger mt-3 d-none small py-2"></div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── 우측: 결과 #}
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold" id="resultTitle">
+          <i class="bi bi-file-earmark-text me-2 text-muted"></i>생성 결과
+        </h6>
+        <button id="copyBtn" class="btn btn-sm btn-outline-secondary d-none">
+          <i class="bi bi-clipboard me-1"></i>복사
+        </button>
+      </div>
+      <div class="card-body p-4">
+        <div id="resultPlaceholder" class="text-center py-5 text-muted">
+          <i class="bi bi-file-earmark-text fs-1 d-block mb-3" style="opacity:.2"></i>
+          <div class="small">유형을 선택하고 내용을 입력한 뒤<br>자료 생성하기를 눌러주세요</div>
+        </div>
+        <div id="resultContent" class="d-none">
+          <div id="resultBody" style="font-size:.9rem;line-height:1.8;white-space:pre-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.proposal-type-card { background:#fff; }
+.proposal-type-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); transform:translateY(-1px); }
+.proposal-type-card.selected { border-color:#e8355a !important; background:#fff5f7; }
+</style>
+
+<script>
+// ── 유형 선택 ──────────────────────────────────────────────
+const cards = document.querySelectorAll('.proposal-type-card');
+const selectedTypeEl = document.getElementById('selectedType');
+const typeDescEl    = document.getElementById('typeDesc');
+const targetInput   = document.getElementById('targetInput');
+const extraInput    = document.getElementById('extraInput');
+const generateBtn   = document.getElementById('generateBtn');
+
+cards.forEach(card => {
+  card.addEventListener('click', () => {
+    cards.forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    const type = card.dataset.type;
+    selectedTypeEl.value = type;
+    typeDescEl.textContent = card.querySelector('.small.fw-semibold').textContent +
+      ' (' + card.querySelector('.text-muted').textContent + ')';
+    targetInput.placeholder = card.dataset.targetPh;
+    extraInput.placeholder  = card.dataset.extraPh;
+    generateBtn.disabled = false;
+  });
+});
+
+// ── 브랜드 변경 → 상품 목록 갱신 ─────────────────────────
+const brandSelect   = document.getElementById('brandSelect');
+const productSelect = document.getElementById('productSelect');
+
+brandSelect.addEventListener('change', async () => {
+  productSelect.innerHTML = '<option value="">상품 선택 안 함</option>';
+  const bid = brandSelect.value;
+  if (!bid) return;
+  try {
+    const res = await fetch(`/create/blog/products?brand_id=${bid}`);
+    const data = await res.json();
+    (data.products || []).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name + (p.price ? ` (${p.price.toLocaleString()}원)` : '');
+      productSelect.appendChild(opt);
+    });
+  } catch(e) {}
+});
+
+// ── 생성 ──────────────────────────────────────────────────
+generateBtn.addEventListener('click', async () => {
+  const proposalType = selectedTypeEl.value;
+  const keyPoints    = document.getElementById('keyPointsInput').value.trim();
+  const errorMsg     = document.getElementById('errorMsg');
+
+  if (!proposalType) { showError('자료 유형을 선택해주세요.'); return; }
+  if (!keyPoints)    { showError('핵심 내용을 입력해주세요.'); return; }
+  errorMsg.classList.add('d-none');
+
+  setLoading(true);
+  try {
+    const res = await fetch('/create/proposal/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposal_type: proposalType,
+        brand_id:    brandSelect.value,
+        product_id:  productSelect.value,
+        target:      document.getElementById('targetInput').value.trim(),
+        key_points:  keyPoints,
+        extra:       document.getElementById('extraInput').value.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) { showError(data.message || '생성 실패'); return; }
+    showResult(data.text, proposalType);
+  } catch(e) {
+    showError('오류가 발생했습니다: ' + e.message);
+  } finally {
+    setLoading(false);
+  }
+});
+
+function setLoading(on) {
+  generateBtn.disabled = on;
+  document.getElementById('btnText').classList.toggle('d-none', on);
+  document.getElementById('btnLoading').classList.toggle('d-none', !on);
+}
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.remove('d-none');
+}
+function showResult(text, type) {
+  document.getElementById('resultPlaceholder').classList.add('d-none');
+  const content = document.getElementById('resultContent');
+  content.classList.remove('d-none');
+
+  // 마크다운 기본 렌더 (## → <h5>, - → <li>)
+  const html = text
+    .replace(/^## (.+)$/gm, '<h5 class="fw-bold mt-4 mb-2" style="color:#222">$1</h5>')
+    .replace(/^### (.+)$/gm, '<h6 class="fw-semibold mt-3 mb-1">$1</h6>')
+    .replace(/^\*\*(.+?)\*\*/gm, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li class="mb-1">$1</li>')
+    .replace(/(<li[\s\S]*?<\/li>)/g, '<ul class="ps-3 mb-2">$1</ul>')
+    .replace(/\n{2,}/g, '</p><p class="mb-2">')
+    .replace(/\n/g, '<br>');
+
+  document.getElementById('resultBody').innerHTML = '<p class="mb-2">' + html + '</p>';
+
+  // 제목 업데이트
+  const typeMeta = {{ proposal_types | tojson }};
+  const label = (typeMeta[type] || {}).label || '결과';
+  document.getElementById('resultTitle').innerHTML =
+    `<i class="bi bi-file-earmark-check me-2" style="color:#198754"></i>${label} 완성`;
+
+  // 복사 버튼
+  const copyBtn = document.getElementById('copyBtn');
+  copyBtn.classList.remove('d-none');
+  copyBtn.onclick = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>복사됨';
+      setTimeout(() => { copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+    });
+  };
+}
+</script>
+{% endblock %}
