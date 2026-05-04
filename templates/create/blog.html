@@ -246,21 +246,27 @@
       <hr class="my-3">
 
       <!-- 이미지 스타일 -->
-      <label class="form-label fw-semibold small mb-2">이미지 스타일</label>
+      <label class="form-label fw-semibold small mb-2">이미지 스타일 <span class="text-muted fw-normal">(선택한 스타일이 모든 이미지에 동일하게 적용되어 일관성 유지)</span></label>
       <div class="row g-2" id="styleCards">
-        {% for sid, slabel, sdesc, sicon in [
-          ('realistic','실사 사진','제품 촬영 스타일, 자연스러운 배경','bi-camera'),
-          ('illustration','일러스트','감성적인 일러스트, 파스텔톤','bi-brush'),
-          ('webtoon','만화/웹툰','웹툰 스타일, 귀여운 캐릭터 포함 가능','bi-emoji-smile'),
-          ('minimal','미니멀','심플하고 깔끔한 플랫 디자인','bi-square'),
+        {% for sid, slabel, sdesc, semoji in [
+          ('ghibli',       '지브리풍',        '따뜻한 수채화, 자연 배경',     '🌿'),
+          ('watercolor',   '수채화 일러스트',  '번지는 색감, 몽환적 분위기',   '🎨'),
+          ('pastel_cute',  '파스텔 귀여운',    '부드럽고 동글동글, 동화풍',    '🍬'),
+          ('webtoon',      '한국 웹툰',        '선명한 선화, K-만화 스타일',   '📖'),
+          ('nordic',       '북유럽 일러스트',  '미니멀 모던, 내추럴 색감',     '🏔️'),
+          ('flat_modern',  '모던 플랫',        '그래픽 디자인, 굵은 색면',     '◼'),
+          ('disney',       '디즈니/픽사',      '3D 애니 느낌, 생동감',         '✨'),
+          ('pencil_sketch','펜화/스케치',      '손그림 감성, 선명한 스케치',   '✏️'),
+          ('retro_pop',    '레트로 팝아트',    '빈티지 포스터, 볼드한 색감',   '🎸'),
+          ('realistic',    '실사 사진',        '제품 촬영 느낌, 자연스러운',   '📷'),
         ] %}
-        <div class="col-6 col-md-3">
-          <div class="style-card border rounded p-3 text-center h-100"
+        <div class="col-6 col-md-4 col-lg-3" style="min-width:140px">
+          <div class="style-card border rounded p-2 text-center h-100"
                style="cursor:pointer;transition:all .2s" data-style="{{ sid }}"
                onclick="selectImageStyle('{{ sid }}', this)">
-            <i class="bi {{ sicon }}" style="font-size:1.8rem;color:#aaa"></i>
-            <div class="fw-semibold small mt-2">{{ slabel }}</div>
-            <div class="text-muted" style="font-size:.72rem">{{ sdesc }}</div>
+            <div style="font-size:1.6rem;line-height:1.4">{{ semoji }}</div>
+            <div class="fw-semibold" style="font-size:.82rem;margin-top:4px">{{ slabel }}</div>
+            <div class="text-muted" style="font-size:.68rem;line-height:1.3;margin-top:2px">{{ sdesc }}</div>
           </div>
         </div>
         {% endfor %}
@@ -354,10 +360,16 @@
             <div class="mb-3">
               <label class="form-label small fw-semibold mb-1">스타일</label>
               <select id="blogRegenStyle" class="form-select form-select-sm">
-                <option value="realistic">사실적 (Realistic)</option>
-                <option value="illustration" selected>일러스트 (Illustration)</option>
-                <option value="webtoon">웹툰 (Webtoon)</option>
-                <option value="minimal">미니멀 (Minimal)</option>
+                <option value="ghibli" selected>🌿 지브리풍</option>
+                <option value="watercolor">🎨 수채화 일러스트</option>
+                <option value="pastel_cute">🍬 파스텔 귀여운</option>
+                <option value="webtoon">📖 한국 웹툰</option>
+                <option value="nordic">🏔️ 북유럽 일러스트</option>
+                <option value="flat_modern">◼ 모던 플랫</option>
+                <option value="disney">✨ 디즈니/픽사</option>
+                <option value="pencil_sketch">✏️ 펜화/스케치</option>
+                <option value="retro_pop">🎸 레트로 팝아트</option>
+                <option value="realistic">📷 실사 사진</option>
               </select>
             </div>
             <button id="blogRegenGenBtn" class="btn btn-sm fw-semibold w-100"
@@ -404,12 +416,18 @@ let slotManualImages = [];    // 슬롯별 수동 삽입 이미지 URL (null = A
 // 제품별 이미지 목록 (서버에서 주입)
 const PRODUCT_IMAGES = {{ products_images_map | tojson }};
 
-// 스타일별 프롬프트 수식어
+// 스타일별 프롬프트 수식어 — 명확한 화풍 앵커로 이미지 간 일관성 확보
 const STYLE_MODIFIERS = {
-  realistic:   'photorealistic, professional product photography, natural lighting, high resolution DSLR photo',
-  illustration:'Korean illustration style, soft pastel colors, cute and warm aesthetic, digital art',
-  webtoon:     'Korean webtoon style, clean line art, vibrant colors, cute cartoon characters',
-  minimal:     'minimal flat design, clean simple layout, geometric shapes, white background, modern',
+  ghibli:       'Studio Ghibli style, hand-painted watercolor, warm soft pastel colors, detailed natural backgrounds, gentle anime aesthetic, Hayao Miyazaki inspired',
+  watercolor:   'soft watercolor illustration, delicate paint washes, bleeding ink edges, dreamy pastel tones, artistic sketchbook texture, translucent color layers',
+  pastel_cute:  'cute pastel illustration, soft rounded shapes, kawaii aesthetic, gentle pink and mint tones, children\'s book style, warm cozy atmosphere',
+  webtoon:      'Korean webtoon manhwa style, clean bold black outlines, flat vibrant colors, cute expressive East Asian characters, digital comic art',
+  nordic:       'Scandinavian illustration style, hygge cozy aesthetic, muted earth and sage tones, simple clean folk art shapes, Nordic design inspired',
+  flat_modern:  'modern flat design illustration, bold geometric color blocks, clean editorial graphic style, solid colors with no gradients, professional vector art',
+  disney:       'Pixar Disney 3D animation style, vibrant polished render, expressive rounded characters, warm cinematic lighting, family-friendly commercial quality',
+  pencil_sketch:'hand-drawn pencil sketch illustration, fine detailed line art, crosshatching texture, warm sepia and charcoal tones, artistic sketchbook feel',
+  retro_pop:    'retro pop art illustration, bold halftone dot pattern, vintage poster palette, flat graphic mid-century modern style, bold saturated colors',
+  realistic:    'photorealistic DSLR photography, professional studio lighting, natural bokeh background, high resolution commercial product shot, clean composition',
 };
 
 // ── 스텝 UI ──────────────────────────────────────────────────
@@ -1290,6 +1308,9 @@ function openBlogRegenModal(vidx) {
   document.getElementById('blogRegenPrompt').value    = promptHint;
   document.getElementById('blogRegenPreview').classList.add('d-none');
   document.getElementById('blogRegenReplaceBtn').disabled = true;
+  // 현재 선택된 스타일로 기본값 설정
+  const styleEl = document.getElementById('blogRegenStyle');
+  if (styleEl && selectedStyle) styleEl.value = selectedStyle;
   bootstrap.Modal.getOrCreateInstance(document.getElementById('blogRegenModal')).show();
 }
 
