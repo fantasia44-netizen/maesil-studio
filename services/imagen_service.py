@@ -7,6 +7,7 @@
   FLUX + PIL    → 긴 한글 문구 합성 카드뉴스 (600~1,200P)
 """
 import os
+import re
 import logging
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -14,6 +15,34 @@ from io import BytesIO
 import base64
 
 logger = logging.getLogger(__name__)
+
+
+# ── 한국어 → 영어 번역 (Flux는 한글 이해 불가) ──────────────
+_KO_RE = re.compile(r'[가-힣ㄱ-ㆎᄀ-ᇿ]')
+
+def _has_korean(text: str) -> bool:
+    return bool(_KO_RE.search(text))
+
+def _translate_prompt(text: str) -> str:
+    """Claude Haiku로 이미지 프롬프트를 영어로 번역. 실패 시 원본 반환."""
+    try:
+        from services.claude_service import generate_text
+        translated = generate_text(
+            system=(
+                'You are an expert image prompt translator. '
+                'Translate the given Korean image description into a concise, vivid English image generation prompt. '
+                'Output ONLY the English prompt. No explanation, no quotes, no line breaks.'
+            ),
+            prompt=text,
+            max_tokens=300,
+            model='claude-haiku-4-5-20251001',
+        )
+        result = translated.strip().strip('"\'')
+        logger.info(f'[translate] KO→EN: "{text[:40]}" → "{result[:60]}"')
+        return result
+    except Exception as e:
+        logger.warning(f'[translate] 번역 실패, 원본 사용: {e}')
+        return text
 
 # ── 엔진별 포인트 비용 ───────────────────────────────────
 IMAGE_COSTS = {
@@ -40,8 +69,8 @@ STYLE_PRESETS = {
 
 def generate_image(prompt: str, engine: str = 'flux_standard',
                    style_preset: str = None, size: str = '1024x1024',
-                   brand_color: str = None) -> str:
-    """이미지 생성 — https URL 반환"""
+                   brand_color: str = None) -> tuple[str, str]:
+    """이미지 생성 — (url, prompt_used) 반환"""
     if style_preset and style_preset in STYLE_PRESETS:
         prompt = f'{prompt}, {STYLE_PRESETS[style_preset]}'
 
@@ -91,10 +120,10 @@ def replace_background(image_url: str, bg_prompt: str) -> str:
 
 def generate_card_news(texts: list[str], background_prompt: str,
                        brand_color: str = '#2d8f5e',
-                       font_color: str = '#ffffff') -> str:
+                       font_color: str = '#ffffff') -> tuple[str, str]:
     """FLUX 배경 + PIL 한글 텍스트 합성 — 카드뉴스"""
-    bg_url = _generate_flux(background_prompt, 'flux_standard', '1080x1080')
-    return _overlay_text(bg_url, texts, brand_color, font_color)
+    bg_url, prompt_used = _generate_flux(background_prompt, 'flux_standard', '1080x1080')
+    return _overlay_text(bg_url, texts, brand_color, font_color), prompt_used
 
 
 # ════════════════════════════════════════════════════════
@@ -108,7 +137,12 @@ _FAL_MODELS = {
 }
 
 
-def _generate_flux(prompt: str, engine: str, size: str) -> str:
+def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
+    """(image_url, prompt_used) 반환. 한글이면 자동 번역."""
+    original = prompt
+    if _has_korean(prompt):
+        prompt = _translate_prompt(prompt)
+
     from services.config_service import get_config
     api_key = get_config('fal_api_key')
     if not api_key:
@@ -133,14 +167,15 @@ def _generate_flux(prompt: str, engine: str, size: str) -> str:
     )
     resp.raise_for_status()
     data = resp.json()
-    return data['images'][0]['url']
+    return data['images'][0]['url'], prompt if prompt != original else ''
 
 
 # ════════════════════════════════════════════════════════
 # Ideogram 3.0 — 한글 텍스트 포함 이미지
 # ════════════════════════════════════════════════════════
 
-def _generate_ideogram(prompt: str, size: str) -> str:
+def _generate_ideogram(prompt: str, size: str) -> tuple[str, str]:
+    """(image_url, '') 반환. Ideogram은 한글 직접 지원."""
     from services.config_service import get_config
     api_key = get_config('ideogram_api_key')
     if not api_key:
@@ -171,7 +206,7 @@ def _generate_ideogram(prompt: str, size: str) -> str:
     )
     resp.raise_for_status()
     data = resp.json()
-    return data['data'][0]['url']
+    return data['data'][0]['url'], ''
 
 
 # ════════════════════════════════════════════════════════

@@ -73,6 +73,37 @@ def _get_product(supabase, product_id: str) -> dict | None:
 
 # ── 라우트 ────────────────────────────────────────────────────
 
+def _recent_instagram_creations(supabase, user_id: str, brand_id: str | None,
+                                limit: int = 30) -> list[dict]:
+    """최근 인스타그램 생성 이력 (연속/시리즈 dropdown 용)."""
+    try:
+        q = (supabase.table('creations')
+             .select('id,brand_id,output_data,input_data,created_at')
+             .eq('user_id', user_id)
+             .eq('creation_type', 'instagram')
+             .eq('status', 'done')
+             .order('created_at', desc=True)
+             .limit(limit))
+        if brand_id:
+            q = q.eq('brand_id', brand_id)
+        rows = q.execute().data or []
+    except Exception as e:
+        logger.debug(f'[insta] recent creations 실패: {e}')
+        return []
+
+    out = []
+    for r in rows:
+        inp = r.get('input_data') or {}
+        out_data = r.get('output_data') or {}
+        title = (out_data.get('caption') or inp.get('direction') or '')[:60] or '(제목 없음)'
+        out.append({
+            'id':         r.get('id'),
+            'title':      title,
+            'created_at': r.get('created_at', ''),
+        })
+    return out
+
+
 @create_bp.route('/instagram', methods=['GET'])
 @login_required
 def instagram():
@@ -85,12 +116,15 @@ def instagram():
     products      = _accessible_products(supabase,
                                          brand_id=default_brand['id'] if default_brand else None)
     products_images_map = {p['id']: _product_images(p) for p in products}
+    recent_instagrams   = _recent_instagram_creations(
+        supabase, current_user.id, default_brand['id'] if default_brand else None)
 
     return render_template('create/instagram.html',
                            brands=brands,
                            default_brand=default_brand,
                            products=products,
-                           products_images_map=products_images_map)
+                           products_images_map=products_images_map,
+                           recent_instagrams=recent_instagrams)
 
 
 @create_bp.route('/instagram/products', methods=['GET'])
@@ -109,6 +143,32 @@ def instagram_products():
             for p in products
         ],
     })
+
+
+@create_bp.route('/instagram/ref-preview', methods=['GET'])
+@login_required
+def instagram_ref_preview():
+    """시리즈/변형 모드에서 참조 게시물 발췌 미리보기."""
+    supabase = current_app.supabase
+    ref_id   = request.args.get('id', '').strip()
+    if not ref_id:
+        return jsonify(ok=False, message='id 필요')
+    try:
+        r = supabase.table('creations').select(
+            'id,output_data,input_data'
+        ).eq('id', ref_id).eq('user_id', current_user.id).limit(1).execute()
+        if not r.data:
+            return jsonify(ok=False, message='게시물을 찾을 수 없습니다.')
+        row = r.data[0]
+        inp      = row.get('input_data') or {}
+        out_data = row.get('output_data') or {}
+        title    = (out_data.get('caption') or inp.get('direction') or '')[:60] or '(제목 없음)'
+        caption  = out_data.get('caption') or ''
+        excerpt  = caption[:400] if caption else (inp.get('direction') or '')[:400]
+        return jsonify(ok=True, title=title, excerpt=excerpt)
+    except Exception as e:
+        logger.debug(f'[insta] ref-preview 실패: {e}')
+        return jsonify(ok=False, message=str(e))
 
 
 # ─────────────────────────────────────────────────────────────
@@ -512,17 +572,20 @@ def instagram_image_generate():
     try:
         from services.imagen_service import upload_to_supabase
 
+        translated_prompt = ''
+        bg_url = None
+
         if style == 'typography':
             # Ideogram — 한글 텍스트 포함 프롬프트를 직접 전달
             from services.imagen_service import _generate_ideogram
-            img_url = _generate_ideogram(flux_prompt, flux_size_str)
+            img_url, _ = _generate_ideogram(flux_prompt, flux_size_str)
             final_url = upload_to_supabase(img_url, current_user.id,
                                            f'insta_typo_{creation_id[:8]}.jpg')
 
         elif style == 'webtoon':
             from services.imagen_service import _generate_flux
             from services.instagram_service import create_webtoon_image
-            bg_url    = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
+            bg_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
             dialogues = [d for d in [dialogue1, dialogue2] if d]
             data_url  = create_webtoon_image(bg_url, dialogues, pil_size)
             final_url = upload_to_supabase(data_url, current_user.id,
@@ -531,7 +594,7 @@ def instagram_image_generate():
         else:  # realistic_banner (기본)
             from services.imagen_service import _generate_flux
             from services.instagram_service import create_banner_image
-            bg_url    = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
+            bg_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
             texts     = [t for t in [title, subtitle] if t]
             data_url  = create_banner_image(bg_url, texts, brand_color, pil_size)
             final_url = upload_to_supabase(data_url, current_user.id,
@@ -545,7 +608,8 @@ def instagram_image_generate():
             'status':      'done',
         }).eq('id', creation_id).execute()
 
-        return jsonify(ok=True, image_url=final_url, base_image_url=bg_url, cost=cost, creation_id=creation_id)
+        return jsonify(ok=True, image_url=final_url, base_image_url=bg_url, cost=cost,
+                       creation_id=creation_id, translated_prompt=translated_prompt or None)
 
     except Exception as ex:
         logger.error(f'[insta/image-generate] {ex}')

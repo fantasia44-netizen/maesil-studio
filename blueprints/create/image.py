@@ -69,8 +69,9 @@ def image_generate():
     try:
         from services.imagen_service import generate_image, generate_card_news, upload_to_supabase
 
+        translated_prompt = ''
         if engine == 'card_news':
-            image_url = generate_card_news(texts or [prompt], prompt, brand_color)
+            image_url, translated_prompt = generate_card_news(texts or [prompt], prompt, brand_color)
         elif engine == 'bg_replace':
             # Bria 배경 교체 — reference_image_url = 누끼컷, prompt = 배경 설명
             if not reference_image_url:
@@ -78,7 +79,7 @@ def image_generate():
             from services.imagen_service import replace_background
             image_url = replace_background(reference_image_url, prompt)
         else:
-            image_url = generate_image(prompt, engine, style_preset, size, brand_color)
+            image_url, translated_prompt = generate_image(prompt, engine, style_preset, size, brand_color)
 
         # Supabase Storage 업로드
         filename = f'{engine}_{creation_id[:8]}.jpg'
@@ -99,7 +100,8 @@ def image_generate():
             'generation_ms': gen_ms,
         }).eq('id', creation_id).execute()
 
-        return jsonify(ok=True, image_url=public_url, creation_id=creation_id, cost=cost)
+        return jsonify(ok=True, image_url=public_url, creation_id=creation_id, cost=cost,
+                       translated_prompt=translated_prompt or None)
 
     except Exception as e:
         logger.error(f'[IMAGE] generate error: {e}')

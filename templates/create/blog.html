@@ -353,9 +353,12 @@
           </div>
           <div class="col-md-7">
             <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1">프롬프트 <span class="text-muted fw-normal">(영문 권장)</span></label>
+              <label class="form-label small fw-semibold mb-1">프롬프트</label>
               <textarea id="blogRegenPrompt" class="form-control form-control-sm" rows="4"
-                        placeholder="수정할 이미지 설명을 입력하세요"></textarea>
+                        placeholder="수정할 이미지 설명을 입력하세요 (한글 입력 가능, 자동 번역)"></textarea>
+              <div id="blogRegenTranslated" class="d-none mt-1 p-2 rounded" style="background:#f0f8ff;font-size:.75rem;font-family:monospace;color:#0d6efd">
+                <span class="fw-semibold">🔤 번역:</span> <span id="blogRegenTranslatedText"></span>
+              </div>
             </div>
             <div class="mb-3">
               <label class="form-label small fw-semibold mb-1">스타일</label>
@@ -878,7 +881,7 @@ function renderPromptCards(prompts) {
           <div id="bgReplaceRow" class="d-none">
             <textarea id="bgPrompt" class="form-control form-control-sm" rows="2"
                       style="font-size:.78rem;font-family:monospace"
-                      placeholder="원하는 배경 설명 (영문): e.g. soft pastel kitchen with morning sunlight, warm and cozy"></textarea>
+                      placeholder="원하는 배경 설명: e.g. 따뜻한 햇살이 드는 파스텔 주방 (한글 입력 가능)"></textarea>
             <div class="text-muted mt-1" style="font-size:.72rem">
               누끼컷 배경만 교체합니다. 제품·패키지·텍스트는 건드리지 않습니다.
             </div>
@@ -1394,6 +1397,10 @@ async function blogRegenGenerate() {
     document.getElementById('blogRegenPreviewImg').src = data.image_url;
     document.getElementById('blogRegenPreview').classList.remove('d-none');
     document.getElementById('blogRegenReplaceBtn').disabled = false;
+    if (data.translated_prompt) {
+      document.getElementById('blogRegenTranslatedText').textContent = data.translated_prompt;
+      document.getElementById('blogRegenTranslated').classList.remove('d-none');
+    }
   } catch (e) {
     alert('생성 실패: ' + e.message);
   } finally {
