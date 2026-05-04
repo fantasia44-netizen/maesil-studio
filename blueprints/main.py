@@ -117,10 +117,16 @@ def history():
     per_page = 20
 
     # 유형별 표시 우선순위 (대시보드/생성 메뉴 순서와 일치)
+    # image.py  → img_preview / img_ideogram / img_card_news / bg_replace
+    # logo.py   → logo
+    # shorts.py → shorts_script / shorts_video
     TYPE_ORDER = [
         'blog', 'instagram', 'detail_page', 'thumbnail_text', 'ad_copy',
         'press_release', 'thumbnail_image', 'detail_image', 'card_news',
-        'logo', 'brand_package', 'product_launch',
+        'img_preview', 'img_ideogram', 'img_card_news', 'image_generation',
+        'bg_replace', 'bg_remove_adv',
+        'logo', 'shorts_script', 'shorts_video',
+        'brand_package', 'product_launch',
     ]
     GROUP_LIMIT_PER_TYPE = 12
 
