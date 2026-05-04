@@ -226,23 +226,41 @@
 
       <!-- ③ 스타일 선택 -->
       <div class="mb-3">
-        <label class="form-label fw-semibold small mb-2">이미지 스타일</label>
-        <div class="row g-3" id="styleCards">
-          {% for sid, sicon, slabel, sdesc, scost in [
-            ('realistic_banner','bi-camera','실사 배너','라이프스타일 사진 + 하단 한글 텍스트 배너','50P/장'),
-            ('webtoon','bi-emoji-smile','웹툰 컷','웹툰 스타일 씬 + 한글 말풍선 대사','50P/장'),
-            ('typography','bi-fonts','타이포 카드','한글 텍스트를 이미지에 직접 렌더링','400P/장'),
+        <label class="form-label fw-semibold small mb-2">이미지 스타일 <span class="text-muted fw-normal">(선택한 스타일이 모든 컷에 일관 적용)</span></label>
+        <div class="row g-2" id="styleCards">
+          <!-- 기능형: 텍스트 합성 -->
+          {% for sid, sicon, slabel, sdesc in [
+            ('realistic_banner','bi-camera','📸 실사 배너','라이프스타일 사진 + 하단 배너'),
+            ('webtoon','bi-emoji-smile','📖 웹툰 컷','웹툰 씬 + 한글 말풍선'),
           ] %}
-          <div class="col-12 col-md-4">
-            <div class="style-card border rounded p-3 h-100"
+          <div class="col-6 col-md-4 col-lg-3" style="min-width:130px">
+            <div class="style-card border rounded p-2 text-center h-100"
                  style="cursor:pointer;transition:all .2s" data-style="{{ sid }}"
                  onclick="selectStyle('{{ sid }}',this)">
-              <div class="d-flex align-items-center gap-2 mb-2">
-                <i class="bi {{ sicon }}" style="font-size:1.4rem;color:#aaa"></i>
-                <span class="fw-semibold small">{{ slabel }}</span>
-                <span class="badge ms-auto" style="background:#f8f0fb;color:#d63384;font-size:.7rem">{{ scost }}</span>
-              </div>
-              <div class="text-muted" style="font-size:.76rem">{{ sdesc }}</div>
+              <i class="bi {{ sicon }}" style="font-size:1.6rem;color:#aaa;line-height:1.4;display:block"></i>
+              <div class="fw-semibold" style="font-size:.82rem;margin-top:4px">{{ slabel }}</div>
+              <div class="text-muted" style="font-size:.68rem;line-height:1.3;margin-top:2px">{{ sdesc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+          <!-- 감성형: 순수 AI 일러스트 -->
+          {% for sid, semoji, slabel, sdesc in [
+            ('ghibli',        '🌿','지브리풍',       '따뜻한 수채화, 자연 배경'),
+            ('watercolor',    '🎨','수채화 일러스트', '번지는 색감, 몽환적 분위기'),
+            ('pastel_cute',   '🍬','파스텔 귀여운',   '부드럽고 동글동글, 동화풍'),
+            ('nordic',        '🏔️','북유럽 일러스트', '미니멀 모던, 내추럴 색감'),
+            ('flat_modern',   '◼','모던 플랫',        '그래픽 디자인, 굵은 색면'),
+            ('disney',        '✨','디즈니/픽사',      '3D 애니 느낌, 생동감'),
+            ('pencil_sketch', '✏️','펜화/스케치',     '손그림 감성, 선명한 스케치'),
+            ('retro_pop',     '🎸','레트로 팝아트',   '빈티지 포스터, 볼드한 색감'),
+          ] %}
+          <div class="col-6 col-md-4 col-lg-3" style="min-width:130px">
+            <div class="style-card border rounded p-2 text-center h-100"
+                 style="cursor:pointer;transition:all .2s" data-style="{{ sid }}"
+                 onclick="selectStyle('{{ sid }}',this)">
+              <div style="font-size:1.6rem;line-height:1.4">{{ semoji }}</div>
+              <div class="fw-semibold" style="font-size:.82rem;margin-top:4px">{{ slabel }}</div>
+              <div class="text-muted" style="font-size:.68rem;line-height:1.3;margin-top:2px">{{ sdesc }}</div>
             </div>
           </div>
           {% endfor %}
@@ -298,18 +316,16 @@
       <!-- ④-A 단일 이미지 모드 (qty=1) -->
       <div id="singleImgSection" class="d-none">
         <hr class="my-3">
-        <label class="form-label fw-semibold small mb-2" id="textInputLabel">이미지에 들어갈 텍스트</label>
-        <div id="bannerTextFields">
-          <input type="text" id="imgTitle" class="form-control form-control-sm mb-2" placeholder="메인 문구 (15자 이내)" maxlength="20">
-          <input type="text" id="imgSubtitle" class="form-control form-control-sm" placeholder="서브 문구 (20자 이내, 선택)" maxlength="25">
-        </div>
-        <div id="webtoonTextFields" class="d-none">
-          <input type="text" id="dialogue1" class="form-control form-control-sm mb-2" placeholder="첫 번째 말풍선 대사 (20자 이내)" maxlength="25">
-          <input type="text" id="dialogue2" class="form-control form-control-sm" placeholder="두 번째 말풍선 대사 (선택)" maxlength="25">
-        </div>
-        <div id="typoTextFields" class="d-none">
-          <div class="alert alert-info py-2 mb-2" style="font-size:.8rem">
-            <i class="bi bi-info-circle me-1"></i>타이포 카드는 아래 프롬프트에 한글 텍스트를 직접 포함해 주세요
+        <!-- 텍스트 합성형(배너/웹툰)만 표시 -->
+        <div id="textSection">
+          <label class="form-label fw-semibold small mb-2" id="textInputLabel">이미지에 들어갈 텍스트</label>
+          <div id="bannerTextFields">
+            <input type="text" id="imgTitle" class="form-control form-control-sm mb-2" placeholder="메인 문구 (15자 이내)" maxlength="20">
+            <input type="text" id="imgSubtitle" class="form-control form-control-sm" placeholder="서브 문구 (20자 이내, 선택)" maxlength="25">
+          </div>
+          <div id="webtoonTextFields" class="d-none">
+            <input type="text" id="dialogue1" class="form-control form-control-sm mb-2" placeholder="첫 번째 말풍선 대사 (20자 이내)" maxlength="25">
+            <input type="text" id="dialogue2" class="form-control form-control-sm" placeholder="두 번째 말풍선 대사 (선택)" maxlength="25">
           </div>
         </div>
 
@@ -593,6 +609,19 @@ let selectedSubStyle   = null; // 서브 화풍
 let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
 let selectedGravity    = 'bottom-left';
 let selectedTextScale  = 1.0;
+
+// ── 감성 스타일 수식어 (블로그와 동일) ───────────────────────
+const INSTA_STYLE_MODIFIERS = {
+  ghibli:       'Studio Ghibli style, hand-painted watercolor, warm soft pastel colors, detailed natural backgrounds, gentle anime aesthetic, Hayao Miyazaki inspired',
+  watercolor:   'soft watercolor illustration, delicate paint washes, bleeding ink edges, dreamy pastel tones, artistic sketchbook texture, translucent color layers',
+  pastel_cute:  'cute pastel illustration, soft rounded shapes, kawaii aesthetic, gentle pink and mint tones, children\'s book style, warm cozy atmosphere',
+  nordic:       'Scandinavian illustration style, hygge cozy aesthetic, muted earth and sage tones, simple clean folk art shapes, Nordic design inspired',
+  flat_modern:  'modern flat design illustration, bold geometric color blocks, clean editorial graphic style, solid colors with no gradients, professional vector art',
+  disney:       'Pixar Disney 3D animation style, vibrant polished render, expressive rounded characters, warm cinematic lighting, family-friendly commercial quality',
+  pencil_sketch:'hand-drawn pencil sketch illustration, fine detailed line art, crosshatching texture, warm sepia and charcoal tones, artistic sketchbook feel',
+  retro_pop:    'retro pop art illustration, bold halftone dot pattern, vintage poster palette, flat graphic mid-century modern style, bold saturated colors',
+};
+const ILLUST_STYLES = new Set(Object.keys(INSTA_STYLE_MODIFIERS));
 
 // ── 서브스타일 프롬프트 수식어 ────────────────────────────────
 const BANNER_SUBSTYLE = {
@@ -1028,12 +1057,16 @@ function selectRatio(ratio, el) {
 function selectStyle(styleId, el) {
   const styleChanged = selectedStyle !== styleId;
   selectedStyle = styleId;
+  const isIllust = ILLUST_STYLES.has(styleId);
+
   document.querySelectorAll('.style-card').forEach(c => {
     c.style.borderColor=''; c.style.background='';
-    c.querySelector('i').style.color='#aaa';
+    const icon = c.querySelector('i');
+    if (icon) icon.style.color='#aaa';
   });
   el.style.borderColor='#d63384'; el.style.background='#fff0f8';
-  el.querySelector('i').style.color='#d63384';
+  const selIcon = el.querySelector('i');
+  if (selIcon) selIcon.style.color='#d63384';
 
   // 스타일 바뀌면 멀티 플랜 초기화
   if (styleChanged && panelPlans.length > 0) {
@@ -1047,21 +1080,23 @@ function selectStyle(styleId, el) {
   // 단일/멀티 섹션 전환
   _updateImgSections();
 
-  // 단일 모드: 텍스트 필드 전환
-  document.getElementById('bannerTextFields').classList.toggle('d-none', styleId !== 'realistic_banner');
-  document.getElementById('webtoonTextFields').classList.toggle('d-none', styleId !== 'webtoon');
-  document.getElementById('typoTextFields').classList.toggle('d-none', styleId !== 'typography');
-  document.getElementById('textInputLabel').textContent =
-    styleId === 'webtoon'    ? '말풍선 대사' :
-    styleId === 'typography' ? '이미지 텍스트 안내' : '이미지 배너 텍스트';
+  // 감성 일러스트 스타일: 텍스트 합성 불필요 → 해당 섹션 숨김
+  const textSec = document.getElementById('textSection');
+  if (textSec) textSec.classList.toggle('d-none', isIllust);
 
-  // 서브스타일 섹션 show/hide
+  if (!isIllust) {
+    document.getElementById('bannerTextFields').classList.toggle('d-none', styleId !== 'realistic_banner');
+    document.getElementById('webtoonTextFields').classList.toggle('d-none', styleId !== 'webtoon');
+    document.getElementById('textInputLabel').textContent =
+      styleId === 'webtoon' ? '말풍선 대사' : '이미지 배너 텍스트';
+  }
+
+  // 서브스타일 섹션 show/hide (배너/웹툰만)
   const subSec = document.getElementById('subStyleSection');
   const hasSub = (styleId === 'realistic_banner' || styleId === 'webtoon');
   subSec.classList.toggle('d-none', !hasSub);
   document.getElementById('bannerSubStyles').classList.toggle('d-none', styleId !== 'realistic_banner');
   document.getElementById('webtoonSubStyles').classList.toggle('d-none', styleId !== 'webtoon');
-  // 서브스타일 리셋
   selectedSubStyle = null;
   document.querySelectorAll('.substyle-card').forEach(c => { c.style.borderColor=''; c.style.background=''; });
 
@@ -1124,9 +1159,11 @@ async function generateImage() {
   goStep(5);
   _showStep5Single(true);
 
-  // 서브스타일 수식어를 프롬프트에 추가
-  const subMod = _subStyleMod();
-  const finalPrompt = subMod ? `${prompt}, ${subMod}` : prompt;
+  // 감성 스타일 or 서브스타일 수식어 추가
+  const illustMod = INSTA_STYLE_MODIFIERS[selectedStyle] || '';
+  const subMod    = _subStyleMod();
+  const modPart   = illustMod || subMod;
+  const finalPrompt = modPart ? `${prompt}, ${modPart}` : prompt;
 
   const body = {
     style:       selectedStyle,
@@ -1356,8 +1393,10 @@ async function generateAllImages() {
     }
 
     const rawPrompt   = document.getElementById(`p${i}_prompt`)?.value.trim() || p.flux_prompt || '';
+    const illustMod   = INSTA_STYLE_MODIFIERS[selectedStyle] || '';
     const subMod      = _subStyleMod();
-    const flux_prompt = subMod ? `${rawPrompt}, ${subMod}` : rawPrompt;
+    const modPart     = illustMod || subMod;
+    const flux_prompt = modPart ? `${rawPrompt}, ${modPart}` : rawPrompt;
     const title       = document.getElementById(`p${i}_title`)?.value.trim()    || p.title    || '';
     const subtitle    = document.getElementById(`p${i}_subtitle`)?.value.trim() || p.subtitle || '';
     const dialogue1   = document.getElementById(`p${i}_dialogue1`)?.value.trim()|| p.dialogue1|| '';

@@ -466,9 +466,16 @@ def instagram_image_prompt():
     angle_hook  = angle.get('hook',  '') if isinstance(angle, dict) else ''
 
     STYLE_GUIDE = {
-        'realistic_banner': '실사 라이프스타일 사진 스타일. 제품 없이 분위기/감성 장면. 텍스트 없이. 인물이 등장할 경우 기본적으로 East Asian/Korean appearance으로.',
+        'realistic_banner': '실사 라이프스타일 사진 스타일. 제품 없이 분위기/감성 장면. 텍스트 없이. 인물이 등장할 경우 East Asian/Korean appearance.',
         'webtoon':          '한국 웹툰 스타일. 귀여운 캐릭터·장면. 텍스트 없이. 말풍선 공간 남기기. 캐릭터는 East Asian/Korean features.',
-        'typography':       '타이포그래피 디자인 카드. 한글 텍스트를 이미지에 직접 포함. 브랜드 컬러 활용.',
+        'ghibli':           'Studio Ghibli 수채화 일러스트. 따뜻한 파스텔 자연 배경. 지브리 애니 감성. 텍스트 없이.',
+        'watercolor':       '수채화 일러스트. 번지는 물감, 몽환적 파스텔 색감. 텍스트 없이.',
+        'pastel_cute':      '파스텔 귀여운 일러스트. 동글동글한 형태, 카와이 감성, 동화책 스타일. 텍스트 없이.',
+        'nordic':           '북유럽 미니멀 일러스트. 차분한 대지색·세이지톤. 깔끔한 포크아트 느낌. 텍스트 없이.',
+        'flat_modern':      '모던 플랫 일러스트. 굵은 색면 그래픽, 그라디언트 없음, 에디토리얼 벡터아트. 텍스트 없이.',
+        'disney':           'Pixar/Disney 3D 애니메이션 스타일. 생동감 있는 렌더링, 따뜻한 시네마틱 조명. 텍스트 없이.',
+        'pencil_sketch':    '손그림 펜화 스케치. 세밀한 선화, 크로스해칭, 따뜻한 세피아톤. 텍스트 없이.',
+        'retro_pop':        '레트로 팝아트. 굵은 할프톤 도트, 빈티지 포스터 팔레트, 미드센추리 모던. 텍스트 없이.',
     }
     style_guide = STYLE_GUIDE.get(style, STYLE_GUIDE['realistic_banner'])
 
@@ -575,12 +582,15 @@ def instagram_image_generate():
         translated_prompt = ''
         bg_url = None
 
-        if style == 'typography':
-            # Ideogram — 한글 텍스트 포함 프롬프트를 직접 전달
-            from services.imagen_service import _generate_ideogram
-            img_url, _ = _generate_ideogram(flux_prompt, flux_size_str)
+        _ILLUST_STYLES = {'ghibli', 'watercolor', 'pastel_cute', 'nordic',
+                          'flat_modern', 'disney', 'pencil_sketch', 'retro_pop'}
+
+        if style in _ILLUST_STYLES:
+            # 순수 FLUX — PIL 합성 없음
+            from services.imagen_service import _generate_flux
+            img_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
             final_url = upload_to_supabase(img_url, current_user.id,
-                                           f'insta_typo_{creation_id[:8]}.jpg')
+                                           f'insta_{style}_{creation_id[:8]}.jpg')
 
         elif style == 'webtoon':
             from services.imagen_service import _generate_flux
