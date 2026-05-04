@@ -54,21 +54,16 @@ POINT_COSTS = {
     'thumbnail_text':  40,
     'ad_copy':         60,
     'press_release':  200,
-    'brand_package': 1500,
-    'product_launch': 2000,
-    # 이미지 생성 — 엔진별
+    # 이미지 생성 — FLUX Schnell + Ideogram만 운영
     'img_preview':     50,   # FLUX Schnell — 빠른 라이프스타일 씬
-    'img_standard':   300,   # FLUX Pro — 브랜드 에셋
-    'img_hq':         600,   # FLUX Pro Max — 최고화질
-    'img_ideogram':   400,   # Ideogram 3.0 — 한글 타이포
-    'bg_replace':      80,   # Bria — 누끼컷 배경 교체
+    'img_ideogram':   200,   # Ideogram 3.0 — 한글 타이포 (원가 ~110원)
+    'bg_replace':      80,   # Bria — 누끼컷 배경 교체 (원가 ~55원)
     'img_card_news':  800,   # FLUX + PIL 합성 카드뉴스
-    'logo':           800,   # Ideogram 로고 시안
-    'bg_remove_adv':   20,   # fal.ai BiRefNet 고급 배경 제거
+    'logo':           200,   # Ideogram 로고 시안 3종 (1회 생성)
+    'bg_remove_adv':   10,   # fal.ai BiRefNet 고급 배경 제거
     'image_generation': 30,  # 스튜디오 이미지 생성 (FLUX Schnell, 장당)
-    # 쇼츠/릴스 영상
-    'shorts_script':   30,   # Claude 대본 생성
-    'shorts_video':   300,   # FLUX 5장 + TTS + FFmpeg 조립
+    # 쇼츠/릴스 영상 (대본+이미지+TTS+조립 통합)
+    'shorts_video':   300,   # FLUX 5장 + TTS + FFmpeg 조립 all-in-one
 }
 
 # ──────────────────────────────────────────
@@ -130,12 +125,8 @@ CREATION_LABELS = {
     'thumbnail_text':  '썸네일 문구',
     'ad_copy':         '광고 카피',
     'press_release':   '보도자료',
-    'brand_package':   '브랜드 정체성 패키지',
-    'product_launch':  '상품 런칭 패키지',
     # 이미지
     'img_preview':     '이미지 생성',
-    'img_standard':    '이미지 생성 (표준)',
-    'img_hq':          '이미지 생성 (고화질)',
     'img_ideogram':    '이미지 생성 (한글)',
     'bg_replace':      '배경 교체',
     'bg_remove_adv':   '배경 제거',
@@ -145,7 +136,7 @@ CREATION_LABELS = {
     'detail_image':    '상세페이지 이미지',
     'card_news':       '인스타 카드뉴스',
     'logo':            '브랜드 로고',
-    'shorts_script':   '쇼츠 대본',
+    # 영상
     'shorts_video':    '쇼츠/릴스 영상',
 }
 

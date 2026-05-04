@@ -9,12 +9,10 @@ from services.tz_utils import now_kst
 logger = logging.getLogger(__name__)
 
 ENGINE_COST_MAP = {
-    'flux_preview':  'img_preview',
-    'flux_standard': 'img_standard',
-    'flux_hq':       'img_hq',
-    'ideogram':      'img_ideogram',
-    'card_news':     'img_card_news',
-    'bg_replace':    'bg_replace',   # Bria 배경 교체
+    'flux_preview':  'img_preview',   # FLUX Schnell 50P
+    'ideogram':      'img_ideogram',  # Ideogram 200P
+    'card_news':     'img_card_news', # 카드뉴스 800P
+    'bg_replace':    'bg_replace',    # 배경 교체 80P
 }
 
 
@@ -36,9 +34,8 @@ def image_generate():
     if not prompt:
         return jsonify(ok=False, message='프롬프트를 입력하세요.')
 
-    # img2img 는 FLUX Dev 기준으로 비용 산정 (flux_standard 동일)
-    cost_key = ENGINE_COST_MAP.get(engine, 'img_standard')
-    cost = POINT_COSTS.get(cost_key, 300)
+    cost_key = ENGINE_COST_MAP.get(engine, 'img_preview')
+    cost = POINT_COSTS.get(cost_key, 50)
 
     # 포인트 확인
     from services.point_service import get_balance, use_points, InsufficientPoints

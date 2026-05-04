@@ -110,7 +110,7 @@ def shorts_angles():
 @create_bp.route('/shorts/script', methods=['POST'])
 @login_required
 def shorts_script():
-    """5씬 쇼츠 대본 생성 (30P)"""
+    """5씬 쇼츠 대본 생성 (무료 — 포인트는 영상 생성 시 통합 차감)"""
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
@@ -126,12 +126,6 @@ def shorts_script():
 
     from services.claude_service import build_brand_context
     from services.shorts_service import generate_shorts_script
-    from services.point_service import get_balance, use_points, InsufficientPoints
-
-    cost = POINT_COSTS.get('shorts_script', 30)
-    balance = get_balance(current_user.id)
-    if balance < cost:
-        return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
     brand_ctx = build_brand_context(brand, product)
     creation_id = str(uuid.uuid4())
@@ -144,7 +138,7 @@ def shorts_script():
             'creation_type': 'shorts_script',
             'input_data': {'angle': angle, 'style': style},
             'output_data': {},
-            'points_used': cost,
+            'points_used': 0,
             'status': 'generating',
             'model_used': 'claude-haiku-4-5-20251001',
             'created_at': now_kst().isoformat(),
@@ -154,7 +148,7 @@ def shorts_script():
 
     try:
         scenes = generate_shorts_script(brand_ctx, angle, style)
-        use_points(current_user.id, 'shorts_script', creation_id)
+        # 포인트 차감 없음 — 영상 생성(shorts/generate)에서 300P 통합 차감
 
         supabase.table('creations').update({
             'output_data': {'scenes': scenes},
