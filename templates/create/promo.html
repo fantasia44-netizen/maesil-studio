@@ -1,0 +1,332 @@
+{% extends 'base.html' %}
+{% block title %}홍보물 만들기 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}홍보물 만들기{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  {# ── 좌측: 입력 폼 ── #}
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold">
+          <i class="bi bi-megaphone me-2" style="color:#e8355a"></i>홍보물 만들기
+        </h6>
+      </div>
+      <div class="card-body p-4">
+
+        {# ── 유형 선택 ── #}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">자료 유형 <span class="text-danger">*</span></label>
+
+          {# 제안서 그룹 #}
+          <div class="text-muted small fw-semibold mb-1 mt-1" style="letter-spacing:.03em">제안서</div>
+          <div class="row g-2 mb-3">
+            {% for key, meta in promo_types.items() if meta.group == '제안서' %}
+            <div class="col-6">
+              <div class="promo-type-card border rounded p-2 h-100 text-center"
+                   data-type="{{ key }}"
+                   data-cost="{{ point_costs[key] }}"
+                   data-has-page="false"
+                   data-target-ph="{{ meta.target_placeholder }}"
+                   data-extra-ph="{{ meta.extra_placeholder }}"
+                   style="cursor:pointer;transition:.15s">
+                <i class="bi {{ meta.icon }} d-block mb-1" style="font-size:1.3rem;color:{{ meta.color }}"></i>
+                <div class="small fw-semibold" style="font-size:.78rem">{{ meta.label }}</div>
+                <div class="text-muted" style="font-size:.68rem">{{ point_costs[key] }}P</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {# 인쇄물 그룹 #}
+          <div class="text-muted small fw-semibold mb-1" style="letter-spacing:.03em">인쇄물 <span class="fw-normal">(Canva·미리캔버스 편집용 카피)</span></div>
+          <div class="row g-2">
+            {% for key, meta in promo_types.items() if meta.group == '인쇄물' %}
+            <div class="col-4">
+              <div class="promo-type-card border rounded p-2 h-100 text-center"
+                   data-type="{{ key }}"
+                   data-cost="{{ point_costs[key] }}"
+                   data-has-page="{{ 'true' if meta.get('has_page_select') else 'false' }}"
+                   data-target-ph="{{ meta.target_placeholder }}"
+                   data-extra-ph="{{ meta.extra_placeholder }}"
+                   style="cursor:pointer;transition:.15s">
+                <i class="bi {{ meta.icon }} d-block mb-1" style="font-size:1.3rem;color:{{ meta.color }}"></i>
+                <div class="small fw-semibold" style="font-size:.78rem">{{ meta.label }}</div>
+                <div class="text-muted cost-disp" style="font-size:.68rem">
+                  {% if meta.get('has_page_select') %}{{ catalog_page_costs[8].cost }}P~
+                  {% else %}{{ point_costs[key] }}P{% endif %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <input type="hidden" id="selectedType" value="">
+          <div class="mt-2 small text-muted" id="typeDesc"></div>
+        </div>
+
+        {# 카탈로그 분량 선택 #}
+        <div class="mb-3 d-none" id="pageSelectWrap">
+          <label class="form-label fw-semibold small">카탈로그 분량 <span class="text-danger">*</span></label>
+          <div class="row g-2">
+            {% for pages, pmeta in catalog_page_costs.items() %}
+            <div class="col-4">
+              <div class="page-card border rounded p-2 text-center"
+                   data-pages="{{ pages }}" data-cost="{{ pmeta.cost }}"
+                   style="cursor:pointer;transition:.15s">
+                <div class="fw-bold" style="font-size:1rem">{{ pmeta.label }}</div>
+                <div class="text-muted" style="font-size:.72rem">{{ pmeta.cost }}P</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="selectedPages" value="8">
+        </div>
+
+        {# 브랜드 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">브랜드</label>
+          <select id="brandSelect" class="form-select form-select-sm">
+            <option value="">브랜드 선택</option>
+            {% for b in brands %}
+            <option value="{{ b.id }}" {{ 'selected' if b.get('is_default') }}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# 상품 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">상품 <span class="text-muted fw-normal">(선택)</span></label>
+          <select id="productSelect" class="form-select form-select-sm">
+            <option value="">상품 선택 안 함</option>
+          </select>
+        </div>
+
+        {# 대상 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small" id="targetLabel">제안 대상 <span class="text-muted fw-normal">(선택)</span></label>
+          <input type="text" id="targetInput" class="form-control form-control-sm"
+                 placeholder="예: ○○유통 구매팀">
+        </div>
+
+        {# 핵심 내용 #}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">핵심 내용 / 포인트 <span class="text-danger">*</span></label>
+          <textarea id="keyPointsInput" class="form-control" rows="5"
+                    style="font-size:.88rem;line-height:1.7;resize:vertical"
+                    placeholder="예:&#10;• 주요 제안 내용&#10;• 강조할 차별점&#10;• 제공 조건 또는 혜택"></textarea>
+        </div>
+
+        {# 추가 요청 #}
+        <div class="mb-4">
+          <label class="form-label fw-semibold small">추가 요청 사항 <span class="text-muted fw-normal">(선택)</span></label>
+          <textarea id="extraInput" class="form-control" rows="2"
+                    style="font-size:.88rem;resize:vertical"
+                    placeholder="예: 특정 조건, 포함/제외할 내용 등"></textarea>
+        </div>
+
+        <button id="generateBtn" class="btn w-100 fw-semibold py-2"
+                style="background:#e8355a;color:#fff;font-size:.95rem" disabled>
+          <span id="btnText">
+            <i class="bi bi-cpu me-2"></i>자료 생성하기
+            <span id="btnCost" class="ms-1 opacity-75" style="font-size:.82rem"></span>
+          </span>
+          <span id="btnLoading" class="d-none">
+            <span class="spinner-border spinner-border-sm me-2"></span>열심히 작성 중이에요 ✍️
+          </span>
+        </button>
+        <div id="errorMsg" class="alert alert-danger mt-3 d-none small py-2"></div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── 우측: 결과 ── #}
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold" id="resultTitle">
+          <i class="bi bi-megaphone me-2 text-muted"></i>생성 결과
+        </h6>
+        <button id="copyBtn" class="btn btn-sm btn-outline-secondary d-none">
+          <i class="bi bi-clipboard me-1"></i>복사
+        </button>
+      </div>
+      <div class="card-body p-4">
+        <div id="resultPlaceholder" class="text-center py-5 text-muted">
+          <i class="bi bi-megaphone fs-1 d-block mb-3" style="opacity:.2"></i>
+          <div class="small">유형을 선택하고 내용을 입력한 뒤<br>자료 생성하기를 눌러주세요</div>
+        </div>
+        <div id="resultContent" class="d-none">
+          <div id="canvaHint" class="alert alert-light border mb-3 py-2 d-none" style="font-size:.8rem">
+            <i class="bi bi-lightbulb text-warning me-1"></i>
+            아래 카피를 <strong>Canva</strong> 또는 <strong>미리캔버스</strong>에 붙여넣어 디자인을 완성하세요.
+          </div>
+          <div id="resultBody" style="font-size:.9rem;line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.promo-type-card { background:#fff; }
+.promo-type-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); transform:translateY(-1px); }
+.promo-type-card.selected { border-color:#e8355a !important; background:#fff5f7; }
+.page-card { background:#fff; }
+.page-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); transform:translateY(-1px); }
+.page-card.selected { border-color:#198754 !important; background:#f0faf4; }
+</style>
+
+<script>
+const CATALOG_PAGE_COSTS = {{ catalog_page_costs | tojson }};
+const PRINTOUT_GROUPS    = ['인쇄물'];
+
+const typeCards     = document.querySelectorAll('.promo-type-card');
+const selectedTypeEl= document.getElementById('selectedType');
+const generateBtn   = document.getElementById('generateBtn');
+const pageSelectWrap= document.getElementById('pageSelectWrap');
+const pageCards     = document.querySelectorAll('.page-card');
+const selectedPagesEl = document.getElementById('selectedPages');
+let currentCost = 0;
+
+// ── 유형 선택
+typeCards.forEach(card => {
+  card.addEventListener('click', () => {
+    typeCards.forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedTypeEl.value = card.dataset.type;
+
+    document.getElementById('targetInput').placeholder = card.dataset.targetPh;
+    document.getElementById('extraInput').placeholder  = card.dataset.extraPh;
+
+    const hasPage = card.dataset.hasPage === 'true';
+    pageSelectWrap.classList.toggle('d-none', !hasPage);
+
+    if (hasPage) {
+      selectPage(8);
+    } else {
+      currentCost = parseInt(card.dataset.cost) || 0;
+      updateBtnCost();
+      generateBtn.disabled = false;
+    }
+  });
+});
+
+// ── 분량 선택 (카탈로그)
+function selectPage(pages) {
+  pageCards.forEach(c => c.classList.toggle('selected', parseInt(c.dataset.pages) === pages));
+  selectedPagesEl.value = pages;
+  currentCost = (CATALOG_PAGE_COSTS[pages] || {}).cost || 0;
+  updateBtnCost();
+  generateBtn.disabled = false;
+}
+pageCards.forEach(card => {
+  card.addEventListener('click', () => selectPage(parseInt(card.dataset.pages)));
+});
+
+function updateBtnCost() {
+  document.getElementById('btnCost').textContent = currentCost ? `(${currentCost}P)` : '';
+}
+
+// ── 브랜드 → 상품 갱신
+const brandSelect   = document.getElementById('brandSelect');
+const productSelect = document.getElementById('productSelect');
+brandSelect.addEventListener('change', async () => {
+  productSelect.innerHTML = '<option value="">상품 선택 안 함</option>';
+  const bid = brandSelect.value;
+  if (!bid) return;
+  try {
+    const r = await fetch(`/create/blog/products?brand_id=${bid}`);
+    const d = await r.json();
+    (d.products || []).forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name + (p.price ? ` (${p.price.toLocaleString()}원)` : '');
+      productSelect.appendChild(o);
+    });
+  } catch(e) {}
+});
+
+// ── 생성
+generateBtn.addEventListener('click', async () => {
+  const docType   = selectedTypeEl.value;
+  const keyPoints = document.getElementById('keyPointsInput').value.trim();
+  const errorEl   = document.getElementById('errorMsg');
+
+  if (!docType)    { showError('자료 유형을 선택해주세요.'); return; }
+  if (!keyPoints)  { showError('핵심 내용을 입력해주세요.'); return; }
+  errorEl.classList.add('d-none');
+
+  const body = {
+    doc_type:   docType,
+    brand_id:   brandSelect.value,
+    product_id: productSelect.value,
+    target:     document.getElementById('targetInput').value.trim(),
+    key_points: keyPoints,
+    extra:      document.getElementById('extraInput').value.trim(),
+  };
+  if (docType === 'catalog') body.catalog_pages = parseInt(selectedPagesEl.value) || 8;
+
+  setLoading(true);
+  try {
+    const res  = await fetch('/create/promo/generate', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.ok) { showError(data.message || '생성 실패'); return; }
+    showResult(data.text, docType);
+  } catch(e) {
+    showError('오류가 발생했습니다: ' + e.message);
+  } finally {
+    setLoading(false);
+  }
+});
+
+function setLoading(on) {
+  generateBtn.disabled = on;
+  document.getElementById('btnText').classList.toggle('d-none', on);
+  document.getElementById('btnLoading').classList.toggle('d-none', !on);
+}
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.classList.remove('d-none');
+}
+function showResult(text, type) {
+  document.getElementById('resultPlaceholder').classList.add('d-none');
+  document.getElementById('resultContent').classList.remove('d-none');
+
+  // 인쇄물이면 Canva 힌트 표시
+  const isprint = ['catalog','leaflet','flyer'].includes(type);
+  document.getElementById('canvaHint').classList.toggle('d-none', !isprint);
+
+  const html = text
+    .replace(/^## (.+)$/gm, '<h5 class="fw-bold mt-4 mb-2" style="color:#222">$1</h5>')
+    .replace(/^### (.+)$/gm, '<h6 class="fw-semibold mt-3 mb-1">$1</h6>')
+    .replace(/^\*\*(.+?)\*\*/gm, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li class="mb-1">$1</li>')
+    .replace(/(<li[\s\S]*?<\/li>)/g, '<ul class="ps-3 mb-2">$1</ul>')
+    .replace(/\n{2,}/g, '</p><p class="mb-2">')
+    .replace(/\n/g, '<br>');
+  document.getElementById('resultBody').innerHTML = '<p class="mb-2">' + html + '</p>';
+
+  const typeMeta = {{ promo_types | tojson }};
+  const label    = (typeMeta[type] || {}).label || '결과';
+  const suffix   = type === 'catalog' ? ` (${selectedPagesEl.value}p)` : '';
+  document.getElementById('resultTitle').innerHTML =
+    `<i class="bi bi-check-circle me-2" style="color:#198754"></i>${label}${suffix} 완성`;
+
+  const copyBtn = document.getElementById('copyBtn');
+  copyBtn.classList.remove('d-none');
+  copyBtn.onclick = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>복사됨';
+      setTimeout(() => { copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+    });
+  };
+}
+</script>
+{% endblock %}

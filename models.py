@@ -67,8 +67,8 @@ POINT_COSTS = {
     # 홍보 자료 (제안서·카탈로그·리플릿·전단지)
     'business_proposal':   150,  # 거래처 제안서
     'sponsorship_proposal':150,  # 협찬 제안서
-    'catalog':             200,  # 카탈로그
-    'leaflet':             120,  # 리플릿
+    'catalog':             150,  # 카탈로그 8p 기본 (printout.py에서 분량별 override)
+    'leaflet':             120,  # 리플릿 (3단 접이 6패널)
     'flyer':                80,  # 전단지
 }
 
@@ -160,15 +160,15 @@ MENU_REGISTRY = [
     # (label, icon, endpoint, required_plan_feature, group)
     ('대시보드',    'bi-speedometer2',        'main.dashboard',       None,  '홈'),
     ('브랜드 관리', 'bi-building',            'brand.index',          None,  '홈'),
+    ('브랜드 로고', 'bi-pentagon',            'create.logo',          None,  '홈'),
     ('상품 관리',   'bi-box-seam',            'product.index',        None,  '상품'),
     # ── 콘텐츠 생성
     ('블로그',      'bi-file-text',           'create.blog',          None,  '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',     None,  '콘텐츠 생성'),
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
     ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page',   None,  '콘텐츠 생성'),
-    ('브랜드 로고', 'bi-pentagon',            'create.logo',          None,  '콘텐츠 생성'),
-    # ── 홍보 자료 (제안서·카탈로그·리플릿·전단지)
-    ('제안서 만들기','bi-file-earmark-text',  'create.proposal',      None,  '홍보 자료'),
+    # ── 홍보물
+    ('홍보물 만들기', 'bi-megaphone',          'create.promo',     None, '홍보물'),
     # ── 관리
     ('생성 이력',   'bi-clock-history',       'main.history',         None,  '관리'),
     ('구독 관리',   'bi-credit-card',         'billing.index',        None,  '관리'),
