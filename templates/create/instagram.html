@@ -1646,22 +1646,66 @@ function _showStep5Carousel() {
   carouselShowImage(0);
 }
 
+let _thumbDragSrc = -1;
+
 function _buildThumbStrip() {
   const strip = document.getElementById('thumbStrip');
   strip.innerHTML = '';
   generatedImages.forEach((url, i) => {
     const th = document.createElement('div');
-    th.id = `thumb_${i}`;
-    th.style.cssText = 'cursor:pointer;flex-shrink:0';
+    th.id            = `thumb_${i}`;
+    th.draggable     = true;
+    th.dataset.idx   = i;
+    th.style.cssText = 'cursor:grab;flex-shrink:0;position:relative';
+    th.title         = '드래그해서 순서 변경';
+
     if (url) {
       th.innerHTML = `<img src="${url}"
         style="width:52px;height:52px;object-fit:cover;border-radius:6px;
-               border:3px solid ${i === 0 ? '#d63384' : '#dee2e6'};transition:all .2s"
-        onclick="carouselShowImage(${i})">`;
+               border:3px solid ${i === carouselIdx ? '#d63384' : '#dee2e6'};
+               transition:all .2s;pointer-events:none">
+        <span style="position:absolute;bottom:1px;right:3px;font-size:.55rem;
+               color:#fff;text-shadow:0 0 3px #000;font-weight:700">${i+1}</span>`;
     } else {
       th.innerHTML = `<div style="width:52px;height:52px;border-radius:6px;border:2px dashed #ccc;
         display:flex;align-items:center;justify-content:center;font-size:.65rem;color:#aaa">실패</div>`;
     }
+
+    th.addEventListener('click', () => carouselShowImage(i));
+
+    // 드래그 이벤트
+    th.addEventListener('dragstart', e => {
+      _thumbDragSrc = i;
+      e.dataTransfer.effectAllowed = 'move';
+      th.style.opacity = '0.4';
+    });
+    th.addEventListener('dragend', () => { th.style.opacity = '1'; });
+    th.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    th.addEventListener('dragenter', () => { th.style.outline = '2px solid #d63384'; });
+    th.addEventListener('dragleave', () => { th.style.outline = ''; });
+    th.addEventListener('drop', e => {
+      e.preventDefault();
+      th.style.outline = '';
+      const src = _thumbDragSrc;
+      const dst = i;
+      if (src === dst || src < 0) return;
+      // 배열 순서 변경
+      const imgMoved    = generatedImages.splice(src, 1)[0];
+      const manualMoved = panelManualImages.splice(src, 1)[0];
+      const planMoved   = panelPlans.splice(src, 1)[0];
+      generatedImages.splice(dst, 0, imgMoved);
+      panelManualImages.splice(dst, 0, manualMoved);
+      panelPlans.splice(dst, 0, planMoved);
+      // 현재 포커스 인덱스 보정
+      let newIdx = carouselIdx;
+      if (src === carouselIdx) newIdx = dst;
+      else if (src < carouselIdx && dst >= carouselIdx) newIdx--;
+      else if (src > carouselIdx && dst <= carouselIdx) newIdx++;
+      _buildThumbStrip();
+      carouselShowImage(newIdx);
+      _thumbDragSrc = -1;
+    });
+
     strip.appendChild(th);
   });
 }

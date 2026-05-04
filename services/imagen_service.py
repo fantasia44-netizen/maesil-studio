@@ -137,11 +137,21 @@ _FAL_MODELS = {
 }
 
 
+# Flux는 CJK 문자를 생성하려 할 때 중국어/일본어로 출력하는 경향 — 항상 억제
+_NO_CJK = (
+    ', no Chinese characters, no Japanese characters, no kanji, no hanzi, '
+    'no CJK text on signs or labels, Latin alphabet only for any visible text'
+)
+
+
 def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
     """(image_url, prompt_used) 반환. 한글이면 자동 번역."""
     original = prompt
     if _has_korean(prompt):
         prompt = _translate_prompt(prompt)
+
+    # CJK 문자 억제 (Flux가 중국어/일본어 글자를 생성하는 현상 차단)
+    prompt = prompt.rstrip() + _NO_CJK
 
     from services.config_service import get_config
     api_key = get_config('fal_api_key')
