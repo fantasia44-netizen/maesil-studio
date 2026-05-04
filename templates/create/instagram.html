@@ -46,10 +46,43 @@
               <option value="{{ p.id }}">{{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}</option>
               {% endfor %}
             </select>
-            <!-- 이미지 피커 -->
-            <div id="productImgPicker" class="mt-2 d-none">
-              <div class="text-muted mb-1" style="font-size:.72rem"><i class="bi bi-hand-index me-1"></i>이미지 기반으로 사용할 사진 선택</div>
+          </div>
+        </div>
+
+        <!-- 제품 슬라이드 추가 (선택) -->
+        <div class="mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="productSlideToggle" onchange="toggleProductSlide(this.checked)">
+            <label class="form-check-label small fw-semibold" for="productSlideToggle">
+              <i class="bi bi-layers me-1" style="color:#d63384"></i>제품 슬라이드 추가 <span class="text-muted fw-normal">(배경교체 · 선택)</span>
+            </label>
+          </div>
+          <div id="productSlideConfig" class="d-none mt-2 p-3 rounded" style="background:#fff0f8;border:1px solid #f9a8d4">
+            <div class="text-muted small mb-3">제품 사진 배경을 교체하고 텍스트를 넣어 캐러셀 슬라이드로 추가합니다
+              <span class="badge bg-light text-dark ms-1" style="font-size:.7rem">80P</span>
+            </div>
+            <!-- 제품 이미지 선택 -->
+            <div id="productImgPicker" class="mb-2 d-none">
+              <div class="text-muted mb-1" style="font-size:.72rem"><i class="bi bi-hand-index me-1"></i>슬라이드에 사용할 제품 사진 선택</div>
               <div id="productImgList" class="d-flex flex-wrap gap-2"></div>
+            </div>
+            <div id="productSlideNoImg" class="text-muted small mb-2">상품을 먼저 선택해주세요</div>
+            <!-- 배경 묘사 -->
+            <div class="mb-2">
+              <label class="small fw-semibold mb-1">배경 묘사 <span class="text-danger">*</span></label>
+              <input id="productSlideBgPrompt" class="form-control form-control-sm"
+                     placeholder="예: 밝은 카페 테이블, 오후 햇살 가득 / bright cafe table, warm sunlight">
+            </div>
+            <!-- 텍스트 오버레이 -->
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="small fw-semibold mb-1">제목 텍스트</label>
+                <input id="productSlideTitle" class="form-control form-control-sm" placeholder="신제품 출시">
+              </div>
+              <div class="col-sm-6">
+                <label class="small fw-semibold mb-1">부제목 (선택)</label>
+                <input id="productSlideSubtitle" class="form-control form-control-sm" placeholder="지금 만나보세요">
+              </div>
             </div>
           </div>
         </div>
@@ -133,8 +166,8 @@
     <button class="btn btn-sm btn-outline-secondary" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>소구포인트 재선택</button>
     <div class="d-flex gap-2">
       <span id="step3AngleBadge" class="badge rounded-pill px-3 py-2" style="background:#fff0f8;color:#d63384;font-size:.8rem"></span>
-      <button class="btn btn-sm fw-semibold" style="background:#d63384;color:#fff" onclick="goStep(4)">
-        이미지 만들기 <i class="bi bi-arrow-right ms-1"></i>
+      <button class="btn btn-sm fw-semibold" id="step3NextBtn" style="background:#d63384;color:#fff" onclick="step3Next()">
+        <span id="step3NextText">이미지 만들기</span> <i class="bi bi-arrow-right ms-1"></i>
       </button>
     </div>
   </div>
@@ -586,7 +619,18 @@
           <button class="btn btn-sm btn-outline-secondary" onclick="copyCaption()"><i class="bi bi-clipboard me-1"></i></button>
         </div>
         <div class="card-body p-3">
-          <div id="finalCaption" style="white-space:pre-wrap;font-size:.87rem;line-height:1.8;max-height:280px;overflow-y:auto"></div>
+          <div id="captionDisplayArea">
+            <div id="finalCaption" style="white-space:pre-wrap;font-size:.87rem;line-height:1.8;max-height:280px;overflow-y:auto"></div>
+          </div>
+          <div id="captionEditArea" class="d-none">
+            <textarea id="captionInlineTextarea" class="form-control" rows="8"
+                      style="font-size:.87rem;line-height:1.8;resize:vertical"></textarea>
+            <div class="d-flex gap-2 mt-2">
+              <button onclick="saveCaptionInline()" class="btn btn-sm fw-semibold flex-fill"
+                      style="background:#d63384;color:#fff">저장</button>
+              <button onclick="cancelCaptionInline()" class="btn btn-sm btn-outline-secondary flex-fill">취소</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -603,11 +647,14 @@
 
   <!-- 하단 액션 -->
   <div class="mt-3 d-flex gap-2 flex-wrap">
-    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(3)">
-      <i class="bi bi-chat-text me-1"></i>캡션 수정
+    <button class="btn btn-sm btn-outline-secondary" onclick="toggleCaptionInline()">
+      <i class="bi bi-pencil me-1"></i>캡션 수정
     </button>
     <button class="btn btn-sm btn-outline-secondary" onclick="goStep(2)">
       <i class="bi bi-arrow-left-circle me-1"></i>소구포인트 재선택
+    </button>
+    <button id="productSlideGenBtn" class="btn btn-sm btn-outline-primary d-none" onclick="generateProductSlide()">
+      <i class="bi bi-layers me-1"></i>제품 슬라이드 추가
     </button>
     <button class="btn btn-sm btn-outline-secondary" onclick="goStep(1)">
       <i class="bi bi-house me-1"></i>처음부터
@@ -642,6 +689,7 @@ let carouselIdx        = 0;
 let regenModalIdx      = -1;   // 수정생성 팝업 대상 패널 인덱스
 let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
 let selectedSubStyle   = null; // 서브 화풍
+let currentCaptionTab  = 'short'; // Step 5 현재 캡션 탭
 let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
 let selectedGravity    = 'bottom-left';
 let selectedTextScale  = 1.0;
@@ -768,35 +816,134 @@ async function instaLoadRefPreview(refId) {
 // 초기 실행
 _instaApplyRelationMode(document.getElementById('relationMode').value);
 
-// ── 상품 이미지 피커 ─────────────────────────────────────────
+// ── 상품 이미지 피커 (제품 슬라이드 전용) ────────────────────
 function updateProductImage() {
-  const pid   = document.getElementById('productSelect').value;
-  const picker= document.getElementById('productImgPicker');
-  const list  = document.getElementById('productImgList');
-  const imgs  = (pid && PRODUCT_IMAGES[pid]) ? PRODUCT_IMAGES[pid] : [];
-  if (!imgs.length) { productImageUrl=''; picker.classList.add('d-none'); return; }
-  picker.classList.remove('d-none');
-  list.innerHTML='';
-  productImageUrl = imgs[0];
-  imgs.forEach((url, idx) => {
-    const w = document.createElement('div');
-    w.style.cursor='pointer';
-    w.innerHTML=`<img src="${url}" id="pimg_${idx}"
-      style="width:60px;height:60px;object-fit:cover;border-radius:8px;
-             border:3px solid ${idx===0?'#d63384':'#dee2e6'};transition:all .2s"
-      onclick="selectProductImg('${url}',${idx},${imgs.length})">`;
-    list.appendChild(w);
-  });
+  const pid  = document.getElementById('productSelect').value;
+  const list = document.getElementById('productImgList');
+  const imgs = (pid && PRODUCT_IMAGES[pid]) ? PRODUCT_IMAGES[pid] : [];
+  if (list) list.innerHTML = '';
+  productImageUrl = imgs[0] || '';
+  if (imgs.length) {
+    imgs.forEach((url, idx) => {
+      const w = document.createElement('div');
+      w.style.cursor = 'pointer';
+      w.innerHTML = `<img src="${url}" id="pimg_${idx}"
+        style="width:60px;height:60px;object-fit:cover;border-radius:8px;
+               border:3px solid ${idx===0?'#d63384':'#dee2e6'};transition:all .2s"
+        onclick="selectProductImg('${url}',${idx},${imgs.length})">`;
+      if (list) list.appendChild(w);
+    });
+    const picker = document.getElementById('productImgPicker');
+    const noImg  = document.getElementById('productSlideNoImg');
+    if (!document.getElementById('productSlideConfig').classList.contains('d-none')) {
+      if (picker) picker.classList.remove('d-none');
+      if (noImg)  noImg.classList.add('d-none');
+    }
+  } else {
+    const picker = document.getElementById('productImgPicker');
+    const noImg  = document.getElementById('productSlideNoImg');
+    if (picker) picker.classList.add('d-none');
+    if (noImg && !document.getElementById('productSlideConfig').classList.contains('d-none'))
+      noImg.classList.remove('d-none');
+  }
 }
 function selectProductImg(url, idx, total) {
   productImageUrl = url;
   for (let i=0;i<total;i++) {
-    const img=document.getElementById('pimg_'+i);
-    if(img) img.style.borderColor = (i===idx)?'#d63384':'#dee2e6';
+    const img = document.getElementById('pimg_'+i);
+    if (img) img.style.borderColor = (i===idx)?'#d63384':'#dee2e6';
   }
 }
 document.getElementById('productSelect').addEventListener('change', updateProductImage);
 updateProductImage();
+
+// ── 제품 슬라이드 토글 ────────────────────────────────────────
+function toggleProductSlide(checked) {
+  document.getElementById('productSlideConfig').classList.toggle('d-none', !checked);
+  const slideBtn = document.getElementById('productSlideGenBtn');
+  if (slideBtn) slideBtn.classList.toggle('d-none', !checked);
+  if (checked) updateProductImage();
+}
+
+// ── Step 3 → 다음 (이미지 있으면 Step 5 바로) ────────────────
+function step3Next() {
+  if (generatedImages.length > 0) {
+    if (generatedImages.length === 1) {
+      _showStep5Single(false, generatedImages[0]);
+    } else {
+      _showStep5Carousel();
+    }
+    goStep(5);
+  } else {
+    goStep(4);
+  }
+}
+
+// ── Step 5 캡션 인라인 편집 ──────────────────────────────────
+function toggleCaptionInline() {
+  const display  = document.getElementById('captionDisplayArea');
+  const editArea = document.getElementById('captionEditArea');
+  if (!editArea.classList.contains('d-none')) { cancelCaptionInline(); return; }
+  const text = captionData[currentCaptionTab] || document.getElementById('finalCaption').textContent || '';
+  document.getElementById('captionInlineTextarea').value = text;
+  display.classList.add('d-none');
+  editArea.classList.remove('d-none');
+}
+function saveCaptionInline() {
+  const val = document.getElementById('captionInlineTextarea').value;
+  captionData[currentCaptionTab] = val;
+  document.getElementById('finalCaption').textContent = val;
+  document.getElementById('captionDisplayArea').classList.remove('d-none');
+  document.getElementById('captionEditArea').classList.add('d-none');
+}
+function cancelCaptionInline() {
+  document.getElementById('captionDisplayArea').classList.remove('d-none');
+  document.getElementById('captionEditArea').classList.add('d-none');
+}
+
+// ── 제품 슬라이드 생성 ────────────────────────────────────────
+async function generateProductSlide() {
+  const imgUrl   = productImageUrl;
+  const bgPrompt = (document.getElementById('productSlideBgPrompt')?.value || '').trim();
+  const title    = (document.getElementById('productSlideTitle')?.value    || '').trim();
+  const subtitle = (document.getElementById('productSlideSubtitle')?.value || '').trim();
+
+  if (!imgUrl)   { alert('제품 이미지를 선택해주세요 (상품 선택 후 슬라이드 설정에서 사진을 선택하세요).'); return; }
+  if (!bgPrompt) { alert('배경 묘사를 입력해주세요.'); return; }
+
+  const btn = document.getElementById('productSlideGenBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>생성 중...';
+
+  try {
+    const res  = await fetch('{{ url_for("create.instagram_product_slide") }}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        product_image_url: imgUrl,
+        bg_prompt: bgPrompt,
+        title, subtitle,
+        brand_color: selectedBrandColor || '#e8355a',
+        size: selectedRatio,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    generatedImages.push(data.image_url);
+    panelManualImages.push(null);
+    document.getElementById('singleImageView').classList.add('d-none');
+    document.getElementById('carouselView').classList.remove('d-none');
+    _buildThumbStrip();
+    carouselShowImage(generatedImages.length - 1);
+    alert(`제품 슬라이드가 추가되었습니다 (${data.cost}P 사용)`);
+  } catch (err) {
+    alert('슬라이드 생성 실패: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-layers me-1"></i>제품 슬라이드 추가';
+  }
+}
 
 // 브랜드 변경
 document.getElementById('brandSelect').addEventListener('change', async function() {
@@ -979,6 +1126,10 @@ function parseCaptionText(text) {
   switchCaption('short');
   document.getElementById('hashtagBox').textContent    = hashtagText;
   document.getElementById('finalHashtags').textContent = hashtagText;
+
+  // 이미 이미지가 있으면 "완성 보기"로 버튼 텍스트 변경
+  const nextText = document.getElementById('step3NextText');
+  if (nextText) nextText.textContent = generatedImages.length > 0 ? '완성 보기' : '이미지 만들기';
 }
 
 /** 캡션 후처리: 마크다운 잔재 제거 */
@@ -1012,6 +1163,7 @@ function switchCaption(tab, el) {
     document.querySelectorAll('[data-tab], #step5 .nav-link, #step3 .nav-link').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
   }
+  currentCaptionTab = tab;
   const text = captionData[tab] || captionData.medium || captionData.long || '';
   document.getElementById('captionTextArea').value = text;
   document.getElementById('finalCaption').textContent = text;

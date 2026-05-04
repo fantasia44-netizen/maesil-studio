@@ -663,6 +663,97 @@ def instagram_recomposite_banner():
         return jsonify(ok=False, message=str(e))
 
 
+@create_bp.route('/instagram/product-slide', methods=['POST'])
+@login_required
+def instagram_product_slide():
+    """제품 이미지 + Bria 배경 교체 + PIL 배너 오버레이 → 슬라이드 (80P)"""
+    supabase = current_app.supabase
+    data = request.get_json(force=True) or {}
+
+    product_image_url = (data.get('product_image_url') or '').strip()
+    bg_prompt         = (data.get('bg_prompt')         or '').strip()
+    title             = (data.get('title')             or '').strip()
+    subtitle          = (data.get('subtitle')          or '').strip()
+    brand_color       = (data.get('brand_color')       or '#e8355a').strip()
+    img_size          = (data.get('size')              or '1:1').strip()
+
+    if not product_image_url:
+        return jsonify(ok=False, message='제품 이미지 URL이 필요합니다.')
+    if not bg_prompt:
+        return jsonify(ok=False, message='배경 묘사를 입력해주세요.')
+
+    cost = POINT_COSTS.get('bg_replace', 80)
+    from services.point_service import get_balance, use_points, InsufficientPoints
+    balance = get_balance(current_user.id)
+    if balance < cost:
+        return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
+
+    creation_id = str(uuid.uuid4())
+    try:
+        supabase.table('creations').insert({
+            'id': creation_id,
+            'user_id': current_user.id,
+            'creation_type': 'bg_replace',
+            'input_data': {'product_image_url': product_image_url, 'bg_prompt': bg_prompt},
+            'output_data': {},
+            'points_used': cost,
+            'status': 'generating',
+            'model_used': 'bria',
+            'created_at': now_kst().isoformat(),
+        }).execute()
+    except Exception as e:
+        logger.error(f'[product-slide] creation insert error: {e}')
+
+    try:
+        from services.imagen_service import (
+            replace_background, upload_to_supabase, _has_korean, _translate_prompt,
+        )
+        from services.instagram_service import create_banner_image
+
+        _, pil_size = SIZE_MAP.get(img_size, SIZE_MAP['1:1'])
+
+        # 한글 bg_prompt → 영어 번역
+        eng_prompt = _translate_prompt(bg_prompt) if _has_korean(bg_prompt) else bg_prompt
+
+        # 1. Bria 배경 교체
+        replaced_url = replace_background(product_image_url, eng_prompt)
+
+        # 2. 텍스트 오버레이 (있을 때만)
+        texts = [t for t in [title, subtitle] if t]
+        if texts:
+            data_url = create_banner_image(replaced_url, texts, brand_color, pil_size)
+        else:
+            import requests as _req, base64 as _b64
+            from io import BytesIO as _BytesIO
+            from PIL import Image as _Image
+            r = _req.get(replaced_url, timeout=30)
+            img = _Image.open(_BytesIO(r.content)).convert('RGB').resize(pil_size, _Image.LANCZOS)
+            buf = _BytesIO()
+            img.save(buf, format='JPEG', quality=93)
+            data_url = 'data:image/jpeg;base64,' + _b64.b64encode(buf.getvalue()).decode()
+
+        filename = f'insta_pslide_{creation_id[:8]}.jpg'
+        final_url = upload_to_supabase(data_url, current_user.id, filename)
+
+        try:
+            use_points(current_user.id, 'bg_replace', creation_id)
+        except InsufficientPoints:
+            supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+            return jsonify(ok=False, message='포인트가 부족합니다.')
+
+        supabase.table('creations').update({
+            'output_data': {'image_url': final_url},
+            'status': 'done',
+        }).eq('id', creation_id).execute()
+
+        return jsonify(ok=True, image_url=final_url, cost=cost)
+
+    except Exception as e:
+        logger.error(f'[product-slide] error: {e}')
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        return jsonify(ok=False, message=f'슬라이드 생성 실패: {str(e)}')
+
+
 @create_bp.route('/instagram/recomposite-webtoon', methods=['POST'])
 @login_required
 def instagram_recomposite_webtoon():
