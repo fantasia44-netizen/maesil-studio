@@ -66,6 +66,9 @@ POINT_COSTS = {
     'logo':           800,   # Ideogram 로고 시안
     'bg_remove_adv':   20,   # fal.ai BiRefNet 고급 배경 제거
     'image_generation': 30,  # 스튜디오 이미지 생성 (FLUX Schnell, 장당)
+    # 쇼츠/릴스 영상
+    'shorts_script':   30,   # Claude 대본 생성
+    'shorts_video':   300,   # FLUX 5장 + TTS + FFmpeg 조립
 }
 
 # ──────────────────────────────────────────
@@ -142,6 +145,8 @@ CREATION_LABELS = {
     'detail_image':    '상세페이지 이미지',
     'card_news':       '인스타 카드뉴스',
     'logo':            '브랜드 로고',
+    'shorts_script':   '쇼츠 대본',
+    'shorts_video':    '쇼츠/릴스 영상',
 }
 
 
@@ -155,6 +160,7 @@ MENU_REGISTRY = [
     ('상품 관리',   'bi-box-seam',            'product.index',      None,        '상품'),
     ('블로그',      'bi-file-text',           'create.blog',        None,        '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',   None,        '콘텐츠 생성'),
+    ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',      None,        '콘텐츠 생성'),
     ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page', None,        '콘텐츠 생성'),
     ('썸네일 문구', 'bi-card-heading',        'create.thumbnail',   None,        '콘텐츠 생성'),
     ('광고 카피',   'bi-megaphone',           'create.ad_copy',     None,        '콘텐츠 생성'),

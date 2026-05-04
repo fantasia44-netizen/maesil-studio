@@ -1,0 +1,628 @@
+{% extends 'base.html' %}
+{% block title %}쇼츠/릴스 영상 생성 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 쇼츠/릴스{% endblock %}
+
+{% block content %}
+
+<!-- 스텝 인디케이터 -->
+<div class="d-flex align-items-center mb-4" style="max-width:800px">
+  {% for n, label in [(1,'기본 설정'),(2,'소구포인트'),(3,'대본 확인'),(4,'스타일·음성'),(5,'영상 생성')] %}
+  <div class="d-flex align-items-center {% if not loop.last %}flex-fill{% endif %}">
+    <div class="d-flex align-items-center gap-1">
+      <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+           id="sc{{ n }}" style="width:26px;height:26px;font-size:.75rem;background:#ddd;color:#888;flex-shrink:0;transition:all .3s">{{ n }}</div>
+      <span class="small fw-semibold d-none d-md-inline" id="sl{{ n }}" style="color:#aaa;white-space:nowrap">{{ label }}</span>
+    </div>
+    {% if not loop.last %}
+    <div class="flex-fill mx-1" id="sline{{ n }}" style="height:2px;background:#ddd;transition:all .3s;min-width:12px"></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ══════ Step 1 ══════ -->
+<div id="step1" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-play-circle me-2" style="color:#d63384"></i>어떤 브랜드·상품의 쇼츠/릴스를 만들까요?</h6>
+    </div>
+    <div class="card-body p-4">
+      <input type="hidden" id="csrfToken" value="{{ csrf_token() }}">
+      <div class="row g-3 mb-4">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small">브랜드</label>
+          <select id="brandSelect" class="form-select form-select-sm" onchange="onBrandChange(this.value)">
+            {% for b in brands %}
+            <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small">상품 <span class="text-muted fw-normal">(선택)</span></label>
+          <select id="productSelect" class="form-select form-select-sm">
+            <option value="">— 상품 미지정 —</option>
+            {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">영상 목적 / 방향 <span class="text-muted fw-normal">(선택)</span></label>
+        <input id="directionInput" class="form-control form-control-sm"
+               placeholder="예: 신제품 출시 알리기 / 브랜드 인지도 높이기 / 구매 전환 유도">
+      </div>
+
+      <div class="d-flex justify-content-end mt-4">
+        <button class="btn btn-primary" onclick="goStep2()">
+          소구포인트 생성 <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 2 ══════ -->
+<div id="step2" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-bullseye me-2" style="color:#d63384"></i>어떤 포인트로 어필할까요?</h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="regenAngles()"><i class="bi bi-arrow-clockwise me-1"></i>재생성</button>
+    </div>
+    <div class="card-body p-4">
+      <div id="anglesLoading" class="text-center py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2"></div>소구포인트 생성 중...
+      </div>
+      <div id="anglesList" class="d-none"></div>
+      <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(1)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+        <button class="btn btn-primary" id="step2Next" onclick="goStep3()" disabled>
+          대본 생성 <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 3 ══════ -->
+<div id="step3" class="d-none" style="max-width:800px">
+  <div class="card">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-file-text me-2" style="color:#d63384"></i>5씬 대본 확인 · 편집</h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="regenScript()"><i class="bi bi-arrow-clockwise me-1"></i>대본 재생성</button>
+    </div>
+    <div class="card-body p-4">
+      <div id="scriptLoading" class="text-center py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2"></div>대본 생성 중...
+      </div>
+      <div id="scriptCards" class="d-none">
+        <div class="alert alert-info py-2 px-3 mb-3" style="font-size:.82rem">
+          <i class="bi bi-info-circle me-1"></i>나레이션과 화면 텍스트를 수정할 수 있습니다. 이미지 프롬프트는 영문으로 작성하세요.
+        </div>
+        <div id="sceneList" class="d-flex flex-column gap-3"></div>
+      </div>
+      <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+        <button class="btn btn-primary" id="step3Next" onclick="goStep(4)" disabled>
+          스타일 설정 <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 4 ══════ -->
+<div id="step4" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-sliders me-2" style="color:#d63384"></i>스타일 · 음성 설정</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 이미지 스타일 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">이미지 스타일</label>
+        <div class="row g-2" id="styleGrid">
+          {% for sid, slabel, sdesc in [
+            ('realistic_banner', '실사 감성', '라이프스타일 사진'),
+            ('webtoon',          '웹툰',      '만화 일러스트'),
+            ('ghibli',           '지브리',    '수채화 애니'),
+            ('flat_modern',      '모던 플랫', '벡터 일러스트'),
+            ('disney',           '픽사/디즈니','3D 애니 렌더'),
+          ] %}
+          <div class="col-6 col-md-4">
+            <div class="style-card border rounded p-2 text-center"
+                 style="cursor:pointer" data-style="{{ sid }}"
+                 onclick="selectStyle('{{ sid }}', this)">
+              <div class="fw-semibold small">{{ slabel }}</div>
+              <div class="text-muted" style="font-size:.7rem">{{ sdesc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 음성 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">나레이션 음성</label>
+        <div class="row g-2">
+          {% for vk, vlabel, vdesc in [
+            ('female_natural', '여성 자연스럽게', 'Neural2-A'),
+            ('male_calm',      '남성 차분하게',   'Neural2-C'),
+            ('female_bright',  '여성 밝게',       'Neural2-B'),
+            ('male_clear',     '남성 또렷하게',   'Wavenet-C'),
+          ] %}
+          <div class="col-6">
+            <div class="voice-card border rounded p-2 text-center"
+                 style="cursor:pointer" data-voice="{{ vk }}"
+                 onclick="selectVoice('{{ vk }}', this)">
+              <div class="fw-semibold small">{{ vlabel }}</div>
+              <div class="text-muted" style="font-size:.68rem">{{ vdesc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 읽기 속도 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">읽기 속도</label>
+        <select id="ttsSpeed" class="form-select form-select-sm">
+          <option value="0.95">천천히 (0.95×)</option>
+          <option value="1.1" selected>보통 (1.1×)</option>
+          <option value="1.25">빠르게 (1.25×)</option>
+        </select>
+      </div>
+
+      <!-- 브랜드 컬러 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">브랜드 컬러</label>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          {% for c in ['#e8355a','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#111111'] %}
+          <div class="color-dot rounded-circle border"
+               style="width:26px;height:26px;background:{{ c }};cursor:pointer;flex-shrink:0"
+               onclick="selectColor('{{ c }}', this)" title="{{ c }}"></div>
+          {% endfor %}
+          <input type="color" id="customColor" value="#e8355a"
+                 oninput="selectColor(this.value, null)"
+                 class="form-control form-control-color" style="width:36px;height:26px;padding:0;border:none;cursor:pointer">
+        </div>
+        <input type="hidden" id="selectedColor" value="#e8355a">
+      </div>
+
+      <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+        <button class="btn btn-primary" id="step4Next" onclick="startGenerate()" disabled>
+          <i class="bi bi-film me-1"></i>영상 생성 시작
+          <span id="step4Cost" class="badge bg-white text-dark ms-1" style="font-size:.7rem">300P</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 5 ══════ -->
+<div id="step5" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-film me-2" style="color:#d63384"></i>영상 생성</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 진행 중 -->
+      <div id="generateProgress" class="text-center py-5">
+        <div class="mb-3">
+          <div class="spinner-border text-primary" style="width:3rem;height:3rem"></div>
+        </div>
+        <div class="fw-semibold mb-1" id="progressStep">이미지 생성 중...</div>
+        <div class="text-muted small mb-3">약 1~2분 소요됩니다</div>
+        <div class="progress mx-auto" style="max-width:300px;height:6px">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+               id="progressBar" style="width:5%"></div>
+        </div>
+        <div class="text-muted small mt-3" id="progressDetail"></div>
+      </div>
+
+      <!-- 완료 -->
+      <div id="generateResult" class="d-none text-center">
+        <div class="mb-3">
+          <i class="bi bi-check-circle-fill text-success" style="font-size:2.5rem"></i>
+        </div>
+        <h6 class="fw-bold mb-1">영상 생성 완료!</h6>
+        <p class="text-muted small mb-4">아래에서 미리보기 후 다운로드하세요</p>
+
+        <video id="resultVideo" controls playsinline
+               style="max-width:280px;width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15)"
+               class="mb-4"></video>
+
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <a id="downloadBtn" href="#" download="shorts.mp4"
+             class="btn btn-primary">
+            <i class="bi bi-download me-1"></i>MP4 다운로드
+          </a>
+          <button class="btn btn-outline-secondary" onclick="goStep(1); resetAll()">
+            <i class="bi bi-plus-circle me-1"></i>새 영상 만들기
+          </button>
+        </div>
+      </div>
+
+      <!-- 실패 -->
+      <div id="generateError" class="d-none text-center py-4">
+        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:2rem"></i>
+        <p class="fw-semibold mt-2 mb-1">영상 생성 실패</p>
+        <p class="text-muted small" id="errorMsg"></p>
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(4)">다시 시도</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 씬 카드 템플릿 -->
+<template id="sceneCardTpl">
+  <div class="card border scene-card" data-idx="">
+    <div class="card-body p-3">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge scene-role-badge" style="font-size:.72rem"></span>
+        <span class="fw-semibold small scene-num"></span>
+      </div>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label mb-1" style="font-size:.75rem;font-weight:600">나레이션 (TTS)</label>
+          <textarea class="form-control form-control-sm scene-narration" rows="2"
+                    style="resize:vertical;font-size:.82rem;line-height:1.6"
+                    placeholder="읽힐 텍스트"></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label mb-1" style="font-size:.75rem;font-weight:600">화면 제목 텍스트</label>
+          <input type="text" class="form-control form-control-sm scene-overlay-title mb-1"
+                 placeholder="상단 굵은 텍스트 (12자 이내)" maxlength="15">
+          <label class="form-label mb-1" style="font-size:.75rem;font-weight:600">하단 자막</label>
+          <input type="text" class="form-control form-control-sm scene-overlay-body"
+                 placeholder="하단 자막 (나레이션 축약)" maxlength="40">
+        </div>
+        <div class="col-12">
+          <label class="form-label mb-1" style="font-size:.75rem;font-weight:600">이미지 프롬프트 (영문)</label>
+          <textarea class="form-control form-control-sm scene-flux-prompt" rows="2"
+                    style="resize:vertical;font-size:.78rem;line-height:1.5"
+                    placeholder="English FLUX image prompt"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+.style-card:hover  { border-color:#d63384 !important; background:#fff0f8; }
+.style-card.active { border-color:#d63384 !important; background:#fff0f8; }
+.voice-card:hover  { border-color:#0d6efd !important; background:#f0f4ff; }
+.voice-card.active { border-color:#0d6efd !important; background:#f0f4ff; }
+
+.scene-role-badge.hook     { background:#dc2626; }
+.scene-role-badge.empathy  { background:#d97706; }
+.scene-role-badge.solution { background:#059669; }
+.scene-role-badge.benefit  { background:#2563eb; }
+.scene-role-badge.cta      { background:#7c3aed; }
+
+.angle-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
+.angle-card:hover { border-color:#d63384 !important; background:#fff0f8; }
+.angle-card.active { border-color:#d63384 !important; background:#fff0f8; }
+</style>
+
+<script>
+const CSRF = document.getElementById('csrfToken').value;
+
+let selectedAngle    = null;
+let scriptScenes     = [];
+let selectedStyle    = null;
+let selectedVoice    = 'female_natural';
+let selectedBrandColor = '#e8355a';
+let currentCreationId  = null;
+let pollTimer          = null;
+
+const ROLE_COLORS = {hook:'hook', empathy:'empathy', solution:'solution', benefit:'benefit', cta:'cta'};
+const ROLE_LABELS = {hook:'훅', empathy:'공감', solution:'해결', benefit:'핵심혜택', cta:'CTA'};
+
+// ── 스텝 이동 ──────────────────────────────────────────────
+function goStep(n) {
+  [1,2,3,4,5].forEach(i => {
+    const el = document.getElementById(`step${i}`);
+    if (el) el.classList.toggle('d-none', i !== n);
+  });
+  for (let i = 1; i <= 5; i++) {
+    const circle = document.getElementById(`sc${i}`);
+    const label  = document.getElementById(`sl${i}`);
+    const line   = document.getElementById(`sline${i}`);
+    if (!circle) continue;
+    if (i < n) {
+      circle.style.background = '#198754'; circle.style.color = '#fff';
+      circle.innerHTML = '<i class="bi bi-check" style="font-size:.65rem"></i>';
+    } else if (i === n) {
+      circle.style.background = '#d63384'; circle.style.color = '#fff';
+      circle.textContent = i;
+    } else {
+      circle.style.background = '#ddd'; circle.style.color = '#888';
+      circle.textContent = i;
+    }
+    if (label) label.style.color = i <= n ? '#333' : '#aaa';
+    if (line)  line.style.background = i < n ? '#198754' : '#ddd';
+  }
+}
+
+// ── Step 1 → Step 2 ────────────────────────────────────────
+async function goStep2() {
+  goStep(2);
+  await loadAngles();
+}
+
+async function loadAngles() {
+  document.getElementById('anglesLoading').classList.remove('d-none');
+  document.getElementById('anglesList').classList.add('d-none');
+  document.getElementById('step2Next').disabled = true;
+  selectedAngle = null;
+
+  const res  = await fetch('/create/shorts/angles', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({
+      brand_id:   document.getElementById('brandSelect').value,
+      product_id: document.getElementById('productSelect').value,
+      direction:  document.getElementById('directionInput').value.trim(),
+    })
+  });
+  const data = await res.json();
+  document.getElementById('anglesLoading').classList.add('d-none');
+  document.getElementById('anglesList').classList.remove('d-none');
+
+  if (!data.ok) {
+    document.getElementById('anglesList').innerHTML =
+      `<div class="alert alert-danger">${data.message}</div>`;
+    return;
+  }
+
+  const html = data.angles.map((a, i) => `
+    <div class="angle-card card mb-2 p-3" onclick="selectAngle(${i}, this)" data-idx="${i}">
+      <div class="d-flex align-items-start gap-2">
+        <span class="badge bg-light text-dark fw-semibold" style="font-size:.72rem;white-space:nowrap">소구포인트 ${i+1}</span>
+        <div>
+          <div class="fw-bold small mb-1">${a.title}</div>
+          <div class="text-muted small mb-1"><i class="bi bi-lightning me-1" style="color:#e8355a"></i><strong>훅:</strong> ${a.hook}</div>
+          <div class="text-muted small"><i class="bi bi-person me-1"></i><strong>타겟 pain:</strong> ${a.target_pain}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('anglesList').innerHTML = html;
+  window._angles = data.angles;
+}
+
+function selectAngle(idx, el) {
+  document.querySelectorAll('.angle-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedAngle = window._angles[idx];
+  document.getElementById('step2Next').disabled = false;
+}
+
+function regenAngles() { loadAngles(); }
+
+// ── Step 2 → Step 3 ────────────────────────────────────────
+async function goStep3() {
+  if (!selectedAngle) return;
+  goStep(3);
+  await loadScript();
+}
+
+async function loadScript() {
+  document.getElementById('scriptLoading').classList.remove('d-none');
+  document.getElementById('scriptCards').classList.add('d-none');
+  document.getElementById('step3Next').disabled = true;
+
+  const res  = await fetch('/create/shorts/script', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({
+      brand_id:   document.getElementById('brandSelect').value,
+      product_id: document.getElementById('productSelect').value,
+      angle:      selectedAngle,
+      style:      selectedStyle || 'realistic_banner',
+    })
+  });
+  const data = await res.json();
+  document.getElementById('scriptLoading').classList.add('d-none');
+  document.getElementById('scriptCards').classList.remove('d-none');
+
+  if (!data.ok) {
+    document.getElementById('sceneList').innerHTML =
+      `<div class="alert alert-danger">${data.message}</div>`;
+    return;
+  }
+
+  scriptScenes = data.scenes;
+  renderScenes(scriptScenes);
+  document.getElementById('step3Next').disabled = false;
+}
+
+function renderScenes(scenes) {
+  const tpl  = document.getElementById('sceneCardTpl');
+  const list = document.getElementById('sceneList');
+  list.innerHTML = '';
+
+  scenes.forEach((sc, i) => {
+    const clone = tpl.content.cloneNode(true);
+    const card  = clone.querySelector('.scene-card');
+    card.dataset.idx = i;
+
+    const badge = clone.querySelector('.scene-role-badge');
+    badge.textContent = ROLE_LABELS[sc.role] || sc.role_ko || sc.role;
+    badge.classList.add(ROLE_COLORS[sc.role] || 'bg-secondary');
+
+    clone.querySelector('.scene-num').textContent = `씬 ${i+1}`;
+    clone.querySelector('.scene-narration').value    = sc.narration    || '';
+    clone.querySelector('.scene-overlay-title').value= sc.overlay_title|| '';
+    clone.querySelector('.scene-overlay-body').value = sc.overlay_body || '';
+    clone.querySelector('.scene-flux-prompt').value  = sc.flux_prompt  || '';
+
+    list.appendChild(clone);
+  });
+}
+
+function regenScript() { loadScript(); }
+
+function collectScenes() {
+  const cards = document.querySelectorAll('.scene-card');
+  return Array.from(cards).map((card, i) => ({
+    ...scriptScenes[i],
+    narration:     card.querySelector('.scene-narration').value.trim(),
+    overlay_title: card.querySelector('.scene-overlay-title').value.trim(),
+    overlay_body:  card.querySelector('.scene-overlay-body').value.trim(),
+    flux_prompt:   card.querySelector('.scene-flux-prompt').value.trim(),
+  }));
+}
+
+// ── Step 4 스타일·음성 ──────────────────────────────────────
+function selectStyle(sid, el) {
+  document.querySelectorAll('.style-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedStyle = sid;
+  checkStep4Ready();
+}
+
+function selectVoice(vk, el) {
+  document.querySelectorAll('.voice-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedVoice = vk;
+  checkStep4Ready();
+}
+
+function selectColor(hex, el) {
+  document.querySelectorAll('.color-dot').forEach(d => {
+    d.style.outline = '';
+    d.style.outlineOffset = '';
+  });
+  if (el && el.classList.contains('color-dot')) {
+    el.style.outline = '2px solid #333';
+    el.style.outlineOffset = '2px';
+  }
+  selectedBrandColor = hex;
+  document.getElementById('selectedColor').value = hex;
+  document.getElementById('customColor').value = hex;
+}
+
+function checkStep4Ready() {
+  document.getElementById('step4Next').disabled = !(selectedStyle && selectedVoice);
+}
+
+// ── Step 5 영상 생성 ────────────────────────────────────────
+async function startGenerate() {
+  goStep(5);
+  document.getElementById('generateProgress').classList.remove('d-none');
+  document.getElementById('generateResult').classList.add('d-none');
+  document.getElementById('generateError').classList.add('d-none');
+
+  const scenes = collectScenes();
+
+  const res  = await fetch('/create/shorts/generate', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({
+      scenes,
+      style:       selectedStyle,
+      brand_color: selectedBrandColor,
+      voice:       selectedVoice,
+      tts_speed:   parseFloat(document.getElementById('ttsSpeed').value),
+      brand_id:    document.getElementById('brandSelect').value,
+    })
+  });
+  const data = await res.json();
+
+  if (!data.ok) {
+    showError(data.message);
+    return;
+  }
+
+  currentCreationId = data.creation_id;
+  startPolling(scenes.length);
+}
+
+function startPolling(sceneCount) {
+  const totalSteps = sceneCount + 2;
+  let lastStep = 0;
+
+  pollTimer = setInterval(async () => {
+    try {
+      const res  = await fetch(`/create/shorts/status/${currentCreationId}`);
+      const data = await res.json();
+      if (!data.ok) { clearInterval(pollTimer); return; }
+
+      const progress = data.output_data?.progress ?? 0;
+      const step     = data.output_data?.step     || '처리 중...';
+      const pct      = Math.min(95, Math.round((progress / totalSteps) * 100));
+
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressStep').textContent = step;
+      document.getElementById('progressDetail').textContent = `${progress}/${totalSteps} 단계`;
+
+      if (data.status === 'done') {
+        clearInterval(pollTimer);
+        document.getElementById('progressBar').style.width = '100%';
+        setTimeout(() => showResult(data.output_data.video_url), 300);
+      } else if (data.status === 'failed') {
+        clearInterval(pollTimer);
+        showError(data.output_data?.error || '알 수 없는 오류');
+      }
+    } catch (e) {
+      console.error('[poll]', e);
+    }
+  }, 4000);
+}
+
+function showResult(videoUrl) {
+  document.getElementById('generateProgress').classList.add('d-none');
+  document.getElementById('generateResult').classList.remove('d-none');
+
+  const video = document.getElementById('resultVideo');
+  video.src = videoUrl;
+  video.load();
+
+  const dl = document.getElementById('downloadBtn');
+  dl.href = videoUrl;
+  dl.download = 'maesil_shorts.mp4';
+}
+
+function showError(msg) {
+  document.getElementById('generateProgress').classList.add('d-none');
+  document.getElementById('generateError').classList.remove('d-none');
+  document.getElementById('errorMsg').textContent = msg;
+}
+
+function resetAll() {
+  if (pollTimer) clearInterval(pollTimer);
+  currentCreationId = null;
+  selectedAngle = null;
+  scriptScenes  = [];
+}
+
+// ── 브랜드 변경 ─────────────────────────────────────────────
+async function onBrandChange(brandId) {
+  const sel = document.getElementById('productSelect');
+  sel.innerHTML = '<option value="">로딩 중...</option>';
+  const res  = await fetch(`/create/shorts/products?brand_id=${brandId}`);
+  const data = await res.json();
+  sel.innerHTML = '<option value="">— 상품 미지정 —</option>' +
+    (data.products || []).map(p =>
+      `<option value="${p.id}">${p.name}${p.category ? ' · '+p.category : ''}</option>`
+    ).join('');
+}
+
+// ── 초기화 ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  goStep(1);
+  // 기본 선택
+  const firstStyle = document.querySelector('.style-card');
+  if (firstStyle) selectStyle(firstStyle.dataset.style, firstStyle);
+  const firstVoice = document.querySelector('.voice-card');
+  if (firstVoice) selectVoice(firstVoice.dataset.voice, firstVoice);
+  // 기본 컬러 표시
+  const firstDot = document.querySelector('.color-dot');
+  if (firstDot) selectColor(firstDot.title, firstDot);
+});
+</script>
+{% endblock %}
