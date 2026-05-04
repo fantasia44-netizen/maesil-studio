@@ -728,11 +728,13 @@ function selectImageStyle(styleId, el) {
   document.querySelectorAll('.style-card').forEach(c => {
     c.style.borderColor = '';
     c.style.background  = '';
-    c.querySelector('i').style.color = '#aaa';
+    const icon = c.querySelector('i');
+    if (icon) icon.style.color = '#aaa';
   });
   el.style.borderColor = '#e8355a';
   el.style.background  = '#fff8f9';
-  el.querySelector('i').style.color = '#e8355a';
+  const selIcon = el.querySelector('i');
+  if (selIcon) selIcon.style.color = '#e8355a';
   generateImagePrompts();
 }
 
