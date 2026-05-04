@@ -18,28 +18,41 @@ logger = logging.getLogger(__name__)
 
 
 # ── 한국어 → 영어 번역 (Flux는 한글 이해 불가) ──────────────
-_KO_RE = re.compile(r'[가-힣ㄱ-ㆎᄀ-ᇿ]')
+_KO_RE = re.compile(r'[가-힣ㄱ-ㆎᄀ-ᇿ一-鿿぀-ヿ㐀-䶿]')  # 한글+CJK 통합
 
 def _has_korean(text: str) -> bool:
     return bool(_KO_RE.search(text))
 
 def _translate_prompt(text: str) -> str:
-    """Claude Haiku로 이미지 프롬프트를 영어로 번역. 실패 시 원본 반환."""
+    """Claude Haiku로 이미지 프롬프트를 영어로 번역. 실패 시 원본 반환.
+
+    규칙:
+    - 반드시 순수 영문만 출력 (한글·중국어·일본어 일절 포함 금지)
+    - 배경이 아시아/한국 풍이어도 프롬프트 자체는 영어로 작성
+    """
     try:
         from services.claude_service import generate_text
         translated = generate_text(
             system=(
-                'You are an expert image prompt translator. '
-                'Translate the given Korean image description into a concise, vivid English image generation prompt. '
-                'Output ONLY the English prompt. No explanation, no quotes, no line breaks.'
+                'You are an expert image prompt translator for AI image generation (FLUX model). '
+                'Convert the given Korean description into a concise, vivid English image generation prompt. '
+                'CRITICAL RULES:\n'
+                '- Output ONLY English. Zero Korean, Chinese, or Japanese characters allowed.\n'
+                '- Never include any text, letters, or writing instructions in the prompt.\n'
+                '- Focus on visual scene: lighting, composition, mood, subject, style.\n'
+                '- Output a single line. No explanation, no quotes, no line breaks.'
             ),
             prompt=text,
             max_tokens=300,
             model='claude-haiku-4-5-20251001',
         )
         result = translated.strip().strip('"\'')
+        # 번역 결과에 한글이 남아있으면 경고 후 영어 부분만 추출 시도
+        if _has_korean(result):
+            logger.warning(f'[translate] 번역 결과에 한글 잔존, 재시도: {result[:60]}')
+            result = re.sub(r'[가-힣ㄱ-ㆎᄀ-ᇿ\s]+', ' ', result).strip()
         logger.info(f'[translate] KO→EN: "{text[:40]}" → "{result[:60]}"')
-        return result
+        return result or text
     except Exception as e:
         logger.warning(f'[translate] 번역 실패, 원본 사용: {e}')
         return text
@@ -139,8 +152,10 @@ _FAL_MODELS = {
 
 # Flux는 CJK 문자를 생성하려 할 때 중국어/일본어로 출력하는 경향 — 항상 억제
 _NO_CJK = (
-    ', no Chinese characters, no Japanese characters, no kanji, no hanzi, '
-    'no CJK text on signs or labels, Latin alphabet only for any visible text'
+    ', no text, no letters, no words, no signs, no labels, no watermarks'
+    ', no Chinese characters, no Japanese characters, no Korean characters'
+    ', no kanji, no hanzi, no hangul, no CJK glyphs'
+    ', absolutely no writing of any language on any surface'
 )
 
 

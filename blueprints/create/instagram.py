@@ -394,7 +394,12 @@ def instagram_story_plan():
                 arc_stages.append('마무리')
     arc_hint = ' → '.join(arc_stages) if arc_stages else ''
 
-    system = '당신은 인스타그램 카드뉴스·웹툰 스토리 작가 겸 AI 이미지 프롬프트 엔지니어입니다. 순수 JSON 배열만 출력하세요.'
+    system = (
+        '당신은 인스타그램 카드뉴스·웹툰 스토리 작가 겸 AI 이미지 프롬프트 엔지니어입니다. 순수 JSON 배열만 출력하세요.\n'
+        '⚠️ flux_prompt 필드는 반드시 English(영문)으로만 작성하세요. '
+        '한글·중국어·일본어 등 비라틴 문자는 절대 포함하지 마세요. '
+        '이미지 내부에 텍스트를 넣으라는 지시도 flux_prompt에 쓰지 마세요 (텍스트는 별도 PIL 오버레이로 처리됩니다).'
+    )
     prompt = f"""인스타그램 {quantity}컷 {info['name']} 구성안을 JSON 배열로 만드세요.
 
 [브랜드·상품]
@@ -421,7 +426,7 @@ def instagram_story_plan():
 - panel: 번호 (1~{quantity})
 - role: 이 컷의 역할 — 위 흐름 단계명 그대로 (8자 이내)
 - scene_ko: 이 장면 한국어 요약 (15자 이내)
-- flux_prompt: 영문 FLUX 프롬프트 (60~90단어, 이 패널 장면에 맞게 구체적으로. 조명·각도·분위기·피사체를 모두 포함. 직전 패널과 달라야 함)
+- flux_prompt: ENGLISH ONLY FLUX prompt (60~90 words). Scene-specific: lighting, angle, mood, subject. NO text/letters in scene. Asian/Korean backgrounds OK. Must differ from previous panel.
 - {info['text_field']}
 - title, body_text, dialogue1, dialogue2 — 해당 스타일에 쓰지 않는 필드는 반드시 빈 문자열
 - body_text는 웹툰 스타일이 아닌 경우 반드시 3~4문장(70~120자)으로 충실하게 작성. 독자에게 직접 말하듯, 공감·정보·행동을 유도하는 내용으로
@@ -491,7 +496,13 @@ def instagram_image_prompt():
 
     is_webtoon = (style == 'webtoon')
 
-    system = '당신은 AI 이미지 프롬프트 엔지니어입니다. 순수 JSON만 출력하세요.'
+    system = (
+        '당신은 AI 이미지 프롬프트 엔지니어입니다. 순수 JSON만 출력하세요.\n'
+        '⚠️ flux_prompt 필드는 반드시 영문(English)으로만 작성하세요. '
+        '한글·중국어·일본어 등 비라틴 문자는 flux_prompt에 절대 포함하지 마세요. '
+        '이미지 안에 텍스트·문자·글씨를 그려달라는 지시도 flux_prompt에 넣지 마세요 '
+        '(텍스트는 별도 오버레이로 처리됩니다).'
+    )
     prompt = f"""인스타그램 이미지 프롬프트와 추천 텍스트를 JSON으로 생성하세요.
 
 [브랜드·상품]
@@ -508,17 +519,16 @@ def instagram_image_prompt():
 
 [출력 형식 — 순수 JSON]
 {{
-  "flux_prompt": "영문 이미지 생성 프롬프트 (60~90단어, 구체적·상세. 조명·각도·분위기·피사체 모두 포함)",
-  "title":     "이미지 안 메인 한글 문구 (15자 이내)",
-  "body_text": "{'웹툰이 아닌 경우 이미지 위에 오버레이될 본문 — 3~4문장, 70~120자. 독자에게 직접 말하듯 공감·정보·행동 유도 내용으로 충실하게 작성' if not is_webtoon else '웹툰 스타일에서는 빈 문자열'}",
+  "flux_prompt": "ENGLISH ONLY image generation prompt (60~90 words). Describe scene, lighting, composition, mood, subject. NO text/letters/words in the scene. Asian/Korean background is OK.",
+  "title":     "이미지 위에 PIL로 합성할 메인 한글 문구 (15자 이내)",
+  "body_text": "{'이미지 위에 오버레이될 본문 — 3~4문장, 70~120자. 독자에게 직접 말하듯 공감·정보·행동 유도 내용으로 충실하게 작성' if not is_webtoon else '웹툰 스타일에서는 빈 문자열'}",
   "dialogue1": "{'첫 번째 말풍선 대사 (웹툰용, 20자 이내)' if is_webtoon else '웹툰 아니면 빈 문자열'}",
   "dialogue2": "{'두 번째 말풍선 대사 (웹툰용, 선택)' if is_webtoon else '웹툰 아니면 빈 문자열'}"
 }}
 
 {"body_text는 3~4문장(70~120자)으로 충실하게 작성하세요. 공감→정보→행동 유도 흐름으로." if not is_webtoon else "dialogue1/dialogue2에 집중하고 body_text는 빈 문자열로 두세요."}
 
-스타일: {style}
-비율: {img_size}"""
+스타일: {style} / 비율: {img_size}"""
 
     try:
         raw   = generate_text(system, prompt, max_tokens=500, model='claude-haiku-4-5-20251001')
