@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}개인정보처리방침 — 매실 스튜디오{% endblock %}
+
+{% block public_content %}
+<div style="max-width:800px;margin:0 auto;padding:3rem 1rem">
+
+  <a href="{{ url_for('landing.home') }}" class="d-inline-block mb-4 text-decoration-none" style="color:#d63384">← 매실 스튜디오 홈으로</a>
+  <h1 class="fw-bold mb-1">개인정보처리방침</h1>
+  <p class="text-muted mb-5" style="font-size:.88rem">최종 수정일: 2026년 5월 4일</p>
+
+  <p>주식회사 매실패밀리(이하 "회사")는 「개인정보 보호법」 제30조에 따라 정보주체의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리할 수 있도록 다음과 같이 개인정보처리방침을 수립·공개합니다.</p>
+
+  <h2>제1조 (수집하는 개인정보 항목)</h2>
+  <div class="table-responsive">
+    <table class="table table-bordered" style="font-size:.9rem">
+      <thead class="table-light"><tr><th>구분</th><th>수집 항목</th><th>수집 목적</th></tr></thead>
+      <tbody>
+        <tr><td>회원가입</td><td>이메일, 비밀번호(암호화), 이름</td><td>서비스 계정 생성 및 본인 확인</td></tr>
+        <tr><td>서비스 이용</td><td>브랜드 정보, 상품 정보, 입력 프롬프트, 생성 결과물</td><td>AI 콘텐츠 생성 서비스 제공</td></tr>
+        <tr><td>결제</td><td>결제 정보(PG사 위탁 처리, 회사는 카드번호 미보유)</td><td>유료 서비스 결제</td></tr>
+        <tr><td>자동 수집</td><td>접속 IP, 접속 시간, 브라우저 정보</td><td>서비스 보안 및 부정 이용 방지</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>제2조 (개인정보의 처리 목적)</h2>
+  <p>1. 서비스 제공: AI 콘텐츠 생성, 브랜드 관리, 이미지/영상 생성 등 핵심 서비스 제공</p>
+  <p>2. 회원 관리: 본인 확인, 가입 의사 확인, 고객 상담</p>
+  <p>3. 서비스 개선: 이용 통계 및 서비스 품질 개선 (익명화 처리)</p>
+  <p>4. 마케팅(선택): 서비스 안내, 업데이트 알림 (동의 시에만)</p>
+
+  <h2>제3조 (개인정보의 보유 및 이용 기간)</h2>
+  <div class="table-responsive">
+    <table class="table table-bordered" style="font-size:.9rem">
+      <thead class="table-light"><tr><th>항목</th><th>보유 기간</th><th>근거</th></tr></thead>
+      <tbody>
+        <tr><td>회원 정보</td><td>탈퇴 후 즉시 삭제</td><td>서비스 이용 계약</td></tr>
+        <tr><td>생성 결과물</td><td>서비스 이용 기간 동안 보존</td><td>서비스 이용 계약</td></tr>
+        <tr><td>결제 기록</td><td>5년</td><td>전자상거래법 제6조</td></tr>
+        <tr><td>접속 로그</td><td>3개월</td><td>통신비밀보호법</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>제4조 (개인정보의 제3자 제공)</h2>
+  <p>회사는 원칙적으로 이용자의 개인정보를 제3자에게 제공하지 않습니다. 다만, 다음의 경우는 예외입니다.</p>
+  <p>1. 이용자가 사전에 동의한 경우</p>
+  <p>2. 법령의 규정에 의하거나 수사 목적으로 법령에 정해진 절차와 방법에 따라 요청이 있는 경우</p>
+
+  <h2>제5조 (개인정보 처리 위탁)</h2>
+  <div class="table-responsive">
+    <table class="table table-bordered" style="font-size:.9rem">
+      <thead class="table-light"><tr><th>수탁업체</th><th>위탁 업무</th></tr></thead>
+      <tbody>
+        <tr><td>Supabase Inc. (미국)</td><td>데이터베이스 호스팅 및 서비스 운영</td></tr>
+        <tr><td>PortOne (주)</td><td>결제 처리 및 결제 정보 관리</td></tr>
+        <tr><td>Anthropic (미국)</td><td>AI 텍스트 생성 (Claude)</td></tr>
+        <tr><td>fal.ai (미국)</td><td>AI 이미지 생성 (FLUX)</td></tr>
+        <tr><td>Google LLC (미국)</td><td>텍스트 음성 변환 (TTS)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>제6조 (개인정보의 안전성 확보 조치)</h2>
+  <p>1. <strong>비밀번호 암호화</strong>: bcrypt 단방향 해시 알고리즘 적용</p>
+  <p>2. <strong>전송 구간 암호화</strong>: HTTPS/TLS 강제 적용</p>
+  <p>3. <strong>접근 제어</strong>: 역할 기반 접근 통제(RBAC)</p>
+  <p>4. <strong>세션 보안</strong>: HttpOnly/SameSite 쿠키, 비활동 타임아웃</p>
+  <p>5. <strong>데이터베이스</strong>: Supabase RLS(행 수준 보안) 정책 적용</p>
+
+  <h2>제7조 (이용자의 권리)</h2>
+  <p>이용자는 언제든지 다음의 권리를 행사할 수 있습니다.</p>
+  <p>1. 개인정보 열람·정정·삭제 요청</p>
+  <p>2. 개인정보 처리 정지 요청</p>
+  <p>3. 서비스 탈퇴 (서비스 내 설정에서 직접 가능)</p>
+  <p>문의: <a href="mailto:support@maesil-insight.com">support@maesil-insight.com</a></p>
+
+  <h2>제8조 (개인정보 국외 이전)</h2>
+  <p>서비스는 Supabase(미국), Anthropic(미국), fal.ai(미국), Google(미국) 등의 클라우드 서비스를 이용합니다. 이들 업체는 적절한 개인정보 보호 수준을 갖춘 것으로 인정된 기업이며, 데이터 처리 계약(DPA)에 따라 개인정보를 보호합니다.</p>
+
+  <h2>제9조 (개인정보 보호책임자)</h2>
+  <div class="table-responsive">
+    <table class="table table-bordered" style="font-size:.9rem">
+      <thead class="table-light"><tr><th>구분</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td>성명</td><td>김은지</td></tr>
+        <tr><td>직책</td><td>대표 / 개인정보보호책임자</td></tr>
+        <tr><td>이메일</td><td>support@maesil-insight.com</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>제10조 (권익 침해 구제)</h2>
+  <p>· 개인정보침해신고센터: privacy.kisa.or.kr / 118</p>
+  <p>· 개인정보분쟁조정위원회: kopico.go.kr / 1833-6972</p>
+  <p>· 대검찰청 사이버수사과: spo.go.kr / 1301</p>
+
+  <hr class="mt-5">
+  <p class="text-muted" style="font-size:.85rem">본 방침은 2026년 5월 4일부터 시행됩니다.</p>
+</div>
+{% endblock public_content %}

@@ -11,3 +11,13 @@ def home():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
     return render_template('landing/index.html')
+
+
+@landing_bp.route('/terms')
+def terms():
+    return render_template('landing/terms.html')
+
+
+@landing_bp.route('/privacy')
+def privacy():
+    return render_template('landing/privacy.html')

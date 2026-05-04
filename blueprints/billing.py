@@ -51,6 +51,7 @@ def index():
         pass
 
     from models import PLAN_FEATURES
+    from services.payment_service import _get_config
     return render_template('billing/index.html',
                            balance=balance,
                            ledger=ledger,
@@ -58,7 +59,9 @@ def index():
                            payments=payments,
                            PLAN_FEATURES=PLAN_FEATURES,
                            PLAN_PRICES=PLAN_PRICES,
-                           POINT_PACKAGES=POINT_PACKAGES)
+                           POINT_PACKAGES=POINT_PACKAGES,
+                           portone_store_id=_get_config('portone_store_id'),
+                           portone_channel_card=_get_config('portone_channel_card'))
 
 
 @billing_bp.route('/points')
