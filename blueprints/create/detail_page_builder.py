@@ -383,3 +383,87 @@ def dpb_flux_text():
     except Exception as e:
         logger.error(f'[DPB] flux-text error: {e}')
         return jsonify(ok=False, message=f'텍스트 조합 이미지 생성 중 오류가 발생했습니다: {str(e)[:80]}')
+
+
+# ════════════════════════════════════════════════════════════
+# 소구포인트 3열 템플릿
+# ════════════════════════════════════════════════════════════
+
+@create_bp.route('/detail-page/section/feature3')
+@login_required
+def dpb_section_feature3_page():
+    """소구포인트 3열 섹션 이미지 생성 페이지"""
+    supabase = current_app.supabase
+    brands = get_accessible_brands(supabase)
+    default_brand = get_default_brand(supabase)
+    if not default_brand:
+        flash('먼저 브랜드 프로필을 등록해 주세요.', 'warning')
+        return redirect(url_for('main.onboarding'))
+    return render_template(
+        'create/section_feature3.html',
+        brands=brands,
+        default_brand=default_brand,
+    )
+
+
+@create_bp.route('/detail-page/section/feature3/generate', methods=['POST'])
+@login_required
+def dpb_section_feature3_generate():
+    """소구포인트 3열 섹션 PNG 이미지 생성 API (400P).
+
+    JSON body:
+        brand_id:    브랜드 ID (선택)
+        bg_image_url: 배경 이미지 URL (FLUX로 미리 생성한 것)
+        headline:    상단 헤드카피
+        features:    [{title, desc}, {title, desc}, {title, desc}]
+        brand_color: 브랜드 색상 (선택, 브랜드 설정 우선)
+    """
+    data = request.get_json(silent=True) or {}
+    brand_id     = data.get('brand_id', '')
+    bg_image_url = data.get('bg_image_url', '').strip()
+    headline     = data.get('headline', '').strip()
+    features     = data.get('features', [])
+    brand_color  = data.get('brand_color', '#4b5cde')
+
+    if not bg_image_url:
+        return jsonify(ok=False, message='배경 이미지 URL이 필요합니다.')
+    if not headline:
+        return jsonify(ok=False, message='헤드카피를 입력해 주세요.')
+    if not any(f.get('title') for f in features):
+        return jsonify(ok=False, message='소구포인트 제목을 1개 이상 입력해 주세요.')
+
+    # 브랜드 색상 우선 적용
+    supabase = current_app.supabase
+    brand = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if brand and brand.get('primary_color'):
+        brand_color = brand['primary_color']
+
+    # 포인트 차감 (400P)
+    from services.point_service import use_points, InsufficientPoints
+    creation_id = str(uuid.uuid4())
+    try:
+        use_points(current_user, 'dp_feature3', creation_id,
+                   cost_override=400, note_override='상세페이지 소구포인트 3열 이미지')
+    except InsufficientPoints as e:
+        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
+
+    try:
+        from services.imagen_service import generate_feature3_section, upload_to_supabase
+        import base64
+        png_bytes = generate_feature3_section(
+            bg_image_url=bg_image_url,
+            headline=headline,
+            features=features[:3],
+            brand_color=brand_color,
+        )
+        # base64 data URL → upload to Supabase
+        b64 = base64.b64encode(png_bytes).decode()
+        data_url = f'data:image/png;base64,{b64}'
+        stable_url = upload_to_supabase(
+            data_url, current_user.id,
+            f'dpb_feat3_{uuid.uuid4().hex[:8]}.png'
+        )
+        return jsonify(ok=True, image_url=stable_url)
+    except Exception as e:
+        logger.error(f'[DPB] feature3 generate error: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'이미지 생성 중 오류가 발생했습니다: {str(e)[:120]}')

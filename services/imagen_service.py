@@ -293,7 +293,148 @@ def _find_korean_font() -> str:
     for path in candidates:
         if os.path.exists(path):
             return path
-    raise FileNotFoundError('한국어 폰트를 찾을 수 없습니다.')
+    # 자동 다운로드 (Render 등 클라우드 환경)
+    import urllib.request
+    dest = '/tmp/NanumGothic.ttf'
+    if not os.path.exists(dest):
+        logger.info('[font] NanumGothic 자동 다운로드 중...')
+        urllib.request.urlretrieve(
+            'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
+            dest,
+        )
+    return dest
+
+
+# ════════════════════════════════════════════════════════
+# 상세페이지 섹션 합성 — 소구포인트 3열
+# ════════════════════════════════════════════════════════
+
+def generate_feature3_section(
+    bg_image_url: str,
+    headline: str,
+    features: list[dict],   # [{'title': str, 'desc': str}, ...]  최대 3개
+    brand_color: str = '#4b5cde',
+    font_color: str = '#ffffff',
+) -> bytes:
+    """소구포인트 3열 섹션 이미지 생성 (800×600 PNG).
+
+    features 예시:
+        [
+            {'title': '국내산 100%', 'desc': '국내산 야채만 사용'},
+            {'title': '40종 야채',   'desc': '브로콜리 외 39종'},
+            {'title': '1분 완성',    'desc': '간편한 즉석 조리'},
+        ]
+    """
+    W, H = 800, 600
+    features = (features or [])[:3]
+    while len(features) < 3:
+        features.append({'title': '', 'desc': ''})
+
+    # ── 배경 이미지 로드 ────────────────────────────────
+    try:
+        resp = requests.get(bg_image_url, timeout=30)
+        resp.raise_for_status()
+        bg = Image.open(BytesIO(resp.content)).convert('RGBA')
+        bg = bg.resize((W, H), Image.LANCZOS)
+    except Exception:
+        bg = Image.new('RGBA', (W, H), (30, 30, 40, 255))
+
+    # ── 전체 어두운 오버레이 (텍스트 가독성) ───────────────
+    dark = Image.new('RGBA', (W, H), (0, 0, 0, 140))
+    img = Image.alpha_composite(bg, dark)
+    draw = ImageDraw.Draw(img)
+
+    # ── 폰트 로드 ─────────────────────────────────────────
+    try:
+        fp = _find_korean_font()
+        font_head  = ImageFont.truetype(fp, size=36)   # 헤드카피
+        font_num   = ImageFont.truetype(fp, size=28)   # 번호 (01/02/03)
+        font_title = ImageFont.truetype(fp, size=22)   # 카드 타이틀
+        font_desc  = ImageFont.truetype(fp, size=16)   # 카드 설명
+    except Exception:
+        font_head = font_num = font_title = font_desc = ImageFont.load_default()
+
+    brand_rgb  = _hex_to_rgb(brand_color)
+    white      = (255, 255, 255, 255)
+    light_gray = (200, 200, 200, 255)
+
+    # ── 헤드카피 (상단 중앙) ─────────────────────────────
+    if headline:
+        bbox = draw.textbbox((0, 0), headline, font=font_head)
+        tw = bbox[2] - bbox[0]
+        draw.text(((W - tw) / 2, 60), headline, font=font_head, fill=white)
+
+    # ── 브랜드 컬러 구분선 ───────────────────────────────
+    draw.rectangle([(W * 0.1, 120), (W * 0.9, 123)], fill=(*brand_rgb, 180))
+
+    # ── 3열 카드 ─────────────────────────────────────────
+    card_w, card_h = 210, 200
+    gap = (W - card_w * 3) // 4          # 균등 간격
+    card_y = 160
+
+    for i, feat in enumerate(features):
+        cx = gap + i * (card_w + gap)
+
+        # 카드 배경 (반투명 흰색)
+        card_layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        cdraw = ImageDraw.Draw(card_layer)
+        cdraw.rounded_rectangle(
+            [cx, card_y, cx + card_w, card_y + card_h],
+            radius=14,
+            fill=(255, 255, 255, 38),    # 15% 불투명 흰색
+        )
+        img = Image.alpha_composite(img, card_layer)
+        draw = ImageDraw.Draw(img)
+
+        # 번호 (01 / 02 / 03) — 브랜드 컬러
+        num_text = f'0{i+1}'
+        draw.text((cx + 18, card_y + 18), num_text,
+                  font=font_num, fill=(*brand_rgb, 255))
+
+        # 브랜드 컬러 짧은 밑줄
+        draw.rectangle(
+            [(cx + 18, card_y + 55), (cx + 18 + 30, card_y + 58)],
+            fill=(*brand_rgb, 200),
+        )
+
+        # 타이틀
+        title = feat.get('title', '')
+        if title:
+            draw.text((cx + 18, card_y + 70), title,
+                      font=font_title, fill=white)
+
+        # 설명 (줄바꿈 처리)
+        desc = feat.get('desc', '')
+        if desc:
+            _draw_multiline(draw, desc, font_desc, light_gray,
+                            cx + 18, card_y + 108, max_width=card_w - 30)
+
+    # ── 하단 브랜드 컬러 바 ──────────────────────────────
+    draw.rectangle([(0, H - 8), (W, H)], fill=(*brand_rgb, 255))
+
+    # ── PNG bytes 반환 ───────────────────────────────────
+    buf = BytesIO()
+    img.convert('RGB').save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+def _draw_multiline(draw, text: str, font, fill, x: int, y: int,
+                    max_width: int, line_height: int = 22):
+    """max_width 넘으면 자동 줄바꿈해서 그리기"""
+    words = list(text)  # 한글은 글자 단위
+    line, lines = '', []
+    for ch in text:
+        test = line + ch
+        bbox = draw.textbbox((0, 0), test, font=font)
+        if bbox[2] - bbox[0] > max_width and line:
+            lines.append(line)
+            line = ch
+        else:
+            line = test
+    if line:
+        lines.append(line)
+    for i, l in enumerate(lines[:3]):   # 최대 3줄
+        draw.text((x, y + i * line_height), l, font=font, fill=fill)
 
 
 # ════════════════════════════════════════════════════════
