@@ -69,9 +69,10 @@
               placeholder="저렴한, 싸구려">
           </div>
           <div class="mb-4">
-            <label class="form-label fw-semibold">추가 브랜드 설명</label>
+            <label class="form-label fw-semibold">브랜드 설명 · AI 생성 방향</label>
+            <div class="text-muted small mb-1">브랜드 스토리, 주력 상품, 홍보 방향 등을 자유롭게 적으면 모든 콘텐츠 생성에 반영됩니다</div>
             <textarea name="extra_context" class="form-control" rows="3"
-              placeholder="주력 상품, 브랜드 스토리, 특이사항 등">{{ brand.extra_context if brand else '' }}</textarea>
+              placeholder="예: 브랜드 감성·스토리 위주로 홍보 (제조사 노출 최소화)&#10;예: 제조 품질·공정·인증 신뢰도 강조&#10;예: B2B 납품·유통 파트너 대상, 공급 조건 중심&#10;예: 소비자 직판 위주, 창업 스토리와 가성비 강조">{{ brand.extra_context if brand else '' }}</textarea>
           </div>
 
           {# ── 회사 정보 (접기/펼치기) ── #}
