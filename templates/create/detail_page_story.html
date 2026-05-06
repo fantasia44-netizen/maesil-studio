@@ -364,9 +364,19 @@ function renderPlan() {
           ${showImgSel ? `
           <select class="bg-src-sel" id="bgsrc-${i}"
             style="background:#0f0f1a;border:1px solid #2a2b42;color:#e8eaf6;border-radius:6px;
-                   padding:.3rem .6rem;font-size:.78rem;max-width:150px;">
+                   padding:.3rem .6rem;font-size:.78rem;max-width:140px;">
             ${imgOpts}
-          </select>` : ''}
+          </select>
+          <label title="셀러 이미지 직접 업로드"
+            style="background:#1a2a1a;border:1px solid #2a4a2a;color:#80c880;border-radius:6px;
+                   padding:.3rem .6rem;font-size:.75rem;cursor:pointer;white-space:nowrap;
+                   display:inline-flex;align-items:center;gap:.3rem;">
+            <span id="upload-icon-${i}">🖼 삽입</span>
+            <input type="file" accept="image/*" style="display:none;"
+                   onchange="uploadSectionBg(event, ${i})">
+          </label>
+          <span id="upload-status-${i}" style="font-size:.72rem;color:#80c880;display:none;">✓ 업로드됨</span>
+          ` : ''}
           <button onclick="toggleEdit(${i})"
             style="background:#1e2038;border:1px solid #2a2b42;color:#9196c0;border-radius:6px;
                    padding:.3rem .7rem;font-size:.78rem;cursor:pointer;white-space:nowrap;">
@@ -597,6 +607,50 @@ async function downloadAll() {
     }
     await new Promise(r => setTimeout(r, 500));
   }
+}
+
+/* ═══════════════ 이미지 업로드 ═══════════════ */
+async function uploadSectionBg(event, i) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const iconEl   = document.getElementById(`upload-icon-${i}`);
+  const statusEl = document.getElementById(`upload-status-${i}`);
+  const bgsrcSel = document.getElementById(`bgsrc-${i}`);
+
+  iconEl.textContent = '⏳ 업로드 중…';
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const r = await fetch('{{ url_for("create.upload_asset") }}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: fd,
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      iconEl.textContent = '🖼 삽입';
+      alert('업로드 실패: ' + (d.message || '알 수 없는 오류'));
+      return;
+    }
+    // 드롭다운에 새 옵션 추가 후 선택
+    const opt = document.createElement('option');
+    opt.value = d.url;
+    opt.textContent = `📎 ${file.name.slice(0, 18)}`;
+    opt.selected = true;
+    bgsrcSel.appendChild(opt);
+
+    iconEl.textContent = '🖼 삽입';
+    statusEl.style.display = 'inline';
+    setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+  } catch (e) {
+    iconEl.textContent = '🖼 삽입';
+    alert('업로드 오류: ' + e.message);
+  }
+  // input 초기화 (같은 파일 재선택 허용)
+  event.target.value = '';
 }
 
 /* ═══════════════ 유틸 ═══════════════ */
