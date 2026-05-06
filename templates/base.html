@@ -296,13 +296,13 @@
 
 <!-- 매요 버튼 -->
 <button id="maeyoBtn" title="매요에게 물어보기" onclick="toggleMaeyo()">
-  <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed=maeyo&backgroundColor=1f1428&eyes=eva&mouth=smile01" alt="매요">
+  <img src="{{ url_for('static', filename='img/maeyo_avatar.png') }}" alt="매요">
 </button>
 
 <!-- 채팅 패널 -->
 <div id="maeyoPanel" class="hidden">
   <div class="maeyo-header">
-    <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed=maeyo&backgroundColor=1f1428&eyes=eva&mouth=smile01" alt="매요">
+    <img src="{{ url_for('static', filename='img/maeyo_avatar.png') }}" alt="매요">
     <div>
       <div class="name">매요</div>
       <div class="sub">매실 스튜디오 도우미</div>
