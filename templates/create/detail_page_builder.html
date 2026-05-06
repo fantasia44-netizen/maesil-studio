@@ -878,15 +878,10 @@ const IMG_SCENE_HINTS = {
 };
 
 function buildAutoImgPrompt(block) {
-  const scene    = IMG_SCENE_HINTS[block.role] || 'commercial product photography, clean professional';
-  const product  = getProductName();
-  const features = getProductFeatures();
-  // 영문 프롬프트 직접 조합 (한글 상품명은 서버에서 번역됨)
-  const parts = [scene];
-  if (product)  parts.push('product: ' + product);
-  if (features) parts.push(features.slice(0, 60));
-  parts.push('high quality, commercial photography, professional lighting');
-  return parts.join(', ');
+  // FLUX Schnell은 짧고 순수 영문 프롬프트에서만 정상 동작
+  // 한글 상품명/소구포인트는 이미지 프롬프트에 넣지 않음 (번역 왜곡 방지)
+  const scene = IMG_SCENE_HINTS[block.role] || 'commercial product photography, clean professional studio';
+  return scene + ', photorealistic, high quality, 4k';
 }
 
 function showImgGenModal(blockId) {
@@ -916,11 +911,11 @@ function regenImgPrompt() {
   const base = buildAutoImgPrompt(b);
   // 약간의 변형 키워드 추가
   const styles = [
-    '따뜻한 자연광, 필름 감성',
-    '미니멀 스튜디오, 흰 배경',
-    '아웃도어 자연 배경, 생동감',
-    '골든아워 조명, 감성적',
-    '클린하고 모던한 인테리어 배경',
+    'warm natural light, film grain, golden hour',
+    'minimal white studio background, clean shadows',
+    'outdoor natural setting, fresh vibrant colors',
+    'golden hour backlight, soft bokeh, emotional',
+    'clean modern interior background, lifestyle',
   ];
   const pick = styles[Math.floor(Math.random() * styles.length)];
   document.getElementById('img-gen-prompt').value = base + '. ' + pick;
