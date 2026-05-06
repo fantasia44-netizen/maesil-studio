@@ -336,11 +336,13 @@ function renderPlan() {
   const ul = document.getElementById('plan-list');
   ul.innerHTML = '';
   storyPlan.forEach((sec, i) => {
+    const tmpl  = sec.template || 'unknown';
+    const badge = LABELS[tmpl] || tmpl;
     const label = sectionLabel(sec);
     ul.innerHTML += `
       <li class="plan-item" id="plan-item-${i}">
-        <span class="tmpl-badge tmpl-${sec.template}">${LABELS[sec.template] || sec.template}</span>
-        <span class="plan-text">${label}</span>
+        <span class="tmpl-badge tmpl-${tmpl}" style="background:#1a1b2e;color:#90caf9;">${badge}</span>
+        <span class="plan-text">${label || '(내용 없음)'}</span>
         <span class="plan-status" id="plan-status-${i}">대기</span>
       </li>`;
   });
@@ -351,12 +353,15 @@ function renderPlan() {
 }
 
 function sectionLabel(sec) {
-  if (sec.template === 'hero')             return sec.headline || '';
-  if (sec.template === 'feature3')         return sec.headline || '';
-  if (sec.template === 'feature_highlight') return `[${sec.number}] ${sec.title || ''}`;
-  if (sec.template === 'text_emphasis')    return sec.main_text || '';
-  if (sec.template === 'cta')             return sec.cta_text || '';
-  return '';
+  if (!sec) return '';
+  const tmpl = sec.template || '';
+  if (tmpl === 'hero')              return sec.headline || sec.title || '';
+  if (tmpl === 'feature3')          return sec.headline || sec.title || '';
+  if (tmpl === 'feature_highlight') return `[${sec.number || '?'}] ${sec.title || ''}`;
+  if (tmpl === 'text_emphasis')     return sec.main_text || sec.headline || '';
+  if (tmpl === 'cta')               return sec.cta_text || sec.headline || '';
+  // 알 수 없는 템플릿 — 아무 텍스트 필드나 뽑기
+  return sec.headline || sec.title || sec.main_text || sec.cta_text || tmpl;
 }
 
 /* ═══════════════ 전체 이미지 생성 ═══════════════ */

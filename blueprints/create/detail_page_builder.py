@@ -617,41 +617,64 @@ def dpb_story_plan():
     features_txt = '\n'.join(f'- {f}' for f in features_raw) if features_raw else '(없음)'
 
     system = (
-        '당신은 한국 이커머스 상세페이지 전문 기획자입니다. '
-        'JSON만 반환하세요. 추가 설명 없이 JSON 배열만 출력하세요.'
+        'You are a Korean e-commerce detail page planner. '
+        'CRITICAL: Output ONLY a valid JSON array. No explanation, no markdown, no wrapper object. '
+        'Start your response with [ and end with ]. Nothing else.'
     )
 
     tmpl_guide = (
-        'hero: 오프닝 헤더 (headline필수, subtext선택)\n'
-        'feature3: 소구포인트 3열 카드 (headline필수, features=[{title,desc}]x3)\n'
-        'feature_highlight: 특장점 단일 강조 (number필수, title필수, desc필수, layout="left"또는"right")\n'
-        'text_emphasis: 텍스트 강조 배너 (main_text필수, sub_text선택, bg_prompt는 빈 문자열)\n'
-        'cta: 구매 촉구 마무리 (cta_text필수, sub_text선택)'
+        '"hero": opening header — fields: headline(str), subtext(str), bg_prompt(str)\n'
+        '"feature3": 3-column feature card — fields: headline(str), features([{title,desc}]x3), bg_prompt(str)\n'
+        '"feature_highlight": single feature detail — fields: number(str like "01"), title(str), desc(str), layout("left"or"right"), bg_prompt(str)\n'
+        '"text_emphasis": text emphasis banner — fields: main_text(str), sub_text(str), bg_prompt("")\n'
+        '"cta": call-to-action close — fields: cta_text(str), sub_text(str), bg_prompt(str)'
     )
 
     user = (
-        f'제품명: {product["name"]}\n'
-        f'브랜드: {brand_name}\n'
-        f'카테고리: {product.get("category", "")}\n'
-        f'핵심 특징:\n{features_txt}\n'
-        f'설명: {(product.get("description") or "")[:400]}\n\n'
-        f'위 제품의 상세페이지 이미지 세트 {count}장을 기획해주세요.\n\n'
-        f'사용 가능한 템플릿:\n{tmpl_guide}\n\n'
-        f'각 섹션에 bg_prompt 필드 포함 (FLUX용 영문 30단어 이내, text_emphasis는 빈 문자열).\n'
-        f'feature_highlight는 layout 필드 포함 (left/right 번갈아).\n\n'
-        f'JSON 배열 {count}개만 반환:'
+        f'Product: {product["name"]}\n'
+        f'Brand: {brand_name}\n'
+        f'Category: {product.get("category", "")}\n'
+        f'Key features:\n{features_txt}\n'
+        f'Description: {(product.get("description") or "")[:400]}\n\n'
+        f'Plan {count} detail page image sections using these templates:\n{tmpl_guide}\n\n'
+        f'Rules:\n'
+        f'- bg_prompt must be English only (max 25 words), for FLUX image generation\n'
+        f'- text_emphasis bg_prompt must be empty string ""\n'
+        f'- feature_highlight layout alternates "left"/"right"\n'
+        f'- All text content (headline, title, desc, etc.) in Korean\n\n'
+        f'Output ONLY a JSON array of {count} objects. Start with [:'
     )
 
     try:
         from services.claude_service import generate_text
         raw = generate_text(system, user, max_tokens=2500, model='claude-haiku-4-5-20251001')
         raw = raw.strip()
-        if raw.startswith('```'):
-            raw = raw.split('```')[1]
-            if raw.startswith('json'):
-                raw = raw[4:]
-            raw = raw.rsplit('```', 1)[0]
-        sections = _json.loads(raw)
+        # ── 코드블록 제거
+        if '```' in raw:
+            parts = raw.split('```')
+            for p in parts:
+                p = p.strip()
+                if p.startswith('json'):
+                    p = p[4:].strip()
+                if p.startswith('[') or p.startswith('{'):
+                    raw = p
+                    break
+        raw = raw.strip()
+        parsed = _json.loads(raw)
+        # ── 배열 or {"sections":[...]} 두 형태 모두 처리
+        if isinstance(parsed, dict):
+            sections = parsed.get('sections') or parsed.get('data') or list(parsed.values())[0]
+        else:
+            sections = parsed
+        if not isinstance(sections, list):
+            raise ValueError(f'sections가 list가 아님: {type(sections)}')
+        # ── template 필드 없으면 기본값 채워주기
+        VALID_TMPLS = {'hero','feature3','feature_highlight','text_emphasis','cta'}
+        for sec in sections:
+            if not isinstance(sec, dict):
+                continue
+            if sec.get('template') not in VALID_TMPLS:
+                sec['template'] = 'text_emphasis'   # fallback
         return jsonify(ok=True, sections=sections, product_name=product['name'])
     except Exception as e:
         logger.error(f'[DPB] story plan error: {e}', exc_info=True)
