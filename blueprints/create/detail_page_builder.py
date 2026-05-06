@@ -389,6 +389,101 @@ def dpb_flux_text():
 # 소구포인트 3열 템플릿
 # ════════════════════════════════════════════════════════════
 
+@create_bp.route('/detail-page/section/feature3/autofill')
+@login_required
+def dpb_section_feature3_autofill():
+    """제품 정보 → 헤드카피 + 소구포인트 3개 + 배경 프롬프트 자동 생성 (무료).
+
+    GET ?product_id=&brand_id=
+    """
+    supabase   = current_app.supabase
+    product_id = request.args.get('product_id', '').strip()
+    brand_id   = request.args.get('brand_id', '').strip()
+
+    if not product_id:
+        return jsonify(ok=False, message='product_id가 필요합니다.')
+
+    # 제품 로드
+    try:
+        res = supabase.table('products').select('*').eq('id', product_id).single().execute()
+        product = res.data
+    except Exception:
+        return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
+    if not product:
+        return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
+
+    # 브랜드 로드
+    bid = brand_id or product.get('brand_id', '')
+    brand = get_brand_by_id(supabase, bid) if bid else get_default_brand(supabase)
+
+    # ── Claude로 헤드카피 + 소구포인트 3개 생성 ──────────────
+    features_raw = product.get('features') or []
+    if isinstance(features_raw, str):
+        features_raw = [f.strip() for f in features_raw.split(',') if f.strip()]
+
+    features_txt = '\n'.join(f'- {f}' for f in features_raw) if features_raw else '(없음)'
+    brand_name   = brand.get('name', '') if brand else ''
+    product_name = product.get('name', '')
+    category     = product.get('category', '')
+    description  = product.get('description', '') or ''
+
+    system = (
+        '당신은 한국 이커머스 상세페이지 카피라이터입니다. '
+        'JSON만 반환하세요. 추가 설명 없이 JSON 객체 하나만 출력하세요.'
+    )
+    user = f"""아래 제품 정보를 바탕으로 상세페이지 소구포인트 섹션 카피를 작성해주세요.
+
+제품명: {product_name}
+브랜드: {brand_name}
+카테고리: {category}
+핵심 특징:
+{features_txt}
+제품 설명: {description[:300]}
+
+반환 형식 (JSON):
+{{
+  "headline": "상단에 표시할 임팩트 있는 헤드카피 (20자 이내, 질문형 또는 강조형)",
+  "bg_prompt": "배경 이미지 영어 프롬프트 (FLUX용, 순수 영어, 30단어 이내, 제품 연상 씬)",
+  "features": [
+    {{"title": "소구포인트1 제목 (10자 이내)", "desc": "한 줄 설명 (25자 이내)"}},
+    {{"title": "소구포인트2 제목 (10자 이내)", "desc": "한 줄 설명 (25자 이내)"}},
+    {{"title": "소구포인트3 제목 (10자 이내)", "desc": "한 줄 설명 (25자 이내)"}}
+  ]
+}}"""
+
+    try:
+        import json as _json
+        from services.claude_service import generate_text
+        raw = generate_text(system, user, max_tokens=500, model='claude-haiku-4-5-20251001')
+        # JSON 파싱
+        raw = raw.strip()
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+        parsed = _json.loads(raw)
+        return jsonify(
+            ok=True,
+            headline   = parsed.get('headline', product_name),
+            bg_prompt  = parsed.get('bg_prompt', f'{category} product, clean studio, dramatic lighting'),
+            features   = parsed.get('features', []),
+        )
+    except Exception as e:
+        logger.error(f'[DPB] feature3 autofill error: {e}')
+        # 폴백: 제품 features 그대로 사용
+        fallback = [
+            {'title': f[:10], 'desc': ''} for f in (features_raw or [product_name])[:3]
+        ]
+        while len(fallback) < 3:
+            fallback.append({'title': '', 'desc': ''})
+        return jsonify(
+            ok=True,
+            headline  = product_name,
+            bg_prompt = f'{category} product photography, clean studio, dramatic lighting',
+            features  = fallback,
+        )
+
+
 @create_bp.route('/detail-page/section/feature3')
 @login_required
 def dpb_section_feature3_page():

@@ -15,313 +15,239 @@
     margin: 0 auto;
     padding: 2rem 1rem 4rem;
   }
+  .sf3-title  { font-size: 1.5rem; font-weight: 700; margin-bottom: .3rem; }
+  .sf3-subtitle { color: #9196c0; font-size: .9rem; margin-bottom: 2rem; }
 
-  .sf3-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: .3rem;
-  }
-  .sf3-subtitle {
-    color: #9196c0;
-    font-size: .9rem;
-    margin-bottom: 2rem;
-  }
-
+  /* ── 카드 ── */
   .sf3-card {
     background: #1a1b2e;
     border: 1px solid #2a2b42;
     border-radius: 14px;
-    padding: 1.6rem;
+    padding: 1.5rem;
     margin-bottom: 1.2rem;
   }
   .sf3-card label {
-    font-size: .82rem;
-    color: #9196c0;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    display: block;
-    margin-bottom: .4rem;
+    font-size: .8rem; color: #9196c0; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em;
+    display: block; margin-bottom: .45rem;
   }
   .sf3-card input,
-  .sf3-card textarea {
-    background: #0f0f1a;
-    border: 1px solid #2a2b42;
-    color: #e8eaf6;
-    border-radius: 8px;
-    padding: .55rem .85rem;
-    width: 100%;
-    font-size: .93rem;
+  .sf3-card textarea,
+  .sf3-card select {
+    background: #0f0f1a; border: 1px solid #2a2b42;
+    color: #e8eaf6; border-radius: 8px;
+    padding: .55rem .85rem; width: 100%; font-size: .93rem;
     transition: border-color .2s;
   }
   .sf3-card input:focus,
-  .sf3-card textarea:focus {
-    outline: none;
-    border-color: #5c6bc0;
-    background: #0f0f1a;
-    color: #e8eaf6;
+  .sf3-card textarea:focus,
+  .sf3-card select:focus {
+    outline: none; border-color: #5c6bc0;
   }
 
+  /* ── 제품 선택 행 ── */
+  .select-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: .8rem;
+    align-items: end;
+  }
+  .select-row label { margin-bottom: .35rem; }
+  .btn-autofill {
+    background: #3f51b5; color: #fff; border: none;
+    border-radius: 8px; padding: .55rem 1.2rem;
+    font-size: .88rem; font-weight: 700; cursor: pointer;
+    white-space: nowrap; transition: background .2s;
+    height: 38px;
+  }
+  .btn-autofill:hover { background: #5c6bc0; }
+  .btn-autofill:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* ── 소구포인트 3열 ── */
   .feat-row {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 1rem;
   }
   .feat-item {
-    background: #121224;
-    border: 1px solid #2a2b42;
-    border-radius: 10px;
-    padding: 1rem;
+    background: #121224; border: 1px solid #2a2b42;
+    border-radius: 10px; padding: 1rem;
   }
-  .feat-num {
-    font-size: .8rem;
-    font-weight: 700;
-    color: #7986cb;
-    margin-bottom: .6rem;
-  }
-  .feat-item input {
-    margin-bottom: .5rem;
-  }
-  .feat-item textarea {
-    min-height: 64px;
-    resize: vertical;
-  }
+  .feat-num { font-size: .78rem; font-weight: 700; color: #7986cb; margin-bottom: .5rem; }
+  .feat-item input  { margin-bottom: .5rem; }
+  .feat-item textarea { min-height: 58px; resize: vertical; }
 
-  /* 배경 이미지 영역 */
-  .bg-section {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-start;
-    flex-wrap: wrap;
+  /* ── 배경 이미지 ── */
+  .bg-row {
+    display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap;
   }
-  .bg-preview-box {
-    width: 200px;
-    height: 150px;
-    border: 2px dashed #2a2b42;
-    border-radius: 10px;
-    background: #0f0f1a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    flex-shrink: 0;
+  .bg-thumb {
+    width: 180px; height: 120px; flex-shrink: 0;
+    border: 2px dashed #2a2b42; border-radius: 10px;
+    background: #0f0f1a; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
   }
-  .bg-preview-box img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 8px;
-  }
-  .bg-controls {
-    flex: 1;
-    min-width: 240px;
-  }
-  .bg-controls textarea {
-    min-height: 72px;
-    resize: vertical;
-    margin-bottom: .7rem;
-  }
-
-  /* 버튼 */
+  .bg-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .bg-thumb span { color: #555; font-size: .78rem; }
+  .bg-controls { flex: 1; min-width: 240px; }
+  .bg-controls textarea { min-height: 68px; resize: vertical; margin-bottom: .6rem; }
   .btn-gen-bg {
-    background: #303f9f;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: .5rem 1.1rem;
-    font-size: .88rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background .2s;
+    background: #263238; color: #cfd8dc; border: 1px solid #37474f;
+    border-radius: 8px; padding: .45rem 1rem; font-size: .85rem;
+    font-weight: 600; cursor: pointer; transition: background .2s;
   }
-  .btn-gen-bg:hover { background: #3f51b5; }
-  .btn-gen-bg:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-gen-bg:hover { background: #37474f; }
+  .btn-gen-bg:disabled { opacity: .4; cursor: not-allowed; }
 
+  /* ── 생성 버튼 ── */
   .btn-generate {
-    background: linear-gradient(135deg, #5c6bc0 0%, #7e57c2 100%);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: .85rem 2.5rem;
-    font-size: 1.05rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: opacity .2s;
-    width: 100%;
-    margin-top: 1rem;
+    background: linear-gradient(135deg, #5c6bc0, #7e57c2);
+    color: #fff; border: none; border-radius: 10px;
+    padding: .9rem 2rem; font-size: 1.05rem; font-weight: 700;
+    cursor: pointer; transition: opacity .2s; width: 100%; margin-top: .5rem;
   }
   .btn-generate:hover { opacity: .88; }
   .btn-generate:disabled { opacity: .4; cursor: not-allowed; }
 
-  /* 결과 */
-  #result-section {
-    display: none;
-    margin-top: 2rem;
-  }
+  /* ── 결과 ── */
+  #result-section { display: none; margin-top: 1.5rem; }
   #result-section.visible { display: block; }
   #result-img {
-    width: 100%;
-    max-width: 800px;
-    border-radius: 10px;
-    border: 1px solid #2a2b42;
-    display: block;
-    margin: 0 auto 1.2rem;
+    width: 100%; max-width: 800px; border-radius: 10px;
+    border: 1px solid #2a2b42; display: block; margin: 0 auto 1rem;
   }
-  .btn-download {
-    background: #263238;
-    color: #e8eaf6;
-    border: 1px solid #37474f;
-    border-radius: 8px;
-    padding: .55rem 1.4rem;
-    font-size: .9rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-    transition: background .2s;
+  .btn-dl {
+    background: #263238; color: #e8eaf6; border: 1px solid #37474f;
+    border-radius: 8px; padding: .5rem 1.3rem; font-size: .88rem;
+    font-weight: 600; cursor: pointer; text-decoration: none;
+    display: inline-block; transition: background .2s; margin-right: .5rem;
   }
-  .btn-download:hover { background: #37474f; color: #fff; }
+  .btn-dl:hover { background: #37474f; color: #fff; }
 
-  .status-bar {
-    font-size: .85rem;
-    color: #9196c0;
-    margin-top: .6rem;
-    min-height: 1.4em;
-  }
-  .status-bar.err { color: #ef9a9a; }
+  /* ── 상태바 ── */
+  .status { font-size: .83rem; color: #9196c0; min-height: 1.3em; margin-top: .5rem; }
+  .status.err { color: #ef9a9a; }
+  .status.ok  { color: #a5d6a7; }
 
-  /* 브랜드 선택 */
-  .brand-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  .brand-row select {
-    background: #0f0f1a;
-    border: 1px solid #2a2b42;
-    color: #e8eaf6;
-    border-radius: 8px;
-    padding: .45rem .8rem;
-    font-size: .9rem;
-    flex: 1;
-    min-width: 160px;
-  }
-
-  /* 포인트 뱃지 */
+  /* ── 뱃지 ── */
   .cost-badge {
-    font-size: .78rem;
-    color: #ffb74d;
-    background: rgba(255,183,77,.12);
-    border-radius: 20px;
-    padding: .2rem .7rem;
-    font-weight: 600;
-    white-space: nowrap;
+    font-size: .78rem; color: #ffb74d;
+    background: rgba(255,183,77,.1); border-radius: 20px;
+    padding: .18rem .65rem; font-weight: 600; white-space: nowrap;
+  }
+  .free-badge {
+    font-size: .78rem; color: #80cbc4;
+    background: rgba(128,203,196,.1); border-radius: 20px;
+    padding: .18rem .65rem; font-weight: 600; white-space: nowrap;
   }
 
-  /* 스피너 */
-  .spinner {
-    width: 20px; height: 20px;
-    border: 2px solid rgba(255,255,255,.3);
-    border-top-color: #fff;
-    border-radius: 50%;
+  /* ── 스피너 ── */
+  .sp {
+    width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff; border-radius: 50%;
     animation: spin .7s linear infinite;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: .4rem;
+    display: inline-block; vertical-align: middle; margin-right: .35rem;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── 자동완성 완료 표시 ── */
+  .autofilled { border-color: #5c6bc0 !important; background: #131428 !important; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="sf3-wrap">
 
-  <!-- 헤더 -->
   <div class="sf3-title">📦 소구포인트 3열 섹션</div>
-  <div class="sf3-subtitle">핵심 특장점 3가지를 디자인된 이미지로 자동 생성합니다 · 800 × 600 PNG</div>
+  <div class="sf3-subtitle">제품을 선택하면 헤드카피·소구포인트·배경 프롬프트를 자동으로 채워드립니다 · 800×600 PNG</div>
 
-  <!-- 브랜드 선택 -->
+  <!-- ① 브랜드 + 제품 선택 -->
   <div class="sf3-card">
-    <label>브랜드</label>
-    <div class="brand-row">
-      <select id="brand-select" onchange="onBrandChange()">
-        {% for b in brands %}
+    <div class="select-row">
+      <div>
+        <label>브랜드</label>
+        <select id="brand-select" onchange="onBrandChange()">
+          {% for b in brands %}
           <option value="{{ b.id }}"
             data-color="{{ b.primary_color or '#4b5cde' }}"
             {% if b.id == default_brand.id %}selected{% endif %}>
             {{ b.name }}
           </option>
-        {% endfor %}
-      </select>
-      <span class="cost-badge">🪙 400P 차감</span>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>제품 <span class="free-badge">자동완성</span></label>
+        <select id="product-select" onchange="onProductChange()">
+          <option value="">— 제품 선택 —</option>
+        </select>
+      </div>
+      <button class="btn-autofill" id="btn-autofill" onclick="autofill()" disabled>
+        ✨ 자동완성
+      </button>
     </div>
+    <div class="status" id="autofill-status"></div>
   </div>
 
-  <!-- 배경 이미지 -->
+  <!-- ② 배경 이미지 -->
   <div class="sf3-card">
-    <label>배경 이미지</label>
-    <div class="bg-section">
-      <div class="bg-preview-box" id="bg-preview-box">
-        <span style="color:#555;font-size:.8rem;">미리보기</span>
+    <label>배경 이미지 <span class="free-badge">Schnell 무료</span></label>
+    <div class="bg-row">
+      <div class="bg-thumb" id="bg-thumb">
+        <span>미리보기</span>
       </div>
       <div class="bg-controls">
-        <label>이미지 설명 (영문 또는 한국어)</label>
-        <textarea id="bg-prompt" placeholder="예: premium vegetable powder product, dark background, dramatic studio lighting, cinematic composition"></textarea>
+        <label>이미지 설명 (영문 권장)</label>
+        <textarea id="bg-prompt" placeholder="예: premium vegetable powder, dark studio, cinematic lighting"></textarea>
         <button class="btn-gen-bg" id="btn-gen-bg" onclick="generateBg()">
-          🖼 배경 이미지 생성 (무료 Schnell)
+          🖼 배경 이미지 생성
         </button>
-        <div class="status-bar" id="bg-status"></div>
-        <!-- 또는 URL 직접 입력 -->
-        <div style="margin-top:.8rem;">
-          <label style="margin-top:.6rem;">또는 이미지 URL 직접 입력</label>
+        <div style="margin-top:.7rem;">
+          <label>또는 이미지 URL 직접 입력</label>
           <input type="url" id="bg-url-input" placeholder="https://..." oninput="onBgUrlInput()">
         </div>
+        <div class="status" id="bg-status"></div>
       </div>
     </div>
-    <input type="hidden" id="bg-image-url" value="">
+    <input type="hidden" id="bg-image-url">
   </div>
 
-  <!-- 헤드카피 -->
+  <!-- ③ 헤드카피 -->
   <div class="sf3-card">
-    <label>헤드카피 (상단 문구)</label>
+    <label>헤드카피</label>
     <input type="text" id="headline" maxlength="40"
-           placeholder="예: 왜 이 제품이 다를까요?" style="font-size:1rem;">
+           placeholder="제품을 선택하면 자동으로 채워집니다">
   </div>
 
-  <!-- 소구포인트 3개 -->
+  <!-- ④ 소구포인트 3개 -->
   <div class="sf3-card">
     <label>소구포인트 (최대 3개)</label>
     <div class="feat-row">
       {% for i in range(1, 4) %}
       <div class="feat-item">
         <div class="feat-num">0{{ i }}</div>
-        <input type="text" id="feat{{ i }}-title" maxlength="20"
-               placeholder="제목 (예: 국내산 100%)">
-        <textarea id="feat{{ i }}-desc" maxlength="80"
-                  placeholder="설명 (예: 국내산 야채만 엄선해 사용합니다)"></textarea>
+        <input  type="text" id="feat{{ i }}-title" maxlength="20" placeholder="제목">
+        <textarea id="feat{{ i }}-desc"  maxlength="80"  placeholder="한 줄 설명"></textarea>
       </div>
       {% endfor %}
     </div>
   </div>
 
-  <!-- 생성 버튼 -->
-  <button class="btn-generate" id="btn-generate" onclick="generate()">
-    ✨ 소구포인트 이미지 생성
-  </button>
-  <div class="status-bar" id="gen-status"></div>
+  <!-- ⑤ 생성 -->
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+    <button class="btn-generate" id="btn-generate" onclick="generate()" style="flex:1;min-width:200px;">
+      🎨 소구포인트 이미지 생성
+    </button>
+    <span class="cost-badge">🪙 400P 차감</span>
+  </div>
+  <div class="status" id="gen-status"></div>
 
-  <!-- 결과 -->
+  <!-- ⑥ 결과 -->
   <div id="result-section">
     <div class="sf3-card" style="text-align:center;">
       <img id="result-img" src="" alt="생성된 이미지">
-      <a id="btn-download" class="btn-download" href="#" download="feature3.png">
-        ⬇ 이미지 다운로드
-      </a>
-      &nbsp;
-      <button class="btn-download" onclick="addToSession()">
-        ➕ 상세페이지에 추가
-      </button>
+      <a  id="btn-download" class="btn-dl" href="#" download="feature3.png">⬇ 다운로드</a>
+      <button class="btn-dl" onclick="addToCollection()">➕ 상세페이지에 추가</button>
     </div>
   </div>
 
@@ -331,23 +257,102 @@
 const CSRF = '{{ csrf_token() }}';
 let brandColor = '{{ default_brand.primary_color or "#4b5cde" }}';
 
+/* ════════════════════════════════════
+   브랜드 변경 → 제품 목록 로드
+════════════════════════════════════ */
 function onBrandChange() {
   const sel = document.getElementById('brand-select');
   const opt = sel.options[sel.selectedIndex];
   brandColor = opt.dataset.color || '#4b5cde';
+  loadProducts(sel.value);
 }
 
-/* ── 배경 이미지 생성 ── */
+async function loadProducts(brandId) {
+  const ps = document.getElementById('product-select');
+  ps.innerHTML = '<option value="">불러오는 중…</option>';
+  document.getElementById('btn-autofill').disabled = true;
+  try {
+    const r = await fetch(`{{ url_for('create.dpb_products') }}?brand_id=${brandId}`);
+    const d = await r.json();
+    ps.innerHTML = '<option value="">— 제품 선택 —</option>';
+    (d.products || []).forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      ps.appendChild(o);
+    });
+  } catch {
+    ps.innerHTML = '<option value="">로드 실패</option>';
+  }
+}
+
+function onProductChange() {
+  const pid = document.getElementById('product-select').value;
+  document.getElementById('btn-autofill').disabled = !pid;
+}
+
+/* ════════════════════════════════════
+   자동완성 (무료)
+════════════════════════════════════ */
+async function autofill() {
+  const pid = document.getElementById('product-select').value;
+  const bid = document.getElementById('brand-select').value;
+  if (!pid) return;
+
+  const btn = document.getElementById('btn-autofill');
+  btn.disabled = true;
+  setStatus('autofill-status', '<span class="sp"></span> AI가 카피를 작성 중…');
+
+  try {
+    const r = await fetch(
+      `{{ url_for('create.dpb_section_feature3_autofill') }}?product_id=${pid}&brand_id=${bid}`
+    );
+    const d = await r.json();
+    if (!d.ok) { setStatus('autofill-status', d.message || '실패', true); return; }
+
+    // 헤드카피
+    const hEl = document.getElementById('headline');
+    hEl.value = d.headline || '';
+    hEl.classList.add('autofilled');
+
+    // 배경 프롬프트
+    const bpEl = document.getElementById('bg-prompt');
+    bpEl.value = d.bg_prompt || '';
+    bpEl.classList.add('autofilled');
+
+    // 소구포인트
+    const feats = d.features || [];
+    for (let i = 0; i < 3; i++) {
+      const f = feats[i] || {};
+      const tEl = document.getElementById(`feat${i+1}-title`);
+      const dEl = document.getElementById(`feat${i+1}-desc`);
+      tEl.value = f.title || '';
+      dEl.value = f.desc  || '';
+      tEl.classList.add('autofilled');
+      dEl.classList.add('autofilled');
+    }
+
+    setStatus('autofill-status', '✅ 자동완성 완료 — 내용을 자유롭게 수정하세요', false, true);
+  } catch (e) {
+    setStatus('autofill-status', '오류: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ════════════════════════════════════
+   배경 이미지 생성 (Schnell 무료)
+════════════════════════════════════ */
 async function generateBg() {
   const prompt = document.getElementById('bg-prompt').value.trim();
   if (!prompt) { setStatus('bg-status', '이미지 설명을 입력해 주세요.', true); return; }
 
   const btn = document.getElementById('btn-gen-bg');
   btn.disabled = true;
-  setStatus('bg-status', '<span class="spinner"></span> 배경 이미지 생성 중…');
+  setStatus('bg-status', '<span class="sp"></span> 배경 생성 중…');
 
   try {
-    const res = await fetch('{{ url_for("create.dpb_gen_image") }}', {
+    const r = await fetch('{{ url_for("create.dpb_gen_image") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({
@@ -357,15 +362,15 @@ async function generateBg() {
         quality: 'preview',
       }),
     });
-    const d = await res.json();
+    const d = await r.json();
     if (d.ok) {
       setBgImage(d.image_url);
-      setStatus('bg-status', '✅ 배경 이미지 생성 완료');
+      setStatus('bg-status', '✅ 완료', false, true);
     } else {
       setStatus('bg-status', d.message || '생성 실패', true);
     }
   } catch (e) {
-    setStatus('bg-status', '네트워크 오류: ' + e.message, true);
+    setStatus('bg-status', '오류: ' + e.message, true);
   } finally {
     btn.disabled = false;
   }
@@ -379,23 +384,25 @@ function onBgUrlInput() {
 function setBgImage(url) {
   document.getElementById('bg-image-url').value = url;
   document.getElementById('bg-url-input').value = url;
-  const box = document.getElementById('bg-preview-box');
-  box.innerHTML = `<img src="${url}" alt="배경" onerror="this.parentNode.innerHTML='<span style=color:#555;font-size:.8rem>로드 실패</span>'">`;
+  const thumb = document.getElementById('bg-thumb');
+  thumb.innerHTML = `<img src="${url}" alt="배경" onerror="this.parentNode.innerHTML='<span>로드 실패</span>'">`;
 }
 
-/* ── 소구포인트 이미지 생성 ── */
+/* ════════════════════════════════════
+   이미지 생성 (400P)
+════════════════════════════════════ */
 async function generate() {
-  const bgUrl   = document.getElementById('bg-image-url').value.trim();
+  const bgUrl    = document.getElementById('bg-image-url').value.trim();
   const headline = document.getElementById('headline').value.trim();
-
-  if (!bgUrl)     { setStatus('gen-status', '배경 이미지를 먼저 생성하거나 URL을 입력해 주세요.', true); return; }
-  if (!headline)  { setStatus('gen-status', '헤드카피를 입력해 주세요.', true); return; }
+  if (!bgUrl)    { setStatus('gen-status', '배경 이미지를 먼저 생성하거나 URL을 입력해 주세요.', true); return; }
+  if (!headline) { setStatus('gen-status', '헤드카피를 입력해 주세요.', true); return; }
 
   const features = [];
   for (let i = 1; i <= 3; i++) {
-    const title = (document.getElementById(`feat${i}-title`).value || '').trim();
-    const desc  = (document.getElementById(`feat${i}-desc`).value  || '').trim();
-    features.push({ title, desc });
+    features.push({
+      title: (document.getElementById(`feat${i}-title`).value || '').trim(),
+      desc:  (document.getElementById(`feat${i}-desc`).value  || '').trim(),
+    });
   }
   if (!features.some(f => f.title)) {
     setStatus('gen-status', '소구포인트 제목을 1개 이상 입력해 주세요.', true);
@@ -404,10 +411,10 @@ async function generate() {
 
   const btn = document.getElementById('btn-generate');
   btn.disabled = true;
-  setStatus('gen-status', '<span class="spinner"></span> 이미지 합성 중… 잠시만 기다려 주세요.');
+  setStatus('gen-status', '<span class="sp"></span> 이미지 합성 중… 잠시만 기다려 주세요.');
 
   try {
-    const res = await fetch('{{ url_for("create.dpb_section_feature3_generate") }}', {
+    const r = await fetch('{{ url_for("create.dpb_section_feature3_generate") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({
@@ -418,32 +425,31 @@ async function generate() {
         brand_color:  brandColor,
       }),
     });
-    const d = await res.json();
+    const d = await r.json();
     if (d.ok) {
       showResult(d.image_url);
-      setStatus('gen-status', '✅ 이미지 생성 완료!');
+      setStatus('gen-status', '✅ 이미지 생성 완료!', false, true);
     } else if (d.error === 'points') {
       setStatus('gen-status', '⚠️ ' + d.message, true);
     } else {
       setStatus('gen-status', d.message || '생성 실패', true);
     }
   } catch (e) {
-    setStatus('gen-status', '네트워크 오류: ' + e.message, true);
+    setStatus('gen-status', '오류: ' + e.message, true);
   } finally {
     btn.disabled = false;
   }
 }
 
 function showResult(url) {
-  const section = document.getElementById('result-section');
   document.getElementById('result-img').src = url;
   document.getElementById('btn-download').href = url;
-  section.classList.add('visible');
-  section.scrollIntoView({ behavior: 'smooth' });
+  const s = document.getElementById('result-section');
+  s.classList.add('visible');
+  s.scrollIntoView({ behavior: 'smooth' });
 }
 
-function addToSession() {
-  // 세션 스토리지에 이미지 URL 저장 → 빌더 페이지로 이동
+function addToCollection() {
   const url = document.getElementById('result-img').src;
   if (!url) return;
   let imgs = JSON.parse(sessionStorage.getItem('dpb_collected') || '[]');
@@ -452,10 +458,19 @@ function addToSession() {
   alert('상세페이지 컬렉션에 추가되었습니다.');
 }
 
-function setStatus(id, html, isErr = false) {
+/* ════════════════════════════════════
+   유틸
+════════════════════════════════════ */
+function setStatus(id, html, isErr = false, isOk = false) {
   const el = document.getElementById(id);
   el.innerHTML = html;
-  el.className = 'status-bar' + (isErr ? ' err' : '');
+  el.className = 'status' + (isErr ? ' err' : isOk ? ' ok' : '');
 }
+
+/* 초기 제품 로드 */
+document.addEventListener('DOMContentLoaded', () => {
+  const bid = document.getElementById('brand-select').value;
+  if (bid) loadProducts(bid);
+});
 </script>
 {% endblock %}
