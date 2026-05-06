@@ -663,18 +663,45 @@ def dpb_story_plan():
         parsed = _json.loads(raw)
         # ── 배열 or {"sections":[...]} 두 형태 모두 처리
         if isinstance(parsed, dict):
-            sections = parsed.get('sections') or parsed.get('data') or list(parsed.values())[0]
+            sections = (parsed.get('sections') or parsed.get('data')
+                        or parsed.get('pages') or list(parsed.values())[0])
         else:
             sections = parsed
         if not isinstance(sections, list):
             raise ValueError(f'sections가 list가 아님: {type(sections)}')
-        # ── template 필드 없으면 기본값 채워주기
-        VALID_TMPLS = {'hero','feature3','feature_highlight','text_emphasis','cta'}
+
+        # ── template 키 정규화 (type / section_type / template_type 등 허용)
+        VALID_TMPLS = {'hero', 'feature3', 'feature_highlight', 'text_emphasis', 'cta'}
+        TMPL_ALIAS  = {
+            # 완전 일치 변형
+            'feature_3': 'feature3', 'features3': 'feature3',
+            'highlight': 'feature_highlight', 'feature': 'feature_highlight',
+            'text': 'text_emphasis', 'emphasis': 'text_emphasis', 'quote': 'text_emphasis',
+            'call_to_action': 'cta', 'closing': 'cta',
+            'header': 'hero', 'opening': 'hero',
+        }
         for sec in sections:
             if not isinstance(sec, dict):
                 continue
-            if sec.get('template') not in VALID_TMPLS:
-                sec['template'] = 'text_emphasis'   # fallback
+            # template 키가 없으면 type / section_type 에서 찾기
+            if 'template' not in sec:
+                for key in ('type', 'section_type', 'template_type', 'layout'):
+                    if key in sec:
+                        sec['template'] = sec[key]
+                        break
+            tmpl = str(sec.get('template', '')).lower().strip()
+            if tmpl not in VALID_TMPLS:
+                tmpl = TMPL_ALIAS.get(tmpl, '')
+            if tmpl not in VALID_TMPLS:
+                # 부분 문자열 매칭 (마지막 수단)
+                if 'hero' in tmpl or 'open' in tmpl:   tmpl = 'hero'
+                elif 'feature3' in tmpl or 'three' in tmpl or '3' in tmpl: tmpl = 'feature3'
+                elif 'highlight' in tmpl or 'single' in tmpl: tmpl = 'feature_highlight'
+                elif 'cta' in tmpl or 'action' in tmpl or 'buy' in tmpl:  tmpl = 'cta'
+                else: tmpl = 'text_emphasis'
+            sec['template'] = tmpl
+
+        logger.info(f'[DPB] story plan templates: {[s.get("template") for s in sections]}')
         return jsonify(ok=True, sections=sections, product_name=product['name'])
     except Exception as e:
         logger.error(f'[DPB] story plan error: {e}', exc_info=True)
