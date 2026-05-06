@@ -31,18 +31,26 @@ _ROLE_GUIDE = {
 
 _DEFAULT_GUIDE = '해당 섹션에 적합한 내용을 2~4문장으로 작성하세요.'
 
-# ── 이미지 역할별 자동 프롬프트 ─────────────────────────────
+# ── 이미지 역할별 자동 프롬프트 (영문 — FLUX 직접 사용)
 _IMAGE_PROMPT_HINTS = {
-    'problem':    '고객이 불편함을 겪고 있는 모습. 공감 가는 일상적 상황.',
-    'solution':   '문제가 해결된 후 밝고 만족스러운 모습. 긍정적이고 희망적인 분위기.',
-    'before':     '사용 전의 힘들거나 불편한 상황. 어둡고 무거운 분위기.',
-    'after':      '사용 후 변화된 밝고 행복한 모습. 선명하고 긍정적인 분위기.',
-    'product':    '제품을 중심으로 한 깔끔한 상업용 촬영. 스튜디오 조명. 프리미엄 느낌.',
-    'lifestyle':  '이상적인 일상 생활 장면. 따뜻하고 자연스러운 라이프스타일 사진.',
-    'expert':     '전문가 또는 연구소 환경. 신뢰감 있고 전문적인 분위기.',
-    'data':       '깔끔한 인포그래픽 배경 또는 연구 환경. 전문적이고 신뢰감 있는 이미지.',
-    'story':      '브랜드의 진정성 있는 스토리를 담은 장면. 따뜻하고 인간적인 분위기.',
-    'comparison': '두 가지를 비교하는 명확한 장면. 차이가 한눈에 보이는 구도.',
+    'hook':       'bold eye-catching visual, emotional impact, dramatic lighting, cinematic composition',
+    'empathy':    'relatable everyday situation showing discomfort, warm realistic atmosphere, candid lifestyle',
+    'problem':    'person experiencing daily inconvenience or frustration, empathetic scene, soft natural light',
+    'cause':      'symbolic visual showing root cause of a problem, conceptual and clear composition',
+    'solution':   'bright satisfied expression after problem solved, hopeful positive atmosphere, warm tones',
+    'before':     'uncomfortable difficult situation before using product, dark heavy mood, contrast shadows',
+    'after':      'happy transformed lifestyle after using product, bright vibrant positive atmosphere',
+    'product':    'clean commercial product photography, studio lighting, white background, premium feel, sharp detail',
+    'feature':    'close-up product detail shot highlighting key feature, clean minimalist studio background',
+    'lifestyle':  'ideal daily life scene, warm natural lifestyle photography, authentic candid moment',
+    'expert':     'professional laboratory or clinical environment, trustworthy expert atmosphere, clean and credible',
+    'data':       'clean infographic background, research environment, professional trustworthy image, data visualization',
+    'story':      'genuine brand story scene, warm human connection, authentic emotional storytelling',
+    'comparison': 'clear side-by-side comparison scene, visual contrast highlighting difference, clean composition',
+    'review':     'happy satisfied customer using product naturally, genuine lifestyle photography',
+    'fomo':       'energetic crowd of people enjoying product together, trendy vibrant social scene',
+    'benefit':    'abundant positive visual showing value and benefits, bright optimistic atmosphere',
+    'cta':        'bold energetic call-to-action visual, vibrant colors, motivating atmosphere',
 }
 
 
@@ -227,14 +235,15 @@ def dpb_gen_image():
     except InsufficientPoints as e:
         return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
 
-    # FLUX 생성
+    # FLUX 생성 (_generate_flux 내부에서 한글 자동 번역됨)
     try:
         from services.imagen_service import generate_image, upload_to_supabase
-        image_url, _ = generate_image(image_prompt, engine=engine, size='1024x1024')
+        image_url, prompt_en = generate_image(image_prompt, engine=engine, size='1024x1024')
+        logger.info(f'[DPB] gen-image done. prompt_en={prompt_en[:60]}')
 
         # Supabase Storage에 업로드 (안정적인 URL 확보)
         stable_url = upload_to_supabase(image_url, current_user.id, f'dpb_{block_role}.jpg')
-        return jsonify(ok=True, image_url=stable_url, prompt_used=image_prompt)
+        return jsonify(ok=True, image_url=stable_url, prompt_used=prompt_en)
     except Exception as e:
         logger.error(f'[DPB] gen-image error: {e}')
         return jsonify(ok=False, message=f'이미지 생성 중 오류가 발생했습니다: {str(e)[:80]}')
