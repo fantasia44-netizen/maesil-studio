@@ -250,9 +250,10 @@
 
 <script>
 const CSRF = '{{ csrf_token() }}';
-let brandColor = '{{ default_brand.primary_color or "#4b5cde" }}';
-let storyPlan  = [];    // [{template, ...}]
-let resultUrls = [];    // 완성된 이미지 URL 목록
+let brandColor    = '{{ default_brand.primary_color or "#4b5cde" }}';
+let storyPlan     = [];   // [{template, ...}]
+let resultUrls    = [];   // 완성된 이미지 URL 목록
+let productImages = [];   // 제품 업로드 이미지 목록
 
 const COSTS = { hero:200, feature3:400, feature_highlight:300, text_emphasis:150, cta:200 };
 const LABELS = { hero:'히어로 헤더', feature3:'소구포인트 3열',
@@ -267,7 +268,15 @@ function onBrandChange() {
 function onProductChange() {
   const pid = document.getElementById('product-select').value;
   document.getElementById('btn-plan').disabled = !pid;
-  if (pid) updateCostEstimate();
+  if (pid) { updateCostEstimate(); loadProductImages(pid); }
+}
+async function loadProductImages(pid) {
+  productImages = [];
+  try {
+    const r = await fetch(`{{ url_for('create.dpb_story_product_images') }}?product_id=${pid}`);
+    const d = await r.json();
+    productImages = d.images || [];
+  } catch {}
 }
 async function loadProducts(brandId) {
   const ps = document.getElementById('product-select');
@@ -339,17 +348,118 @@ function renderPlan() {
     const tmpl  = sec.template || 'unknown';
     const badge = LABELS[tmpl] || tmpl;
     const label = sectionLabel(sec);
+
+    // 제품 이미지 선택 옵션
+    let imgOpts = '<option value="">AI 자동 생성</option>';
+    productImages.forEach((u, pi) => {
+      imgOpts += `<option value="${u}">제품 사진 ${pi+1}</option>`;
+    });
+    const showImgSel = tmpl !== 'text_emphasis';
+
     ul.innerHTML += `
       <li class="plan-item" id="plan-item-${i}">
-        <span class="tmpl-badge tmpl-${tmpl}" style="background:#1a1b2e;color:#90caf9;">${badge}</span>
-        <span class="plan-text">${label || '(내용 없음)'}</span>
-        <span class="plan-status" id="plan-status-${i}">대기</span>
+        <div style="display:flex;align-items:center;gap:.7rem;width:100%;flex-wrap:wrap;">
+          <span class="tmpl-badge tmpl-${tmpl}" style="min-width:90px;text-align:center;">${badge}</span>
+          <span class="plan-text" style="flex:1;min-width:120px;">${label || '(내용 없음)'}</span>
+          ${showImgSel ? `
+          <select class="bg-src-sel" id="bgsrc-${i}"
+            style="background:#0f0f1a;border:1px solid #2a2b42;color:#e8eaf6;border-radius:6px;
+                   padding:.3rem .6rem;font-size:.78rem;max-width:150px;">
+            ${imgOpts}
+          </select>` : ''}
+          <button onclick="toggleEdit(${i})"
+            style="background:#1e2038;border:1px solid #2a2b42;color:#9196c0;border-radius:6px;
+                   padding:.3rem .7rem;font-size:.78rem;cursor:pointer;white-space:nowrap;">
+            ✏ 편집
+          </button>
+          <span class="plan-status" id="plan-status-${i}">대기</span>
+        </div>
+        <div id="edit-panel-${i}" style="display:none;width:100%;margin-top:.6rem;">
+          ${buildEditFields(sec, i)}
+        </div>
       </li>`;
   });
   document.getElementById('progress-bar').style.width = '0%';
   document.getElementById('progress-label').textContent = '대기 중';
   document.getElementById('gallery-grid').innerHTML = '';
   document.getElementById('gallery-count').textContent = '0';
+}
+
+function buildEditFields(sec, i) {
+  const tmpl = sec.template || '';
+  const inp = (id, val, ph, tag='input') => {
+    const v = (val||'').replace(/"/g,'&quot;');
+    if (tag==='textarea')
+      return `<div style="margin-bottom:.4rem;"><textarea id="ef-${i}-${id}" rows="2"
+        style="width:100%;background:#0a0a15;border:1px solid #2a2b42;color:#e8eaf6;
+               border-radius:6px;padding:.4rem .6rem;font-size:.83rem;resize:vertical;"
+        placeholder="${ph}">${v}</textarea></div>`;
+    return `<div style="margin-bottom:.4rem;"><input type="text" id="ef-${i}-${id}" value="${v}"
+      style="width:100%;background:#0a0a15;border:1px solid #2a2b42;color:#e8eaf6;
+             border-radius:6px;padding:.4rem .6rem;font-size:.83rem;"
+      placeholder="${ph}"></div>`;
+  };
+  let html = `<div style="background:#0a0a15;border:1px solid #1e2038;border-radius:8px;padding:.8rem;">`;
+  if (tmpl === 'hero') {
+    html += inp('headline', sec.headline, '헤드라인 (예: 언제부터 이게 이렇게 쉬웠나요?)');
+    html += inp('subtext',  sec.subtext,  '서브텍스트 (선택)', 'textarea');
+  } else if (tmpl === 'feature3') {
+    html += inp('headline', sec.headline, '헤드라인');
+    (sec.features||[{},{},{}]).slice(0,3).forEach((f,fi) => {
+      html += `<div style="display:grid;grid-template-columns:1fr 2fr;gap:.4rem;margin-bottom:.3rem;">
+        <input id="ef-${i}-feat${fi}_title" value="${(f.title||'').replace(/"/g,'&quot;')}"
+          style="background:#0a0a15;border:1px solid #2a2b42;color:#e8eaf6;border-radius:5px;
+                 padding:.35rem .5rem;font-size:.8rem;" placeholder="제목 0${fi+1}">
+        <input id="ef-${i}-feat${fi}_desc" value="${(f.desc||'').replace(/"/g,'&quot;')}"
+          style="background:#0a0a15;border:1px solid #2a2b42;color:#e8eaf6;border-radius:5px;
+                 padding:.35rem .5rem;font-size:.8rem;" placeholder="설명 0${fi+1}">
+      </div>`;
+    });
+  } else if (tmpl === 'feature_highlight') {
+    html += inp('title',  sec.title,  '특장점 제목');
+    html += inp('desc',   sec.desc,   '상세 설명', 'textarea');
+  } else if (tmpl === 'text_emphasis') {
+    html += inp('main_text', sec.main_text, '강조 문구 (예: 47가지 야채가 한 큐브에)');
+    html += inp('sub_text',  sec.sub_text,  '서브 문구 (선택)');
+  } else if (tmpl === 'cta') {
+    html += inp('cta_text', sec.cta_text, 'CTA 문구 (예: 지금 바로 경험해보세요)');
+    html += inp('sub_text', sec.sub_text, '서브 문구 (선택)');
+  }
+  html += `</div>`;
+  return html;
+}
+
+function toggleEdit(i) {
+  const panel = document.getElementById(`edit-panel-${i}`);
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function applyEdits(i) {
+  // 편집 패널 값을 storyPlan[i]에 반영
+  const sec = storyPlan[i];
+  const val = id => {
+    const el = document.getElementById(`ef-${i}-${id}`);
+    return el ? el.value.trim() : '';
+  };
+  const tmpl = sec.template || '';
+  if (tmpl === 'hero') {
+    sec.headline = val('headline'); sec.subtext = val('subtext');
+  } else if (tmpl === 'feature3') {
+    sec.headline = val('headline');
+    sec.features = [0,1,2].map(fi => ({
+      title: val(`feat${fi}_title`), desc: val(`feat${fi}_desc`)
+    }));
+  } else if (tmpl === 'feature_highlight') {
+    sec.title = val('title'); sec.desc = val('desc');
+  } else if (tmpl === 'text_emphasis') {
+    sec.main_text = val('main_text'); sec.sub_text = val('sub_text');
+  } else if (tmpl === 'cta') {
+    sec.cta_text = val('cta_text'); sec.sub_text = val('sub_text');
+  }
+  // 배경 이미지 소스
+  const bgSel = document.getElementById(`bgsrc-${i}`);
+  if (bgSel && bgSel.value) sec._bg_override = bgSel.value;
+  else delete sec._bg_override;
 }
 
 function sectionLabel(sec) {
@@ -373,6 +483,9 @@ async function generateAll() {
 
   const bid = document.getElementById('brand-select').value;
   let done = 0, failed = 0;
+
+  // 생성 전 모든 편집 내용 반영
+  for (let j = 0; j < storyPlan.length; j++) applyEdits(j);
 
   for (let i = 0; i < storyPlan.length; i++) {
     const sec = storyPlan[i];
@@ -443,21 +556,47 @@ function addGalleryItem(url, label, idx) {
     <img src="${url}" alt="${label}" loading="lazy">
     <div class="gallery-item-footer">
       <span>${idx}. ${label}</span>
-      <a class="btn-dl-small" href="${url}" download="detail_${idx}.png">⬇</a>
+      <button class="btn-dl-small" onclick="downloadOne('${url}','${idx}_${label}')">⬇</button>
     </div>`;
   grid.appendChild(div);
 }
 
-function downloadAll() {
+async function downloadOne(url, name) {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `상세페이지_${name}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch { window.open(url, '_blank'); }
+}
+
+async function downloadAll() {
   if (!resultUrls.length) return;
-  resultUrls.forEach((item, i) => {
-    setTimeout(() => {
+  for (let i = 0; i < resultUrls.length; i++) {
+    const item = resultUrls[i];
+    try {
+      const resp = await fetch(item.url);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = item.url;
-      a.download = `detail_${item.index + 1}_${item.label}.png`;
+      a.href = blobUrl;
+      a.download = `상세페이지_${String(item.index+1).padStart(2,'0')}_${item.label}.png`;
+      document.body.appendChild(a);
       a.click();
-    }, i * 400);
-  });
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch(e) {
+      // cross-origin fallback: open in new tab
+      window.open(item.url, '_blank');
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
 }
 
 /* ═══════════════ 유틸 ═══════════════ */

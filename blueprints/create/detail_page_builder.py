@@ -585,6 +585,41 @@ def dpb_story_page():
     )
 
 
+@create_bp.route('/detail-page/story/product-images')
+@login_required
+def dpb_story_product_images():
+    """제품에 등록된 이미지 URL 목록 반환 (배경 선택용)."""
+    supabase   = current_app.supabase
+    product_id = request.args.get('product_id', '').strip()
+    if not product_id:
+        return jsonify(ok=True, images=[])
+    try:
+        res = supabase.table('products').select('images,image_url,thumbnail_url') \
+                      .eq('id', product_id).single().execute()
+        p = res.data or {}
+        imgs = []
+        # images 필드 (배열 or JSON)
+        raw = p.get('images')
+        if isinstance(raw, list):
+            imgs += [u for u in raw if u and isinstance(u, str)]
+        elif isinstance(raw, str) and raw.startswith('http'):
+            imgs.append(raw)
+        # 단일 image_url
+        if p.get('image_url'):
+            imgs.append(p['image_url'])
+        if p.get('thumbnail_url'):
+            imgs.append(p['thumbnail_url'])
+        # 중복 제거
+        seen, unique = set(), []
+        for u in imgs:
+            if u not in seen:
+                seen.add(u); unique.append(u)
+        return jsonify(ok=True, images=unique[:12])
+    except Exception as e:
+        logger.error(f'[DPB] product-images error: {e}')
+        return jsonify(ok=True, images=[])
+
+
 @create_bp.route('/detail-page/story/plan', methods=['POST'])
 @login_required
 def dpb_story_plan():
@@ -750,9 +785,9 @@ def dpb_story_generate_section():
             generate_cta_section, upload_to_supabase, generate_image,
         )
 
-        # 배경 이미지 생성 (text_emphasis 제외) — 실패해도 단색 배경으로 계속 진행
-        bg_url = ''
-        if tmpl != 'text_emphasis' and section.get('bg_prompt'):
+        # 배경 이미지 — 제품사진 직접 선택 > AI 생성 > 단색 fallback
+        bg_url = section.get('_bg_override', '').strip()
+        if not bg_url and tmpl != 'text_emphasis' and section.get('bg_prompt'):
             try:
                 bg_url, _ = generate_image(section['bg_prompt'], engine='flux_preview', size='1024x768')
             except Exception as flux_err:
