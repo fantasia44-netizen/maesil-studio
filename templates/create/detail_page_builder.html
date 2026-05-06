@@ -148,6 +148,21 @@
 /* ── 스피너 ── */
 .spin { animation: spin .8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 미리보기 섹션 레이아웃 ── */
+.prev-text-bg { padding: 3.5rem 2.5rem; }
+.prev-full-image img { width: 100%; display: block; }
+.prev-split { display: flex; align-items: stretch; min-height: 280px; }
+.prev-split-img { flex: 0 0 42%; overflow: hidden; }
+.prev-split-img img { width: 100%; height: 100%; object-fit: cover; }
+.prev-split-txt { flex: 1; padding: 2.5rem; display: flex; flex-direction: column; justify-content: center; }
+.prev-hero { position: relative; min-height: 300px; overflow: hidden; }
+.prev-hero img { width: 100%; height: 360px; object-fit: cover; display: block; }
+.prev-hero-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 2rem 2.5rem; background: linear-gradient(0deg, rgba(0,0,0,.75) 0%, transparent 100%); color: #fff; }
+.prev-cta { padding: 4rem 2.5rem; text-align: center; }
+/* ── 에디터 블록 레이아웃 아이콘 버튼 ── */
+.layout-btn { padding: 3px 7px; font-size: .7rem; border: 1.5px solid #dde; border-radius: 4px; background: #f8f9fa; cursor: pointer; color: #666; white-space: nowrap; }
+.layout-btn.active { border-color: #4b5cde; background: #eef1ff; color: #4b5cde; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -546,6 +561,29 @@
 // ════════════════════════════════════════════
 const TEMPLATE_DATA = {{ templates | tojson }};
 const CSRF = '{{ csrf_token() }}';
+
+// ── 역할별 기본 레이아웃/색상 ──
+const ROLE_DEFAULT_LAYOUT = {
+  hook:       { layout: 'text_bg',    bgColor: '#1a2332', textColor: '#ffffff' },
+  empathy:    { layout: 'text_bg',    bgColor: '#fff9f9', textColor: '#444444' },
+  cause:      { layout: 'text_bg',    bgColor: '#f8f9fa', textColor: '#555555' },
+  product:    { layout: 'split_left', bgColor: '#ffffff', textColor: '#333333' },
+  feature:    { layout: 'split_right',bgColor: '#f0f4ff', textColor: '#333333' },
+  story:      { layout: 'split_left', bgColor: '#fdfcf8', textColor: '#555555' },
+  lifestyle:  { layout: 'split_right',bgColor: '#fffdf7', textColor: '#666666' },
+  before:     { layout: 'split_left', bgColor: '#fff5f5', textColor: '#333333' },
+  after:      { layout: 'split_right',bgColor: '#f0fff4', textColor: '#333333' },
+  expert:     { layout: 'split_left', bgColor: '#f8fafb', textColor: '#444444' },
+  comparison: { layout: 'full_image', bgColor: '#ffffff', textColor: '#333333' },
+  data:       { layout: 'text_bg',    bgColor: '#eef1ff', textColor: '#4b5cde' },
+  review:     { layout: 'text_bg',    bgColor: '#fffbf0', textColor: '#666666' },
+  fomo:       { layout: 'text_bg',    bgColor: '#fff8f0', textColor: '#c0392b' },
+  benefit:    { layout: 'text_bg',    bgColor: '#f0fff4', textColor: '#1e8449' },
+  cta:        { layout: 'cta',        bgColor: '#4b5cde', textColor: '#ffffff' },
+  solution:   { layout: 'split_right',bgColor: '#ffffff', textColor: '#333333' },
+  problem:    { layout: 'full_image', bgColor: '#ffffff', textColor: '#333333' },
+};
+
 let blocks       = [];
 let templateMeta = null;
 let _uploadTargetId = null;  // 업로드 대상 블록 ID
@@ -647,16 +685,20 @@ function selectTemplate(tplId) {
   const tpl = TEMPLATE_DATA.find(t => t.id === tplId);
   if (!tpl) return;
   templateMeta = tpl;
-  blocks = tpl.blocks.map(b => ({
-    id:          uid(),
-    type:        b.type,
-    role:        b.role,
-    label:       b.label,
-    placeholder: b.placeholder || '',
-    content:     '',
-    imageUrl:    null,
-    imageMode:   'flux',
-  }));
+  blocks = tpl.blocks.map(b => {
+    const def = ROLE_DEFAULT_LAYOUT[b.role] || { layout: b.type === 'image' ? 'full_image' : 'text_bg', bgColor: '#ffffff', textColor: '#333333' };
+    return {
+      id:          uid(),
+      role:        b.role,
+      label:       b.label,
+      placeholder: b.placeholder || '',
+      content:     '',
+      imageUrl:    null,
+      layout:      def.layout,
+      bgColor:     def.bgColor,
+      textColor:   def.textColor,
+    };
+  });
 
   const badge = document.getElementById('tpl-badge');
   badge.textContent = tpl.name;
@@ -747,7 +789,8 @@ function confirmAddBlock() {
   const type  = document.getElementById('new-block-type').value;
   const role  = document.getElementById('new-block-role').value;
   const label = document.getElementById('new-block-label').value.trim() || role;
-  blocks.push({ id:uid(), type, role, label, placeholder:'', content:'', imageUrl:null, imageMode:'flux' });
+  const def = ROLE_DEFAULT_LAYOUT[role] || { layout: type === 'image' ? 'full_image' : 'text_bg', bgColor: '#ffffff', textColor: '#333333' };
+  blocks.push({ id:uid(), role, label, placeholder:'', content:'', imageUrl:null, layout: def.layout, bgColor: def.bgColor, textColor: def.textColor });
   _addModal.hide();
   renderEditor();
   renderPreview();
@@ -968,10 +1011,106 @@ async function handleImageUpload(input) {
 // ════════════════════════════════════════════
 // 에디터 렌더링
 // ════════════════════════════════════════════
-const TYPE_BADGE = {
-  text:  {cls:'bg-primary',   label:'텍스트'},
-  image: {cls:'bg-success',   label:'이미지'},
+const LAYOUT_LABELS = {
+  full_image:  '이미지',
+  hero:        '히어로',
+  text_bg:     '텍스트',
+  split_left:  '좌분할',
+  split_right: '우분할',
+  cta:         'CTA',
 };
+const LAYOUTS_WITH_TEXT  = ['text_bg', 'split_left', 'split_right', 'hero', 'cta'];
+const LAYOUTS_WITH_IMAGE = ['full_image', 'split_left', 'split_right', 'hero', 'cta'];
+
+function renderBlock(b, i, total) {
+  const isFirst = i === 0;
+  const isLast  = i === total - 1;
+  const layout  = b.layout || 'text_bg';
+
+  // Layout picker buttons
+  const layoutBtns = Object.keys(LAYOUT_LABELS).map(l =>
+    `<button class="layout-btn${layout === l ? ' active' : ''}"
+       onclick="setLayout('${b.id}','${l}')">${LAYOUT_LABELS[l]}</button>`
+  ).join('');
+
+  // Color pickers (shown for all layouts with colored backgrounds)
+  const colorPickers = `
+    <div class="d-flex align-items-center gap-2 px-2 pb-1" style="font-size:.7rem;color:#888">
+      <label style="white-space:nowrap">배경</label>
+      <input type="color" value="${esc(b.bgColor||'#ffffff')}"
+        onchange="setBgColor('${b.id}',this.value)"
+        style="width:28px;height:22px;padding:1px;border:1px solid #dde;border-radius:3px;cursor:pointer">
+      <label style="white-space:nowrap">글자</label>
+      <input type="color" value="${esc(b.textColor||'#333333')}"
+        onchange="setTextColor('${b.id}',this.value)"
+        style="width:28px;height:22px;padding:1px;border:1px solid #dde;border-radius:3px;cursor:pointer">
+    </div>`;
+
+  // Textarea (for layouts that have text)
+  const textArea = LAYOUTS_WITH_TEXT.includes(layout)
+    ? `<div class="block-body" data-block-id="${b.id}">
+         <textarea
+           placeholder="${esc(b.placeholder)}"
+           oninput="updateContent('${b.id}', this.value)"
+         >${esc(b.content)}</textarea>
+         <div class="d-flex justify-content-end px-2 pb-2">
+           <button class="btn-ai-gen" data-gen-btn="${b.id}"
+             onclick="genBlockText('${b.id}')">
+             <i class="bi bi-stars"></i> AI 생성 <small>30P</small>
+           </button>
+         </div>
+       </div>`
+    : '';
+
+  // Image slot (for layouts that use images)
+  const imageSlot = LAYOUTS_WITH_IMAGE.includes(layout)
+    ? `<div class="block-body p-2">
+         <div class="img-slot-preview mb-2" onclick="triggerUpload('${b.id}')">
+           ${ b.imageUrl
+              ? `<img src="${esc(b.imageUrl)}" alt="${esc(b.label)}">`
+              : `<i class="bi bi-image text-muted" style="font-size:1.4rem"></i>
+                 <span class="text-muted mt-1" style="font-size:.72rem">${esc(b.label)}</span>
+                 <span style="font-size:.66rem;color:#bbb">클릭하여 업로드</span>` }
+         </div>
+         <div class="d-flex flex-wrap gap-1 mt-1">
+           <button class="btn-ai-gen flex-grow-1" onclick="showImgGenModal('${b.id}')">
+             <i class="bi bi-stars"></i> AI 생성 <small>50P~</small>
+           </button>
+           <button class="btn-ai-gen flex-grow-1" onclick="triggerUpload('${b.id}')">
+             <i class="bi bi-upload"></i> 업로드
+           </button>
+           <button class="btn-ai-gen flex-grow-1" onclick="showBgReplaceModal('${b.id}')"
+             style="border-color:#b2dfb7;color:#27ae60"
+             ${b.imageUrl ? '' : 'disabled title="이미지를 먼저 추가하세요"'}>
+             <i class="bi bi-layers"></i> 배경 교체 <small>80P</small>
+           </button>
+           <button class="btn-ai-gen flex-grow-1" onclick="showFluxTextModal('${b.id}')"
+             style="border-color:#d4b2e8;color:#8e44ad">
+             <i class="bi bi-type"></i> 텍스트 조합 <small>300P</small>
+           </button>
+         </div>
+       </div>`
+    : '';
+
+  return `
+    <div class="block-item" data-id="${b.id}">
+      <div class="block-header">
+        <span class="small fw-semibold flex-grow-1" style="font-size:.78rem;color:#334">${esc(b.label)}</span>
+        <button class="btn btn-outline-secondary btn-block-ctrl" onclick="moveBlock('${b.id}','up')"
+          ${isFirst?'disabled':''} title="위로">↑</button>
+        <button class="btn btn-outline-secondary btn-block-ctrl" onclick="moveBlock('${b.id}','down')"
+          ${isLast?'disabled':''} title="아래로">↓</button>
+        <button class="btn btn-outline-danger btn-block-ctrl" onclick="removeBlock('${b.id}')"
+          title="삭제">✕</button>
+      </div>
+      <div class="d-flex flex-wrap gap-1 px-2 py-1" style="background:#f8f9fa;border-bottom:1px solid #f0f0f0">
+        ${layoutBtns}
+      </div>
+      ${colorPickers}
+      ${textArea}
+      ${imageSlot}
+    </div>`;
+}
 
 function renderEditor() {
   const list = document.getElementById('block-list');
@@ -979,100 +1118,63 @@ function renderEditor() {
     list.innerHTML = '<div class="text-muted small text-center py-5">블록이 없습니다.<br>위 버튼으로 추가하세요.</div>';
     return;
   }
-  list.innerHTML = blocks.map((b, i) => {
-    const badge   = TYPE_BADGE[b.type] || {cls:'bg-secondary', label:b.type};
-    const isFirst = i === 0;
-    const isLast  = i === blocks.length - 1;
-
-    const body = b.type === 'text'
-      ? `<div class="block-body" data-block-id="${b.id}">
-           <textarea
-             placeholder="${esc(b.placeholder)}"
-             oninput="updateContent('${b.id}', this.value)"
-           >${esc(b.content)}</textarea>
-           <div class="d-flex justify-content-end px-2 pb-2">
-             <button class="btn-ai-gen" data-gen-btn="${b.id}"
-               onclick="genBlockText('${b.id}')">
-               <i class="bi bi-stars"></i> AI 생성 <small>30P</small>
-             </button>
-           </div>
-         </div>`
-      : `<div class="block-body p-2">
-           <div class="img-slot-preview mb-2" onclick="triggerUpload('${b.id}')">
-             ${ b.imageUrl
-                ? `<img src="${esc(b.imageUrl)}" alt="${esc(b.label)}">`
-                : `<i class="bi bi-image text-muted" style="font-size:1.4rem"></i>
-                   <span class="text-muted mt-1" style="font-size:.72rem">${esc(b.label)}</span>
-                   <span style="font-size:.66rem;color:#bbb">클릭하여 업로드</span>` }
-           </div>
-           <div class="d-flex flex-wrap gap-1 mt-1">
-             <button class="btn-ai-gen flex-grow-1" onclick="showImgGenModal('${b.id}')">
-               <i class="bi bi-stars"></i> AI 생성 <small>50P~</small>
-             </button>
-             <button class="btn-ai-gen flex-grow-1" onclick="triggerUpload('${b.id}')">
-               <i class="bi bi-upload"></i> 업로드
-             </button>
-             <button class="btn-ai-gen flex-grow-1" onclick="showBgReplaceModal('${b.id}')"
-               style="border-color:#b2dfb7;color:#27ae60"
-               ${b.imageUrl ? '' : 'disabled title="이미지를 먼저 추가하세요"'}>
-               <i class="bi bi-layers"></i> 배경 교체 <small>80P</small>
-             </button>
-             <button class="btn-ai-gen flex-grow-1" onclick="showFluxTextModal('${b.id}')"
-               style="border-color:#d4b2e8;color:#8e44ad">
-               <i class="bi bi-type"></i> 텍스트 조합 <small>300P</small>
-             </button>
-           </div>
-         </div>`;
-
-    return `
-      <div class="block-item" data-id="${b.id}">
-        <div class="block-header">
-          <span class="badge ${badge.cls}" style="font-size:.63rem">${badge.label}</span>
-          <span class="small fw-semibold flex-grow-1" style="font-size:.78rem;color:#334">${esc(b.label)}</span>
-          <button class="btn btn-outline-secondary btn-block-ctrl" onclick="moveBlock('${b.id}','up')"
-            ${isFirst?'disabled':''} title="위로">↑</button>
-          <button class="btn btn-outline-secondary btn-block-ctrl" onclick="moveBlock('${b.id}','down')"
-            ${isLast?'disabled':''} title="아래로">↓</button>
-          <button class="btn btn-outline-danger btn-block-ctrl" onclick="removeBlock('${b.id}')"
-            title="삭제">✕</button>
-        </div>
-        ${body}
-      </div>`;
-  }).join('');
+  list.innerHTML = blocks.map((b, i) => renderBlock(b, i, blocks.length)).join('');
 }
 
 // ════════════════════════════════════════════
 // 미리보기 렌더링
 // ════════════════════════════════════════════
-const ROLE_STYLE = {
-  hook:       'padding:3rem 2rem;text-align:center;font-size:1.85rem;font-weight:800;line-height:1.35;color:#1a2332;background:linear-gradient(150deg,#eef1ff 0%,#f5f7ff 100%);',
-  empathy:    'padding:2rem;font-size:1rem;line-height:1.9;color:#444;border-left:4px solid #e74c3c;background:#fff9f9;',
-  cause:      'padding:2rem;font-size:1rem;line-height:1.85;color:#555;background:#f8f9fa;',
-  product:    'padding:2rem;font-size:1rem;line-height:1.85;color:#333;background:#fff;',
-  feature:    'padding:1.5rem 2rem;font-size:.95rem;line-height:1.8;color:#555;background:#f0f4ff;',
-  review:     'padding:2rem;background:#fffbf0;font-style:italic;color:#666;font-size:.95rem;line-height:1.8;',
-  cta:        'padding:3rem 2rem;text-align:center;background:linear-gradient(135deg,#4b5cde,#667eea);color:#fff;font-size:1.25rem;font-weight:700;',
-  story:      'padding:2rem;font-size:1rem;line-height:2;color:#555;font-style:italic;background:#fdfcf8;',
-  before:     'padding:2rem;background:#fff5f5;border-top:3px solid #e74c3c;color:#333;font-size:1rem;line-height:1.8;',
-  after:      'padding:2rem;background:#f0fff4;border-top:3px solid #27ae60;color:#333;font-size:1rem;line-height:1.8;',
-  comparison: 'padding:2rem;background:#f8f9fa;font-size:1rem;line-height:1.8;color:#333;',
-  data:       'padding:2.5rem 2rem;text-align:center;background:#eef1ff;font-size:1.6rem;font-weight:800;color:#4b5cde;letter-spacing:-.5px;',
-  lifestyle:  'padding:2rem;font-size:1.05rem;line-height:2;color:#666;font-style:italic;background:#fffdf7;',
-  expert:     'padding:2rem;background:#f8fafb;border-left:4px solid #34495e;font-size:1rem;line-height:1.85;color:#444;',
-  fomo:       'padding:2rem;background:#fff8f0;font-size:1rem;line-height:1.8;color:#c0392b;font-weight:600;',
-  benefit:    'padding:2rem;background:#f0fff4;font-size:1rem;line-height:2;color:#1e8449;',
-};
-const ROLE_PREFIX = {
-  before: '<div style="font-size:.68rem;font-weight:700;color:#e74c3c;letter-spacing:3px;margin-bottom:.6rem">BEFORE</div>',
-  after:  '<div style="font-size:.68rem;font-weight:700;color:#27ae60;letter-spacing:3px;margin-bottom:.6rem">AFTER</div>',
-  review: '<div style="color:#f39c12;margin-bottom:.5rem;font-style:normal">⭐⭐⭐⭐⭐</div>',
-  expert: '<div style="font-size:.68rem;font-weight:700;color:#34495e;letter-spacing:2px;margin-bottom:.5rem;font-style:normal">EXPERT</div>',
-};
-const IMG_BG = {
-  problem:'#fff0f0',solution:'#f0fff4',before:'#fff0f0',after:'#f0fff4',
-  lifestyle:'#fffbf0',expert:'#f0f4f8',data:'#eef1ff',story:'#fdfcf8',
-  product:'#f5f5f5',comparison:'#f8f9fa',
-};
+function renderSection(b) {
+  const txt    = b.content ? b.content.replace(/\n/g,'<br>') : '';
+  const hasImg = !!b.imageUrl;
+
+  if (b.layout === 'full_image') {
+    if (!hasImg) return `<div style="background:#f5f5f5;height:200px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:.85rem">${esc(b.label)} — 이미지 없음</div>`;
+    return `<div class="prev-full-image"><img src="${esc(b.imageUrl)}" alt="${esc(b.label)}"></div>`;
+  }
+  if (b.layout === 'hero') {
+    return `<div class="prev-hero">
+      ${hasImg ? `<img src="${esc(b.imageUrl)}" alt="${esc(b.label)}">` : `<div style="width:100%;height:360px;background:#222"></div>`}
+      <div class="prev-hero-overlay">
+        <div style="font-size:1.6rem;font-weight:800;line-height:1.4;margin-bottom:.5rem">${txt || esc(b.label)}</div>
+      </div>
+    </div>`;
+  }
+  if (b.layout === 'split_left') {
+    return `<div class="prev-split" style="background:${b.bgColor||'#fff'}">
+      <div class="prev-split-img">${hasImg ? `<img src="${esc(b.imageUrl)}" alt="">` : `<div style="width:100%;height:100%;min-height:280px;background:#eee;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:.8rem">이미지</div>`}</div>
+      <div class="prev-split-txt" style="color:${b.textColor||'#333'}">
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.5;margin-bottom:.6rem">${esc(b.label)}</div>
+        <div style="font-size:1rem;line-height:1.9;white-space:pre-line">${txt || `<span style="color:#ccc;font-size:.85rem">${esc(b.placeholder||b.label)}</span>`}</div>
+      </div>
+    </div>`;
+  }
+  if (b.layout === 'split_right') {
+    return `<div class="prev-split" style="background:${b.bgColor||'#fff'}">
+      <div class="prev-split-txt" style="color:${b.textColor||'#333'}">
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.5;margin-bottom:.6rem">${esc(b.label)}</div>
+        <div style="font-size:1rem;line-height:1.9;white-space:pre-line">${txt || `<span style="color:#ccc;font-size:.85rem">${esc(b.placeholder||b.label)}</span>`}</div>
+      </div>
+      <div class="prev-split-img">${hasImg ? `<img src="${esc(b.imageUrl)}" alt="">` : `<div style="width:100%;height:100%;min-height:280px;background:#eee;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:.8rem">이미지</div>`}</div>
+    </div>`;
+  }
+  if (b.layout === 'cta') {
+    const bg = b.bgColor || '#4b5cde';
+    return `<div class="prev-cta" style="background:${bg};color:${b.textColor||'#fff'}">
+      ${hasImg ? `<img src="${esc(b.imageUrl)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:1.5rem" alt="">` : ''}
+      <div style="font-size:1.5rem;font-weight:800;line-height:1.4;margin-bottom:1rem">${txt || `<span style="opacity:.4">${esc(b.label)}</span>`}</div>
+      <div style="display:inline-block;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.6);border-radius:50px;padding:.6rem 2.5rem;font-size:1rem;font-weight:700">지금 구매하기</div>
+    </div>`;
+  }
+  // default: text_bg
+  const isHook = b.role === 'hook';
+  return `<div class="prev-text-bg" style="background:${b.bgColor||'#fff'};color:${b.textColor||'#333'}">
+    <div style="font-size:.6rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;opacity:.45;margin-bottom:.75rem">${esc(b.label)}</div>
+    <div style="font-size:${isHook?'1.8rem':'1rem'};font-weight:${isHook?'800':'400'};line-height:${isHook?'1.4':'1.9'};white-space:pre-line;max-width:680px;${isHook?'margin:0 auto;text-align:center':''}">
+      ${txt || `<span style="opacity:.25;font-style:italic;font-size:.85rem">${esc(b.placeholder||b.label)}</span>`}
+    </div>
+  </div>`;
+}
 
 function renderPreview() {
   const box = document.getElementById('preview-content');
@@ -1080,24 +1182,23 @@ function renderPreview() {
     box.innerHTML = '<div style="color:#ccc;text-align:center;padding:5rem;font-size:.9rem">블록이 없습니다</div>';
     return;
   }
-  box.innerHTML = blocks.map(b => {
-    if (b.type === 'image') {
-      if (b.imageUrl) {
-        return `<div><img src="${esc(b.imageUrl)}" style="width:100%;display:block" alt="${esc(b.label)}"></div>`;
-      }
-      const bg = IMG_BG[b.role] || '#f5f5f5';
-      return `<div style="width:100%;height:260px;background:${bg};display:flex;flex-direction:column;align-items:center;justify-content:center;border-bottom:1px solid #eee;">
-        <div style="font-size:2.8rem;opacity:.2">🖼</div>
-        <div style="color:#bbb;margin-top:.5rem;font-size:.83rem">${esc(b.label)}</div>
-      </div>`;
-    }
-    const style  = ROLE_STYLE[b.role] || 'padding:2rem;font-size:1rem;line-height:1.8;color:#333;background:#fff;';
-    const prefix = ROLE_PREFIX[b.role] || '';
-    const body   = b.content
-      ? nl2br(b.content)
-      : `<span style="color:#ccc;font-style:italic">${esc(b.placeholder)||'내용을 입력하세요'}</span>`;
-    return `<div style="${style}border-bottom:1px solid #f0f0f0;">${prefix}${body}</div>`;
-  }).join('');
+  box.innerHTML = blocks.map(b => renderSection(b)).join('');
+}
+
+// ════════════════════════════════════════════
+// 레이아웃 / 색상 헬퍼
+// ════════════════════════════════════════════
+function setLayout(id, layout) {
+  const b = blocks.find(b => b.id === id);
+  if (b) { b.layout = layout; renderEditor(); renderPreview(); }
+}
+function setBgColor(id, color) {
+  const b = blocks.find(b => b.id === id);
+  if (b) { b.bgColor = color; renderPreview(); }
+}
+function setTextColor(id, color) {
+  const b = blocks.find(b => b.id === id);
+  if (b) { b.textColor = color; renderPreview(); }
 }
 
 // ════════════════════════════════════════════
@@ -1256,48 +1357,60 @@ function buildExportHtml() {
   const tplName = templateMeta?.name || '상세페이지';
   const escH = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  const ROLE_PREFIX_HTML = {
-    before: '<div style="font-size:.7rem;font-weight:700;color:#e74c3c;letter-spacing:3px;margin-bottom:.75rem">BEFORE</div>',
-    after:  '<div style="font-size:.7rem;font-weight:700;color:#27ae60;letter-spacing:3px;margin-bottom:.75rem">AFTER</div>',
-    review: '<div style="color:#f39c12;margin-bottom:.75rem">⭐⭐⭐⭐⭐</div>',
-    expert: '<div style="font-size:.7rem;font-weight:700;color:#34495e;letter-spacing:2px;margin-bottom:.75rem">EXPERT</div>',
-  };
+  function exportSection(b) {
+    const txt    = b.content ? escH(b.content).replace(/\n/g,'<br>') : '';
+    const hasImg = !!b.imageUrl;
+    const imgTag = hasImg ? `<img src="${b.imageUrl.startsWith('data:') ? b.imageUrl : escH(b.imageUrl)}" alt="${escH(b.label)}" style="width:100%;display:block">` : '';
 
-  const ROLE_CSS_EXPORT = {
-    hook:       'padding:4rem 3rem;text-align:center;font-size:2.5rem;font-weight:800;line-height:1.35;color:#1a2332;background:linear-gradient(150deg,#eef1ff 0%,#f5f7ff 100%);',
-    empathy:    'padding:3rem;font-size:1.1rem;line-height:2;color:#444;border-left:6px solid #e74c3c;background:#fff9f9;',
-    cause:      'padding:3rem;font-size:1.1rem;line-height:1.9;color:#555;background:#f8f9fa;',
-    product:    'padding:3rem;font-size:1.1rem;line-height:1.9;color:#333;background:#fff;',
-    feature:    'padding:2.5rem 3rem;font-size:1rem;line-height:1.85;color:#555;background:#f0f4ff;',
-    review:     'padding:3rem;background:#fffbf0;font-style:italic;color:#666;font-size:1rem;line-height:1.85;',
-    cta:        'padding:4rem 3rem;text-align:center;background:linear-gradient(135deg,#4b5cde,#667eea);color:#fff;font-size:1.4rem;font-weight:700;',
-    story:      'padding:3rem;font-size:1.1rem;line-height:2.1;color:#555;font-style:italic;background:#fdfcf8;',
-    before:     'padding:3rem;background:#fff5f5;border-top:4px solid #e74c3c;color:#333;font-size:1.1rem;line-height:1.85;',
-    after:      'padding:3rem;background:#f0fff4;border-top:4px solid #27ae60;color:#333;font-size:1.1rem;line-height:1.85;',
-    comparison: 'padding:3rem;background:#f8f9fa;font-size:1.1rem;line-height:1.85;color:#333;',
-    data:       'padding:3.5rem 3rem;text-align:center;background:#eef1ff;font-size:2rem;font-weight:800;color:#4b5cde;letter-spacing:-.5px;',
-    lifestyle:  'padding:3rem;font-size:1.15rem;line-height:2.1;color:#666;font-style:italic;background:#fffdf7;',
-    expert:     'padding:3rem;background:#f8fafb;border-left:6px solid #34495e;font-size:1.1rem;line-height:1.85;color:#444;',
-    fomo:       'padding:3rem;background:#fff8f0;font-size:1.1rem;line-height:1.85;color:#c0392b;font-weight:600;',
-    benefit:    'padding:3rem;background:#f0fff4;font-size:1.1rem;line-height:2.1;color:#1e8449;',
-  };
-
-  const sections = blocks.map((b, i) => {
-    if (b.type === 'image') {
-      if (b.imageUrl && !b.imageUrl.startsWith('data:')) {
-        return `<div><img src="${escH(b.imageUrl)}" style="width:100%;display:block" alt="${escH(b.label)}"></div>`;
-      } else if (b.imageUrl && b.imageUrl.startsWith('data:')) {
-        return `<div><img src="${b.imageUrl}" style="width:100%;display:block" alt="${escH(b.label)}"></div>`;
-      }
-      return `<div style="width:100%;height:300px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:1rem">${escH(b.label)} (이미지 없음)</div>`;
+    if (b.layout === 'full_image') {
+      if (!hasImg) return `<div style="background:#f5f5f5;height:240px;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:1rem">${escH(b.label)} — 이미지 없음</div>`;
+      return `<div>${imgTag}</div>`;
     }
-    const style  = ROLE_CSS_EXPORT[b.role] || 'padding:3rem;font-size:1.1rem;line-height:1.85;color:#333;background:#fff;';
-    const prefix = ROLE_PREFIX_HTML[b.role] || '';
-    const body   = b.content
-      ? escH(b.content).replace(/\n/g,'<br>')
-      : '';
-    return `<section style="${style}">${prefix}${body}</section>`;
-  }).join('\n');
+    if (b.layout === 'hero') {
+      return `<div style="position:relative;overflow:hidden">
+        ${hasImg ? `<img src="${b.imageUrl.startsWith('data:') ? b.imageUrl : escH(b.imageUrl)}" alt="${escH(b.label)}" style="width:100%;height:420px;object-fit:cover;display:block">` : `<div style="width:100%;height:420px;background:#222"></div>`}
+        <div style="position:absolute;bottom:0;left:0;right:0;padding:2.5rem 3rem;background:linear-gradient(0deg,rgba(0,0,0,.75) 0%,transparent 100%);color:#fff">
+          <div style="font-size:2rem;font-weight:800;line-height:1.4">${txt || escH(b.label)}</div>
+        </div>
+      </div>`;
+    }
+    if (b.layout === 'split_left') {
+      return `<div style="display:flex;align-items:stretch;min-height:320px;background:${b.bgColor||'#fff'}">
+        <div style="flex:0 0 42%;overflow:hidden">${hasImg ? `<img src="${b.imageUrl.startsWith('data:') ? b.imageUrl : escH(b.imageUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : `<div style="width:100%;height:100%;min-height:320px;background:#eee;display:flex;align-items:center;justify-content:center;color:#bbb">이미지</div>`}</div>
+        <div style="flex:1;padding:3rem;display:flex;flex-direction:column;justify-content:center;color:${b.textColor||'#333'}">
+          <div style="font-size:.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.5;margin-bottom:.75rem">${escH(b.label)}</div>
+          <div style="font-size:1.1rem;line-height:1.9;white-space:pre-line">${txt}</div>
+        </div>
+      </div>`;
+    }
+    if (b.layout === 'split_right') {
+      return `<div style="display:flex;align-items:stretch;min-height:320px;background:${b.bgColor||'#fff'}">
+        <div style="flex:1;padding:3rem;display:flex;flex-direction:column;justify-content:center;color:${b.textColor||'#333'}">
+          <div style="font-size:.65rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.5;margin-bottom:.75rem">${escH(b.label)}</div>
+          <div style="font-size:1.1rem;line-height:1.9;white-space:pre-line">${txt}</div>
+        </div>
+        <div style="flex:0 0 42%;overflow:hidden">${hasImg ? `<img src="${b.imageUrl.startsWith('data:') ? b.imageUrl : escH(b.imageUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">` : `<div style="width:100%;height:100%;min-height:320px;background:#eee;display:flex;align-items:center;justify-content:center;color:#bbb">이미지</div>`}</div>
+      </div>`;
+    }
+    if (b.layout === 'cta') {
+      const bg = b.bgColor || '#4b5cde';
+      return `<div style="padding:5rem 3rem;text-align:center;background:${bg};color:${b.textColor||'#fff'}">
+        ${hasImg ? `<img src="${b.imageUrl.startsWith('data:') ? b.imageUrl : escH(b.imageUrl)}" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px;margin-bottom:2rem" alt="">` : ''}
+        <div style="font-size:1.8rem;font-weight:800;line-height:1.4;margin-bottom:1.25rem">${txt}</div>
+        <div style="display:inline-block;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.6);border-radius:50px;padding:.75rem 3rem;font-size:1.1rem;font-weight:700">지금 구매하기</div>
+      </div>`;
+    }
+    // default: text_bg
+    const isHook = b.role === 'hook';
+    return `<section style="padding:4rem 3rem;background:${b.bgColor||'#fff'};color:${b.textColor||'#333'}">
+      <div style="font-size:.65rem;font-weight:700;letter-spacing:3px;text-transform:uppercase;opacity:.45;margin-bottom:.85rem">${escH(b.label)}</div>
+      <div style="font-size:${isHook?'2.2rem':'1.1rem'};font-weight:${isHook?'800':'400'};line-height:${isHook?'1.35':'1.9'};white-space:pre-line;max-width:720px;${isHook?'margin:0 auto;text-align:center':''}">
+        ${txt}
+      </div>
+    </section>`;
+  }
+
+  const sections = blocks.map(b => exportSection(b)).join('\n');
 
   return `<!DOCTYPE html>
 <html lang="ko">
