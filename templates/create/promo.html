@@ -234,9 +234,9 @@ function updateBtnCost() {
 // ── 브랜드 → 상품 갱신
 const brandSelect   = document.getElementById('brandSelect');
 const productSelect = document.getElementById('productSelect');
-brandSelect.addEventListener('change', async () => {
+
+async function loadPromoProducts(bid) {
   productSelect.innerHTML = '<option value="">상품 선택 안 함</option>';
-  const bid = brandSelect.value;
   if (!bid) return;
   try {
     const r = await fetch(`/create/blog/products?brand_id=${bid}`);
@@ -248,6 +248,13 @@ brandSelect.addEventListener('change', async () => {
       productSelect.appendChild(o);
     });
   } catch(e) {}
+}
+
+brandSelect.addEventListener('change', () => loadPromoProducts(brandSelect.value));
+
+// 페이지 로드 시 기본 브랜드 제품 자동 로드
+document.addEventListener('DOMContentLoaded', () => {
+  if (brandSelect.value) loadPromoProducts(brandSelect.value);
 });
 
 // ── 생성
