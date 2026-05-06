@@ -74,6 +74,83 @@
               placeholder="주력 상품, 브랜드 스토리, 특이사항 등">{{ brand.extra_context if brand else '' }}</textarea>
           </div>
 
+          {# ── 회사 정보 (접기/펼치기) ── #}
+          <hr class="my-3">
+          <div class="mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary w-100 d-flex align-items-center justify-content-between"
+                    onclick="toggleSection('companyInfo')">
+              <span><i class="bi bi-building me-2"></i>회사 정보 <span class="text-muted small">(제안서·홍보물 자동 입력용)</span></span>
+              <i class="bi bi-chevron-down" id="companyInfoIcon"></i>
+            </button>
+          </div>
+          <div id="companyInfo" style="display:none">
+
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-semibold small">창업 연도</label>
+                <input type="number" name="founded_year" class="form-control form-control-sm"
+                  value="{{ brand.founded_year if brand else '' }}" placeholder="예: 2018" min="1900" max="2099">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold small">대표자명</label>
+                <input type="text" name="ceo_name" class="form-control form-control-sm"
+                  value="{{ brand.ceo_name if brand else '' }}" placeholder="예: 홍길동">
+              </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-semibold small">직원 수</label>
+                <input type="text" name="employee_count" class="form-control form-control-sm"
+                  value="{{ brand.employee_count if brand else '' }}" placeholder="예: 15명">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold small">연락처</label>
+                <input type="text" name="contact_phone" class="form-control form-control-sm"
+                  value="{{ brand.contact_phone if brand else '' }}" placeholder="예: 02-1234-5678">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">이메일</label>
+              <input type="email" name="contact_email" class="form-control form-control-sm"
+                value="{{ brand.contact_email if brand else '' }}" placeholder="예: contact@brand.com">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">홈페이지</label>
+              <input type="text" name="website" class="form-control form-control-sm"
+                value="{{ brand.website if brand else '' }}" placeholder="예: https://www.brand.com">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">주소</label>
+              <input type="text" name="address" class="form-control form-control-sm"
+                value="{{ brand.address if brand else '' }}" placeholder="예: 서울시 강남구 ○○로 123">
+            </div>
+
+            <hr class="my-3">
+            <p class="small text-muted fw-semibold mb-2"><i class="bi bi-trophy me-1"></i>회사 이력 · 성과</p>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">인증·수상 이력</label>
+              <textarea name="certifications" class="form-control form-control-sm" rows="2"
+                placeholder="예: ISO 9001 인증, 2023 K-뷰티 어워드 수상, 중소기업청 인증">{{ brand.certifications if brand else '' }}</textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">핵심 성과 수치</label>
+              <textarea name="key_stats" class="form-control form-control-sm" rows="2"
+                placeholder="예: 누적 판매 50만개 돌파, 재구매율 72%, 고객 만족도 97%, 월 매출 3억">{{ brand.key_stats if brand else '' }}</textarea>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-semibold small">주요 거래처 · 납품처</label>
+              <textarea name="references_text" class="form-control form-control-sm" rows="2"
+                placeholder="예: 이마트, 롯데마트 납품, 쿠팡 공식 판매, GS홈쇼핑 방영">{{ brand.references_text if brand else '' }}</textarea>
+            </div>
+          </div>
+
           <div class="d-flex gap-2">
             <a href="{{ url_for('brand.index') }}" class="btn btn-outline-secondary flex-fill">취소</a>
             <button type="submit" class="btn flex-fill fw-semibold" style="background:#e8355a;color:#fff">
@@ -85,4 +162,22 @@
     </div>
   </div>
 </div>
+
+<script>
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  const icon = document.getElementById(id + 'Icon');
+  const open = el.style.display === 'none';
+  el.style.display = open ? 'block' : 'none';
+  if (icon) icon.className = open ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const hasCompany = {{ 'true' if brand and (brand.founded_year or brand.ceo_name or brand.contact_phone or brand.certifications or brand.key_stats or brand.references_text) else 'false' }};
+  if (hasCompany) {
+    document.getElementById('companyInfo').style.display = 'block';
+    const icon = document.getElementById('companyInfoIcon');
+    if (icon) icon.className = 'bi bi-chevron-up';
+  }
+});
+</script>
 {% endblock %}
