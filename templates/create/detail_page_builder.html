@@ -344,12 +344,20 @@
       </div>
       <div class="modal-body py-3">
         <input type="hidden" id="img-gen-block-id">
+        <!-- 블록 역할 표시 -->
+        <div id="img-gen-role-badge" class="mb-2"></div>
         <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1">이미지 설명</label>
-          <textarea id="img-gen-prompt" class="form-control form-control-sm" rows="3"
-            placeholder="원하는 이미지를 한국어로 설명하세요. 비워두면 역할에 맞게 자동 생성됩니다."></textarea>
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <label class="form-label small fw-semibold mb-0">이미지 설명</label>
+            <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0"
+              style="font-size:.72rem" onclick="regenImgPrompt()" id="img-regen-btn">
+              <i class="bi bi-arrow-clockwise me-1"></i>AI 추천 다시 생성
+            </button>
+          </div>
+          <textarea id="img-gen-prompt" class="form-control form-control-sm" rows="4"
+            placeholder="이미지 설명이 자동 생성됩니다..."></textarea>
           <div class="text-muted mt-1" style="font-size:.72rem">
-            ✦ 한국어로 입력하면 자동으로 번역하여 생성합니다
+            ✦ 자동 생성된 설명을 자유롭게 수정할 수 있습니다 · 한국어 입력 시 자동 번역
           </div>
         </div>
         <div class="mb-0">
@@ -804,14 +812,75 @@ async function genBlockText(blockId) {
 let _imgGenModal = null;
 let _imgGenTargetId = null;
 
+// 역할별 이미지 장면 힌트 (한국어)
+const IMG_SCENE_HINTS = {
+  hook:       '시선을 끄는 강렬한 비주얼, 감정을 자극하는 순간',
+  empathy:    '고객의 일상적 불편함을 공감하는 장면, 따뜻하고 현실적인 분위기',
+  problem:    '불편함을 겪고 있는 일상적 상황, 공감 가는 장면',
+  cause:      '문제의 원인을 보여주는 상징적 장면',
+  solution:   '문제가 해결되어 밝고 만족스러운 모습, 희망적 분위기',
+  before:     '사용 전의 힘들거나 불편한 상황, 어둡고 무거운 분위기',
+  after:      '사용 후 달라진 밝고 행복한 모습, 선명하고 긍정적 분위기',
+  product:    '제품 중심의 깔끔한 스튜디오 촬영, 프리미엄 조명, 흰 배경',
+  feature:    '제품 기능을 직관적으로 보여주는 장면, 클로즈업',
+  lifestyle:  '이상적인 일상 생활 장면, 따뜻하고 자연스러운 라이프스타일',
+  expert:     '전문가 또는 연구소 환경, 신뢰감 있고 전문적인 분위기',
+  data:       '깔끔한 인포그래픽 배경, 수치와 그래프, 전문적이고 신뢰감 있는',
+  story:      '진정성 있는 브랜드 스토리 장면, 따뜻하고 인간적인 분위기',
+  comparison: '두 가지를 나란히 비교하는 명확한 장면, 차이가 한눈에 보이는 구도',
+  review:     '만족한 고객의 행복한 표정, 제품을 사용하는 자연스러운 생활 장면',
+  fomo:       '많은 사람들이 함께 즐기는 활기찬 장면, 소속감과 트렌드를 보여주는 이미지',
+  benefit:    '혜택과 가치를 시각적으로 보여주는 풍요롭고 긍정적인 장면',
+  cta:        '강렬하고 에너지 넘치는 행동 유도 비주얼, 밝고 선명한 색감',
+};
+
+function buildAutoImgPrompt(block) {
+  const scene    = IMG_SCENE_HINTS[block.role] || '제품 관련 상업용 이미지';
+  const product  = getProductName();
+  const features = getProductFeatures();
+  const parts = [scene];
+  if (product)  parts.push(`상품: ${product}`);
+  if (features) parts.push(features.slice(0, 60));
+  parts.push('고화질, 상업용 사진, 자연광, 깔끔한 구도');
+  return parts.join('. ');
+}
+
 function showImgGenModal(blockId) {
   const b = blocks.find(b => b.id === blockId);
   if (!b) return;
   _imgGenTargetId = blockId;
   document.getElementById('img-gen-block-id').value = blockId;
-  document.getElementById('img-gen-prompt').value = '';
+
+  // 역할 배지 표시
+  const badge = document.getElementById('img-gen-role-badge');
+  badge.innerHTML = `<span class="badge bg-light text-secondary border" style="font-size:.72rem">
+    <i class="bi bi-tag me-1"></i>${b.label} (${b.role})
+  </span>`;
+
+  // 자동 프롬프트 생성
+  document.getElementById('img-gen-prompt').value = buildAutoImgPrompt(b);
+
   if (!_imgGenModal) _imgGenModal = new bootstrap.Modal(document.getElementById('imgGenModal'));
   _imgGenModal.show();
+}
+
+// AI 추천 프롬프트 다시 생성 (서버 호출 없이 변형)
+function regenImgPrompt() {
+  const blockId = _imgGenTargetId;
+  const b = blocks.find(b => b.id === blockId);
+  if (!b) return;
+  const base = buildAutoImgPrompt(b);
+  // 약간의 변형 키워드 추가
+  const styles = [
+    '따뜻한 자연광, 필름 감성',
+    '미니멀 스튜디오, 흰 배경',
+    '아웃도어 자연 배경, 생동감',
+    '골든아워 조명, 감성적',
+    '클린하고 모던한 인테리어 배경',
+  ];
+  const pick = styles[Math.floor(Math.random() * styles.length)];
+  document.getElementById('img-gen-prompt').value = base + '. ' + pick;
+  toast('프롬프트를 다시 생성했습니다', 'info');
 }
 
 async function confirmGenImage() {
