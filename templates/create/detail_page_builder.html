@@ -166,10 +166,11 @@
     </div>
     <div class="d-flex align-items-center gap-2">
       <label class="small text-muted fw-semibold mb-0">브랜드</label>
-      <select id="brand-select" class="form-select form-select-sm" style="width:170px">
+      <select id="brand-select" class="form-select form-select-sm" style="width:170px"
+        onchange="onBrandChange(this.value)">
         {% for b in brands %}
         <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>
-          {{ b.name }}{% if b.is_default %} (기본){% endif %}
+          {{ b.name }}{% if b.is_default %} ★{% endif %}
         </option>
         {% endfor %}
       </select>
@@ -208,7 +209,16 @@
       <i class="bi bi-arrow-left"></i>
     </button>
     <span id="tpl-badge" class="badge" style="font-size:.76rem"></span>
-    <span id="tpl-title" class="small text-muted"></span>
+    <span id="tpl-title" class="small text-muted d-none d-md-inline"></span>
+    <!-- 브랜드 선택 (에디터에서도 유지) -->
+    <select id="brand-select-editor" class="form-select form-select-sm ms-2"
+      style="width:140px;font-size:.78rem" onchange="onBrandChange(this.value)">
+      {% for b in brands %}
+      <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>
+        {{ b.name }}{% if b.is_default %} ★{% endif %}
+      </option>
+      {% endfor %}
+    </select>
     <div class="ms-auto d-flex gap-2">
       <button class="btn btn-sm btn-outline-secondary" id="btn-export-html"
         onclick="exportHtml()">
@@ -239,6 +249,17 @@
           </span>
         </div>
         <div id="product-ctx-body">
+          <!-- 등록 상품 불러오기 -->
+          <div class="d-flex gap-1 mb-1">
+            <select id="product-select" class="form-select form-select-sm flex-grow-1"
+              style="font-size:.78rem" onchange="loadProduct(this.value)">
+              <option value="">— 등록 상품 불러오기 —</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm px-2" onclick="refreshProducts()"
+              title="목록 새로고침" style="font-size:.78rem">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
           <input type="text" id="input-product-name" class="form-control form-control-sm mb-1"
             placeholder="상품명 (필수) — 예: 비타민C 세럼 30ml">
           <textarea id="input-product-features" class="form-control form-control-sm"
@@ -527,9 +548,56 @@ let _uploadTargetId = null;  // 업로드 대상 블록 ID
 const uid    = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 const esc    = s  => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const nl2br  = s  => esc(s).replace(/\n/g,'<br>');
-const getBrandId = () => document.getElementById('brand-select')?.value || '';
+const getBrandId = () => document.getElementById('brand-select-editor')?.value
+                       || document.getElementById('brand-select')?.value || '';
 const getProductName     = () => document.getElementById('input-product-name')?.value.trim() || '';
 const getProductFeatures = () => document.getElementById('input-product-features')?.value.trim() || '';
+
+// ── 상품 목록 캐시 ──
+let _productsCache = [];
+
+async function refreshProducts(brandId) {
+  const bid = brandId || getBrandId();
+  try {
+    const url = '{{ url_for("create.dpb_products") }}' + (bid ? '?brand_id=' + encodeURIComponent(bid) : '');
+    const res  = await fetch(url);
+    const data = await res.json();
+    _productsCache = data.products || [];
+    const sel = document.getElementById('product-select');
+    sel.innerHTML = '<option value="">— 등록 상품 불러오기 —</option>';
+    _productsCache.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name + (p.category ? ` [${p.category}]` : '');
+      sel.appendChild(opt);
+    });
+    if (!_productsCache.length) {
+      const opt = document.createElement('option');
+      opt.disabled = true;
+      opt.textContent = '등록된 상품이 없습니다';
+      sel.appendChild(opt);
+    }
+  } catch(e) { console.warn('products load error', e); }
+}
+
+function loadProduct(productId) {
+  if (!productId) return;
+  const p = _productsCache.find(x => x.id === productId);
+  if (!p) return;
+  document.getElementById('input-product-name').value = p.name || '';
+  const features = p.features_text || p.description || '';
+  document.getElementById('input-product-features').value = features;
+  toast(`"${p.name}" 상품 정보를 불러왔습니다 ✓`, 'success');
+}
+
+function onBrandChange(brandId) {
+  // 두 셀렉트 동기화
+  const s1 = document.getElementById('brand-select');
+  const s2 = document.getElementById('brand-select-editor');
+  if (s1) s1.value = brandId;
+  if (s2) s2.value = brandId;
+  refreshProducts(brandId);
+}
 
 function toast(msg, type='info') {
   // 간단 토스트 (Bootstrap alert 방식)
@@ -1284,5 +1352,7 @@ async function downloadImgSections() {
 
 // 초기 모달 역할 옵션
 onTypeChange();
+// 페이지 로드 시 상품 목록 로드
+refreshProducts();
 </script>
 {% endblock %}

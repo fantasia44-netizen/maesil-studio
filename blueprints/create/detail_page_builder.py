@@ -67,6 +67,37 @@ def detail_page_builder():
     )
 
 
+@create_bp.route('/detail-page/builder/products')
+@login_required
+def dpb_products():
+    """브랜드별 등록 상품 목록 JSON 반환"""
+    supabase = current_app.supabase
+    brand_id = request.args.get('brand_id', '').strip()
+    try:
+        q = supabase.table('products').select('id,name,description,features,category') \
+            .eq('is_active', True)
+        if brand_id:
+            q = q.eq('brand_id', brand_id)
+        else:
+            # 브랜드 미지정 시 접근 가능한 전체 브랜드 상품
+            from blueprints.create._base import get_accessible_brands
+            brand_ids = [b['id'] for b in get_accessible_brands(supabase)]
+            if brand_ids:
+                q = q.in_('brand_id', brand_ids)
+        result = q.order('created_at', desc=True).limit(50).execute()
+        products = result.data or []
+        # features가 list면 join
+        for p in products:
+            if isinstance(p.get('features'), list):
+                p['features_text'] = ', '.join(p['features'])
+            else:
+                p['features_text'] = p.get('features') or ''
+        return jsonify(ok=True, products=products)
+    except Exception as e:
+        logger.error(f'[DPB] products error: {e}')
+        return jsonify(ok=False, products=[])
+
+
 @create_bp.route('/detail-page/builder/template/<template_id>')
 @login_required
 def detail_page_builder_template(template_id):
