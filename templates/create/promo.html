@@ -181,6 +181,7 @@
 </style>
 
 <script>
+const CSRF = '{{ csrf_token() }}';
 const CATALOG_PAGE_COSTS = {{ catalog_page_costs | tojson }};
 const PRINTOUT_GROUPS    = ['인쇄물'];
 
@@ -280,7 +281,8 @@ generateBtn.addEventListener('click', async () => {
   setLoading(true);
   try {
     const res  = await fetch('/create/promo/generate', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
       body: JSON.stringify(body),
     });
     const data = await res.json();
