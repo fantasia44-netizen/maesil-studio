@@ -438,6 +438,322 @@ def _draw_multiline(draw, text: str, font, fill, x: int, y: int,
 
 
 # ════════════════════════════════════════════════════════
+# 상세페이지 섹션 합성 — 히어로 오프닝 (800×450)
+# ════════════════════════════════════════════════════════
+
+def generate_hero_section(
+    bg_image_url: str,
+    headline: str,
+    subtext: str = '',
+    brand_color: str = '#4b5cde',
+) -> bytes:
+    """상단 히어로 헤더 이미지 (800×450 PNG)."""
+    W, H = 800, 450
+    try:
+        resp = requests.get(bg_image_url, timeout=30)
+        resp.raise_for_status()
+        bg = Image.open(BytesIO(resp.content)).convert('RGBA').resize((W, H), Image.LANCZOS)
+    except Exception:
+        bg = Image.new('RGBA', (W, H), (20, 20, 35, 255))
+
+    # 그라데이션 오버레이 (하단 더 어둡게)
+    grad = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    gdraw = ImageDraw.Draw(grad)
+    for y in range(H):
+        alpha = int(80 + (y / H) * 130)
+        gdraw.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
+    img = Image.alpha_composite(bg, grad)
+    draw = ImageDraw.Draw(img)
+
+    try:
+        fp = _find_korean_font()
+        font_h  = ImageFont.truetype(fp, size=46)
+        font_s  = ImageFont.truetype(fp, size=22)
+    except Exception:
+        font_h = font_s = ImageFont.load_default()
+
+    brand_rgb = _hex_to_rgb(brand_color)
+    white = (255, 255, 255, 255)
+
+    # 브랜드 컬러 왼쪽 강조선
+    draw.rectangle([(60, H // 2 - 50), (66, H // 2 + 50)], fill=(*brand_rgb, 255))
+
+    # 헤드라인 (멀티라인)
+    _draw_multiline(draw, headline, font_h, white, 86, H // 2 - 45, max_width=W - 110, line_height=58)
+
+    # 서브텍스트
+    if subtext:
+        _draw_multiline(draw, subtext, font_s, (200, 200, 220, 220), 86, H // 2 + 30, max_width=W - 110, line_height=30)
+
+    # 하단 브랜드 바
+    draw.rectangle([(0, H - 6), (W, H)], fill=(*brand_rgb, 255))
+
+    buf = BytesIO()
+    img.convert('RGB').save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+# ════════════════════════════════════════════════════════
+# 상세페이지 섹션 합성 — 특장점 단일 (800×500)
+# ════════════════════════════════════════════════════════
+
+def generate_feature_highlight(
+    bg_image_url: str,
+    number: str,        # '01' ~ '09'
+    title: str,
+    desc: str,
+    brand_color: str = '#4b5cde',
+    layout: str = 'left',   # 'left': 이미지 왼쪽 | 'right': 이미지 오른쪽
+) -> bytes:
+    """특장점 단일 강조 이미지 (800×500 PNG). 이미지+텍스트 좌우 분할."""
+    W, H = 800, 500
+    try:
+        resp = requests.get(bg_image_url, timeout=30)
+        resp.raise_for_status()
+        photo = Image.open(BytesIO(resp.content)).convert('RGBA').resize((W // 2, H), Image.LANCZOS)
+    except Exception:
+        photo = Image.new('RGBA', (W // 2, H), (30, 30, 45, 255))
+
+    img = Image.new('RGBA', (W, H), (18, 18, 30, 255))
+    brand_rgb = _hex_to_rgb(brand_color)
+
+    # 텍스트 패널에 브랜드 컬러 미세 그라데이션
+    panel_x = W // 2 if layout == 'left' else 0
+    for x in range(W // 2):
+        alpha = int(8 + x * 0.06)
+        for y_line in range(0, H, 4):
+            img.putpixel((panel_x + x, min(y_line, H - 1)),
+                         (*brand_rgb, min(alpha, 30)))
+
+    # 사진 붙이기
+    photo_x = 0 if layout == 'left' else W // 2
+    img.paste(photo, (photo_x, 0))
+
+    # 사진 안쪽 그라데이션 (자연스러운 경계)
+    fade = Image.new('RGBA', (60, H), (0, 0, 0, 0))
+    fdraw = ImageDraw.Draw(fade)
+    for x in range(60):
+        a = int((1 - x / 60) * 180)
+        fdraw.line([(x, 0), (x, H)], fill=(18, 18, 30, a))
+    fade_x = (W // 2 - 60) if layout == 'left' else W // 2
+    img = Image.alpha_composite(img, Image.new('RGBA', (W, H), (0, 0, 0, 0)))
+    img.paste(photo, (photo_x, 0))
+
+    draw = ImageDraw.Draw(img)
+
+    # 페이드 경계 (간단히 직접 그리기)
+    if layout == 'left':
+        for xi in range(40):
+            a = int((1 - xi / 40) * 160)
+            draw.line([(W // 2 - 40 + xi, 0), (W // 2 - 40 + xi, H)], fill=(18, 18, 30, a))
+    else:
+        for xi in range(40):
+            a = int(xi / 40 * 160)
+            draw.line([(W // 2 + xi, 0), (W // 2 + xi, H)], fill=(18, 18, 30, a))
+
+    try:
+        fp = _find_korean_font()
+        font_num   = ImageFont.truetype(fp, size=52)
+        font_title = ImageFont.truetype(fp, size=28)
+        font_desc  = ImageFont.truetype(fp, size=17)
+    except Exception:
+        font_num = font_title = font_desc = ImageFont.load_default()
+
+    tx = W // 2 + 40 if layout == 'left' else 40
+    white = (255, 255, 255, 255)
+    gray  = (180, 185, 210, 255)
+
+    # 번호 (브랜드 컬러, 반투명)
+    draw.text((tx, 90), number, font=font_num, fill=(*brand_rgb, 180))
+    # 브랜드 컬러 짧은 선
+    draw.rectangle([(tx, 175), (tx + 40, 179)], fill=(*brand_rgb, 255))
+    # 타이틀
+    _draw_multiline(draw, title, font_title, white, tx, 192, max_width=320, line_height=38)
+    # 설명
+    _draw_multiline(draw, desc, font_desc, gray, tx, 270, max_width=320, line_height=26)
+
+    # 하단 브랜드 바
+    draw.rectangle([(0, H - 5), (W, H)], fill=(*brand_rgb, 255))
+
+    buf = BytesIO()
+    img.convert('RGB').save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+# ════════════════════════════════════════════════════════
+# 상세페이지 섹션 합성 — 텍스트 강조 (800×320)
+# ════════════════════════════════════════════════════════
+
+def generate_text_emphasis(
+    main_text: str,
+    sub_text: str = '',
+    brand_color: str = '#4b5cde',
+) -> bytes:
+    """브랜드 컬러 배경 텍스트 강조 이미지 (800×320 PNG). 배경 이미지 불필요."""
+    W, H = 800, 320
+    brand_rgb = _hex_to_rgb(brand_color)
+
+    # 브랜드 컬러 어두운 그라데이션 배경
+    img = Image.new('RGBA', (W, H), (*brand_rgb, 255))
+    draw = ImageDraw.Draw(img)
+    # 어두운 오버레이
+    for y in range(H):
+        alpha = int(120 + (y / H) * 60)
+        draw.line([(0, y), (W, y)], fill=(0, 0, 10, alpha))
+
+    # 장식 원 (반투명)
+    draw.ellipse([(-60, -60), (180, 180)], fill=(*brand_rgb, 40))
+    draw.ellipse([(W - 180, H - 180), (W + 60, H + 60)], fill=(*brand_rgb, 40))
+
+    try:
+        fp = _find_korean_font()
+        font_main = ImageFont.truetype(fp, size=38)
+        font_sub  = ImageFont.truetype(fp, size=20)
+    except Exception:
+        font_main = font_sub = ImageFont.load_default()
+
+    white     = (255, 255, 255, 255)
+    off_white = (220, 225, 240, 200)
+
+    # 인용부호 장식
+    draw.text((50, 50), '❝', font=font_main, fill=(255, 255, 255, 60))
+
+    # 메인 텍스트 (중앙 정렬)
+    lines = []
+    line = ''
+    for ch in main_text:
+        test = line + ch
+        bbox = draw.textbbox((0, 0), test, font=font_main)
+        if bbox[2] - bbox[0] > W - 120 and line:
+            lines.append(line)
+            line = ch
+        else:
+            line = test
+    if line:
+        lines.append(line)
+    lines = lines[:3]
+
+    total_h = len(lines) * 52
+    start_y = (H - total_h) // 2 - (20 if sub_text else 0)
+    for i, l in enumerate(lines):
+        bbox = draw.textbbox((0, 0), l, font=font_main)
+        tw = bbox[2] - bbox[0]
+        draw.text(((W - tw) // 2, start_y + i * 52), l, font=font_main, fill=white)
+
+    # 서브텍스트
+    if sub_text:
+        bbox = draw.textbbox((0, 0), sub_text, font=font_sub)
+        tw = bbox[2] - bbox[0]
+        draw.text(((W - tw) // 2, start_y + total_h + 16), sub_text, font=font_sub, fill=off_white)
+
+    # 상하 흰색 얇은 선
+    draw.rectangle([(80, 22), (W - 80, 25)], fill=(255, 255, 255, 60))
+    draw.rectangle([(80, H - 25), (W - 80, H - 22)], fill=(255, 255, 255, 60))
+
+    buf = BytesIO()
+    img.convert('RGB').save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+# ════════════════════════════════════════════════════════
+# 상세페이지 섹션 합성 — CTA 마무리 (800×380)
+# ════════════════════════════════════════════════════════
+
+def generate_cta_section(
+    bg_image_url: str,
+    cta_text: str,
+    sub_text: str = '',
+    brand_color: str = '#4b5cde',
+) -> bytes:
+    """CTA(구매 촉구) 마무리 이미지 (800×380 PNG)."""
+    W, H = 800, 380
+    try:
+        resp = requests.get(bg_image_url, timeout=30)
+        resp.raise_for_status()
+        bg = Image.open(BytesIO(resp.content)).convert('RGBA').resize((W, H), Image.LANCZOS)
+    except Exception:
+        bg = Image.new('RGBA', (W, H), (15, 15, 25, 255))
+
+    brand_rgb = _hex_to_rgb(brand_color)
+
+    # 강한 어두운 오버레이
+    dark = Image.new('RGBA', (W, H), (0, 0, 10, 175))
+    img = Image.alpha_composite(bg, dark)
+
+    # 브랜드 컬러 하단 그라데이션
+    grad = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    gdraw = ImageDraw.Draw(grad)
+    for y in range(H // 2, H):
+        a = int(((y - H // 2) / (H // 2)) * 120)
+        gdraw.line([(0, y), (W, y)], fill=(*brand_rgb, a))
+    img = Image.alpha_composite(img, grad)
+
+    draw = ImageDraw.Draw(img)
+
+    try:
+        fp = _find_korean_font()
+        font_cta = ImageFont.truetype(fp, size=40)
+        font_sub = ImageFont.truetype(fp, size=20)
+        font_btn = ImageFont.truetype(fp, size=22)
+    except Exception:
+        font_cta = font_sub = font_btn = ImageFont.load_default()
+
+    white = (255, 255, 255, 255)
+    off_white = (210, 215, 235, 220)
+
+    # CTA 텍스트 중앙
+    lines = []
+    line = ''
+    for ch in cta_text:
+        test = line + ch
+        bbox = draw.textbbox((0, 0), test, font=font_cta)
+        if bbox[2] - bbox[0] > W - 120 and line:
+            lines.append(line)
+            line = ch
+        else:
+            line = test
+    if line:
+        lines.append(line)
+    lines = lines[:2]
+
+    total_h = len(lines) * 54
+    start_y = H // 2 - total_h // 2 - 20
+    for i, l in enumerate(lines):
+        bbox = draw.textbbox((0, 0), l, font=font_cta)
+        tw = bbox[2] - bbox[0]
+        draw.text(((W - tw) // 2, start_y + i * 54), l, font=font_cta, fill=white)
+
+    # 서브텍스트
+    if sub_text:
+        bbox = draw.textbbox((0, 0), sub_text, font=font_sub)
+        tw = bbox[2] - bbox[0]
+        draw.text(((W - tw) // 2, start_y + total_h + 12), sub_text, font=font_sub, fill=off_white)
+
+    # 버튼 모양 장식
+    btn_text = '지금 바로 구매하기 →'
+    bbox = draw.textbbox((0, 0), btn_text, font=font_btn)
+    bw = bbox[2] - bbox[0] + 60
+    bh = 44
+    bx = (W - bw) // 2
+    by = H - 80
+    # 버튼 배경
+    btn_layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    bdraw = ImageDraw.Draw(btn_layer)
+    bdraw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=22,
+                             fill=(*brand_rgb, 220), outline=(255, 255, 255, 100), width=1)
+    img = Image.alpha_composite(img, btn_layer)
+    draw = ImageDraw.Draw(img)
+    draw.text((bx + 30, by + 10), btn_text, font=font_btn, fill=white)
+
+    # 상단 브랜드 바
+    draw.rectangle([(0, 0), (W, 5)], fill=(*brand_rgb, 255))
+
+    buf = BytesIO()
+    img.convert('RGB').save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+# ════════════════════════════════════════════════════════
 # Supabase Storage 업로드
 # ════════════════════════════════════════════════════════
 

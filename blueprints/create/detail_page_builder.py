@@ -562,3 +562,176 @@ def dpb_section_feature3_generate():
     except Exception as e:
         logger.error(f'[DPB] feature3 generate error: {e}', exc_info=True)
         return jsonify(ok=False, message=f'이미지 생성 중 오류가 발생했습니다: {str(e)[:120]}')
+
+
+# ════════════════════════════════════════════════════════════
+# 상세페이지 전체 스토리 세트 생성
+# ════════════════════════════════════════════════════════════
+
+@create_bp.route('/detail-page/story')
+@login_required
+def dpb_story_page():
+    """상세페이지 전체 이미지 세트 생성 페이지"""
+    supabase = current_app.supabase
+    brands = get_accessible_brands(supabase)
+    default_brand = get_default_brand(supabase)
+    if not default_brand:
+        flash('먼저 브랜드 프로필을 등록해 주세요.', 'warning')
+        return redirect(url_for('main.onboarding'))
+    return render_template(
+        'create/detail_page_story.html',
+        brands=brands,
+        default_brand=default_brand,
+    )
+
+
+@create_bp.route('/detail-page/story/plan', methods=['POST'])
+@login_required
+def dpb_story_plan():
+    """제품 정보 -> 상세페이지 섹션 스토리 플랜 JSON 생성 (무료)."""
+    import json as _json
+    supabase   = current_app.supabase
+    data       = request.get_json(silent=True) or {}
+    product_id = data.get('product_id', '').strip()
+    brand_id   = data.get('brand_id', '').strip()
+    count      = max(6, min(12, int(data.get('count', 8))))
+
+    if not product_id:
+        return jsonify(ok=False, message='product_id가 필요합니다.')
+
+    try:
+        res = supabase.table('products').select('*').eq('id', product_id).single().execute()
+        product = res.data
+    except Exception:
+        return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
+    if not product:
+        return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
+
+    bid = brand_id or product.get('brand_id', '')
+    brand = get_brand_by_id(supabase, bid) if bid else get_default_brand(supabase)
+    brand_name = brand.get('name', '') if brand else ''
+
+    features_raw = product.get('features') or []
+    if isinstance(features_raw, str):
+        features_raw = [f.strip() for f in features_raw.split(',') if f.strip()]
+    features_txt = '\n'.join(f'- {f}' for f in features_raw) if features_raw else '(없음)'
+
+    system = (
+        '당신은 한국 이커머스 상세페이지 전문 기획자입니다. '
+        'JSON만 반환하세요. 추가 설명 없이 JSON 배열만 출력하세요.'
+    )
+
+    tmpl_guide = (
+        'hero: 오프닝 헤더 (headline필수, subtext선택)\n'
+        'feature3: 소구포인트 3열 카드 (headline필수, features=[{title,desc}]x3)\n'
+        'feature_highlight: 특장점 단일 강조 (number필수, title필수, desc필수, layout="left"또는"right")\n'
+        'text_emphasis: 텍스트 강조 배너 (main_text필수, sub_text선택, bg_prompt는 빈 문자열)\n'
+        'cta: 구매 촉구 마무리 (cta_text필수, sub_text선택)'
+    )
+
+    user = (
+        f'제품명: {product["name"]}\n'
+        f'브랜드: {brand_name}\n'
+        f'카테고리: {product.get("category", "")}\n'
+        f'핵심 특징:\n{features_txt}\n'
+        f'설명: {(product.get("description") or "")[:400]}\n\n'
+        f'위 제품의 상세페이지 이미지 세트 {count}장을 기획해주세요.\n\n'
+        f'사용 가능한 템플릿:\n{tmpl_guide}\n\n'
+        f'각 섹션에 bg_prompt 필드 포함 (FLUX용 영문 30단어 이내, text_emphasis는 빈 문자열).\n'
+        f'feature_highlight는 layout 필드 포함 (left/right 번갈아).\n\n'
+        f'JSON 배열 {count}개만 반환:'
+    )
+
+    try:
+        from services.claude_service import generate_text
+        raw = generate_text(system, user, max_tokens=2500, model='claude-haiku-4-5-20251001')
+        raw = raw.strip()
+        if raw.startswith('```'):
+            raw = raw.split('```')[1]
+            if raw.startswith('json'):
+                raw = raw[4:]
+            raw = raw.rsplit('```', 1)[0]
+        sections = _json.loads(raw)
+        return jsonify(ok=True, sections=sections, product_name=product['name'])
+    except Exception as e:
+        logger.error(f'[DPB] story plan error: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'스토리 기획 중 오류: {str(e)[:100]}')
+
+
+@create_bp.route('/detail-page/story/generate-section', methods=['POST'])
+@login_required
+def dpb_story_generate_section():
+    """단일 섹션 이미지 생성 (스토리 세트 배치용). 프론트에서 섹션별로 순차 호출."""
+    import base64 as _b64
+    supabase = current_app.supabase
+    data     = request.get_json(silent=True) or {}
+    brand_id    = data.get('brand_id', '')
+    brand_color = data.get('brand_color', '#4b5cde')
+    section     = data.get('section', {})
+    tmpl        = section.get('template', '')
+
+    brand = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if brand and brand.get('primary_color'):
+        brand_color = brand['primary_color']
+
+    COSTS = {
+        'hero': 200, 'feature3': 400,
+        'feature_highlight': 300, 'text_emphasis': 150, 'cta': 200,
+    }
+    LABELS = {
+        'hero': '히어로 헤더', 'feature3': '소구포인트 3열',
+        'feature_highlight': '특장점 상세', 'text_emphasis': '텍스트 강조', 'cta': 'CTA 마무리',
+    }
+    cost = COSTS.get(tmpl, 200)
+
+    from services.point_service import use_points, InsufficientPoints
+    creation_id = str(uuid.uuid4())
+    try:
+        use_points(current_user, f'dp_section_{tmpl}', creation_id,
+                   cost_override=cost,
+                   note_override=f'상세페이지 {LABELS.get(tmpl, tmpl)} 이미지')
+    except InsufficientPoints as e:
+        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
+
+    try:
+        from services.imagen_service import (
+            generate_hero_section, generate_feature3_section,
+            generate_feature_highlight, generate_text_emphasis,
+            generate_cta_section, upload_to_supabase, _generate_flux,
+        )
+
+        # 배경 이미지 생성 (text_emphasis 제외)
+        bg_url = ''
+        if tmpl != 'text_emphasis' and section.get('bg_prompt'):
+            bg_url, _ = _generate_flux(section['bg_prompt'], quality='preview')
+
+        if tmpl == 'hero':
+            png = generate_hero_section(
+                bg_url, section.get('headline', ''), section.get('subtext', ''), brand_color)
+        elif tmpl == 'feature3':
+            png = generate_feature3_section(
+                bg_url, section.get('headline', ''), section.get('features', []), brand_color)
+        elif tmpl == 'feature_highlight':
+            png = generate_feature_highlight(
+                bg_url, section.get('number', '01'), section.get('title', ''),
+                section.get('desc', ''), brand_color, section.get('layout', 'left'))
+        elif tmpl == 'text_emphasis':
+            png = generate_text_emphasis(
+                section.get('main_text', ''), section.get('sub_text', ''), brand_color)
+        elif tmpl == 'cta':
+            png = generate_cta_section(
+                bg_url, section.get('cta_text', ''), section.get('sub_text', ''), brand_color)
+        else:
+            return jsonify(ok=False, message=f'알 수 없는 템플릿: {tmpl}')
+
+        b64 = _b64.b64encode(png).decode()
+        data_url = f'data:image/png;base64,{b64}'
+        stable_url = upload_to_supabase(
+            data_url, current_user.id,
+            f'dpb_{tmpl}_{uuid.uuid4().hex[:8]}.png'
+        )
+        return jsonify(ok=True, image_url=stable_url, template=tmpl, cost=cost)
+
+    except Exception as e:
+        logger.error(f'[DPB] story generate-section error: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'이미지 생성 오류: {str(e)[:120]}')

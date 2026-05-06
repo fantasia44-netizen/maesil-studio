@@ -172,6 +172,23 @@
      템플릿 선택 화면
      ════════════════════════════════════════════ -->
 <div id="select-screen">
+  <!-- 상단 퀵메뉴 -->
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="{{ url_for('create.dpb_story_page') }}"
+       style="background:linear-gradient(135deg,#5c6bc0,#7e57c2);color:#fff;border:none;
+              border-radius:8px;padding:.45rem 1rem;font-size:.88rem;font-weight:700;
+              text-decoration:none;white-space:nowrap;">
+      🎬 이미지 세트 자동생성
+    </a>
+    <a href="{{ url_for('create.dpb_section_feature3_page') }}"
+       style="background:#1a237e;color:#90caf9;border:1px solid #283593;
+              border-radius:8px;padding:.45rem 1rem;font-size:.85rem;font-weight:600;
+              text-decoration:none;white-space:nowrap;">
+      📦 소구포인트 3열
+    </a>
+    <span style="color:#555;font-size:.8rem;">← 상세페이지 이미지 생성 도구</span>
+  </div>
+
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
       <h5 class="fw-bold mb-1">
