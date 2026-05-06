@@ -75,6 +75,8 @@ POINT_COSTS = {
     'dp_block_image':       50,  # 블록 이미지 FLUX Schnell 생성
     'dp_bg_replace':        80,  # 블록 이미지 배경 교체 (Bria)
     'dp_flux_text':        300,  # FLUX 배경 + PIL 텍스트 오버레이
+    # 상세페이지 이미지 세트 — 스토리 빌더 섹션별
+    'detail_page_image':   250,  # 스토리 섹션 이미지 (PIL 합성, 실제 비용은 섹션별 override)
 }
 
 # ──────────────────────────────────────────
@@ -160,16 +162,17 @@ CREATION_LABELS = {
     'ad_copy':         '광고 카피',
     'press_release':   '보도자료',
     # 이미지
-    'img_preview':     '이미지 생성',
-    'img_ideogram':    '이미지 생성 (한글)',
-    'bg_replace':      '배경 교체',
-    'bg_remove_adv':   '배경 제거',
-    'img_card_news':   '인스타 카드뉴스',
-    'image_generation':'이미지 생성',
-    'thumbnail_image': '썸네일 이미지',
-    'detail_image':    '상세페이지 이미지',
-    'card_news':       '인스타 카드뉴스',
-    'logo':            '브랜드 로고',
+    'img_preview':      '이미지 생성',
+    'img_ideogram':     '이미지 생성 (한글)',
+    'bg_replace':       '배경 교체',
+    'bg_remove_adv':    '배경 제거',
+    'img_card_news':    '인스타 카드뉴스',
+    'image_generation': '이미지 생성',
+    'thumbnail_image':  '썸네일 이미지',
+    'detail_image':     '상세페이지 이미지',
+    'detail_page_image':'상세페이지 이미지 세트',
+    'card_news':        '인스타 카드뉴스',
+    'logo':             '브랜드 로고',
     # 영상
     'shorts_video':    '쇼츠/릴스 영상',
     # 홍보 자료

@@ -770,12 +770,39 @@ def dpb_story_generate_section():
     cost = COSTS.get(tmpl, 200)
 
     from services.point_service import use_points, InsufficientPoints
+    from services.tz_utils import now_kst
     creation_id = str(uuid.uuid4())
+
+    # creations 행 선삽입 (generating) — 이력 추적용
+    _insert_row = {
+        'id': creation_id,
+        'user_id': current_user.id,
+        'creation_type': 'detail_page_image',
+        'input_data': {
+            'template': tmpl,
+            'brand_id': brand_id,
+            'section_label': LABELS.get(tmpl, tmpl),
+        },
+        'output_data': {},
+        'points_used': cost,
+        'status': 'generating',
+        'created_at': now_kst().isoformat(),
+    }
+    if brand and brand.get('id'):
+        _insert_row['brand_id'] = brand['id']
+    if getattr(current_user, 'operator_id', None):
+        _insert_row['operator_id'] = current_user.operator_id
     try:
-        use_points(current_user, f'dp_section_{tmpl}', creation_id,
+        supabase.table('creations').insert(_insert_row).execute()
+    except Exception as _ie:
+        logger.warning(f'[DPB] creations insert 실패 (무시): {_ie}')
+
+    try:
+        use_points(current_user, 'detail_page_image', creation_id,
                    cost_override=cost,
                    note_override=f'상세페이지 {LABELS.get(tmpl, tmpl)} 이미지')
     except InsufficientPoints as e:
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
 
     try:
@@ -818,8 +845,21 @@ def dpb_story_generate_section():
             data_url, current_user.id,
             f'dpb_{tmpl}_{uuid.uuid4().hex[:8]}.png'
         )
+        # creations 업데이트 (done)
+        try:
+            supabase.table('creations').update({
+                'output_data': {'image_url': stable_url, 'template': tmpl},
+                'status': 'done',
+            }).eq('id', creation_id).execute()
+        except Exception as _ue:
+            logger.warning(f'[DPB] creations update(done) 실패 (무시): {_ue}')
+
         return jsonify(ok=True, image_url=stable_url, template=tmpl, cost=cost)
 
     except Exception as e:
         logger.error(f'[DPB] story generate-section error: {e}', exc_info=True)
+        try:
+            supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        except Exception:
+            pass
         return jsonify(ok=False, message=f'이미지 생성 오류: {str(e)[:120]}')
