@@ -697,13 +697,16 @@ def dpb_story_generate_section():
         from services.imagen_service import (
             generate_hero_section, generate_feature3_section,
             generate_feature_highlight, generate_text_emphasis,
-            generate_cta_section, upload_to_supabase, _generate_flux,
+            generate_cta_section, upload_to_supabase, generate_image,
         )
 
-        # 배경 이미지 생성 (text_emphasis 제외)
+        # 배경 이미지 생성 (text_emphasis 제외) — 실패해도 단색 배경으로 계속 진행
         bg_url = ''
         if tmpl != 'text_emphasis' and section.get('bg_prompt'):
-            bg_url, _ = _generate_flux(section['bg_prompt'], quality='preview')
+            try:
+                bg_url, _ = generate_image(section['bg_prompt'], engine='flux_preview', size='1024x768')
+            except Exception as flux_err:
+                logger.warning(f'[DPB] story bg-image 실패, 단색 배경 사용: {flux_err}')
 
         if tmpl == 'hero':
             png = generate_hero_section(
