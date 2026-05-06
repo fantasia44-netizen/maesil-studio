@@ -70,6 +70,11 @@ POINT_COSTS = {
     'catalog':             150,  # 카탈로그 8p 기본 (printout.py에서 분량별 override)
     'leaflet':             120,  # 리플릿 (3단 접이 6패널)
     'flyer':                80,  # 전단지
+    # 상세페이지 빌더 — 블록 단위 생성
+    'dp_block_text':        30,  # 블록 텍스트 AI 생성 (블록 1개)
+    'dp_block_image':       50,  # 블록 이미지 FLUX Schnell 생성
+    'dp_bg_replace':        80,  # 블록 이미지 배경 교체 (Bria)
+    'dp_flux_text':        300,  # FLUX 배경 + PIL 텍스트 오버레이
 }
 
 # ──────────────────────────────────────────
@@ -189,7 +194,7 @@ MENU_REGISTRY = [
     ('블로그',      'bi-file-text',           'create.blog',          None,  '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',     None,  '콘텐츠 생성'),
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
-    ('상세페이지',  'bi-layout-text-sidebar', 'create.detail_page',   None,  '콘텐츠 생성'),
+    ('상세페이지 빌더', 'bi-layout-text-sidebar', 'create.detail_page_builder', None, '콘텐츠 생성'),
     # ── 홍보물
     ('홍보물 만들기', 'bi-megaphone',          'create.promo',     None, '홍보물'),
     # ── 관리
