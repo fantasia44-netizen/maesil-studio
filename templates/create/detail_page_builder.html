@@ -855,37 +855,38 @@ async function genBlockText(blockId) {
 let _imgGenModal = null;
 let _imgGenTargetId = null;
 
-// 역할별 이미지 장면 힌트 (한국어)
+// 역할별 이미지 장면 힌트 — 영문 직접 사용 (FLUX는 영문만 인식)
 const IMG_SCENE_HINTS = {
-  hook:       '시선을 끄는 강렬한 비주얼, 감정을 자극하는 순간',
-  empathy:    '고객의 일상적 불편함을 공감하는 장면, 따뜻하고 현실적인 분위기',
-  problem:    '불편함을 겪고 있는 일상적 상황, 공감 가는 장면',
-  cause:      '문제의 원인을 보여주는 상징적 장면',
-  solution:   '문제가 해결되어 밝고 만족스러운 모습, 희망적 분위기',
-  before:     '사용 전의 힘들거나 불편한 상황, 어둡고 무거운 분위기',
-  after:      '사용 후 달라진 밝고 행복한 모습, 선명하고 긍정적 분위기',
-  product:    '제품 중심의 깔끔한 스튜디오 촬영, 프리미엄 조명, 흰 배경',
-  feature:    '제품 기능을 직관적으로 보여주는 장면, 클로즈업',
-  lifestyle:  '이상적인 일상 생활 장면, 따뜻하고 자연스러운 라이프스타일',
-  expert:     '전문가 또는 연구소 환경, 신뢰감 있고 전문적인 분위기',
-  data:       '깔끔한 인포그래픽 배경, 수치와 그래프, 전문적이고 신뢰감 있는',
-  story:      '진정성 있는 브랜드 스토리 장면, 따뜻하고 인간적인 분위기',
-  comparison: '두 가지를 나란히 비교하는 명확한 장면, 차이가 한눈에 보이는 구도',
-  review:     '만족한 고객의 행복한 표정, 제품을 사용하는 자연스러운 생활 장면',
-  fomo:       '많은 사람들이 함께 즐기는 활기찬 장면, 소속감과 트렌드를 보여주는 이미지',
-  benefit:    '혜택과 가치를 시각적으로 보여주는 풍요롭고 긍정적인 장면',
-  cta:        '강렬하고 에너지 넘치는 행동 유도 비주얼, 밝고 선명한 색감',
+  hook:       'bold eye-catching visual, dramatic cinematic lighting, emotional impact, wide shot',
+  empathy:    'relatable everyday discomfort scene, warm candid lifestyle photography, natural light',
+  problem:    'person experiencing daily frustration or inconvenience, empathetic realistic atmosphere',
+  cause:      'symbolic visual representing root cause of a problem, conceptual clean composition',
+  solution:   'bright satisfied expression after problem resolved, hopeful positive atmosphere, warm tones',
+  before:     'uncomfortable difficult situation before product use, dark moody lighting, heavy atmosphere',
+  after:      'happy transformed lifestyle after product use, bright vibrant colors, positive energy',
+  product:    'clean commercial product photography, studio lighting, white background, premium sharp detail',
+  feature:    'close-up product detail highlighting key feature, minimalist studio background, sharp focus',
+  lifestyle:  'ideal daily life scene, warm golden hour natural lifestyle photography, authentic candid moment',
+  expert:     'professional laboratory clinical environment, trustworthy expert credible atmosphere, clean',
+  data:       'clean infographic background, research environment, data visualization, professional trustworthy',
+  story:      'genuine brand story scene, warm human emotional connection, authentic storytelling photography',
+  comparison: 'clear side-by-side comparison layout, visual contrast highlighting difference, clean composition',
+  review:     'happy satisfied customer using product naturally, genuine smile, lifestyle photography',
+  fomo:       'energetic group of people enjoying product together, trendy vibrant social scene, FOMO',
+  benefit:    'abundant positive visual showing value and benefits, bright optimistic cheerful atmosphere',
+  cta:        'bold energetic action-inspiring visual, vibrant saturated colors, motivating dynamic composition',
 };
 
 function buildAutoImgPrompt(block) {
-  const scene    = IMG_SCENE_HINTS[block.role] || '제품 관련 상업용 이미지';
+  const scene    = IMG_SCENE_HINTS[block.role] || 'commercial product photography, clean professional';
   const product  = getProductName();
   const features = getProductFeatures();
+  // 영문 프롬프트 직접 조합 (한글 상품명은 서버에서 번역됨)
   const parts = [scene];
-  if (product)  parts.push(`상품: ${product}`);
+  if (product)  parts.push('product: ' + product);
   if (features) parts.push(features.slice(0, 60));
-  parts.push('고화질, 상업용 사진, 자연광, 깔끔한 구도');
-  return parts.join('. ');
+  parts.push('high quality, commercial photography, professional lighting');
+  return parts.join(', ');
 }
 
 function showImgGenModal(blockId) {
@@ -1277,11 +1278,24 @@ function showFluxTextModal(blockId) {
   if (!b) return;
   _fluxTextTargetId = blockId;
   document.getElementById('flux-text-block-id').value = blockId;
-  // 블록 텍스트 내용이 있으면 자동 채움
-  const existingText = blocks
-    .filter(x => x.type === 'text' && x.content)
-    .map(x => x.content.split('\n')[0].slice(0, 40));
-  if (existingText[0]) document.getElementById('flux-text-line1').value = existingText[0];
+
+  // 배경 프롬프트 자동 생성 (영문 직접)
+  const bgPromptEl = document.getElementById('flux-text-bg-prompt');
+  if (!bgPromptEl.value.trim()) {
+    bgPromptEl.value = IMG_SCENE_HINTS[b.role] || 'clean studio background, soft lighting, minimal';
+  }
+
+  // 텍스트 자동 채움: 현재 블록 내용 우선, 없으면 다른 블록에서 가져옴
+  const line1El = document.getElementById('flux-text-line1');
+  if (!line1El.value) {
+    if (b.content) {
+      line1El.value = b.content.split('\n')[0].slice(0, 40);
+    } else {
+      const other = blocks.find(x => x.id !== blockId && x.content);
+      if (other) line1El.value = other.content.split('\n')[0].slice(0, 40);
+    }
+  }
+
   if (!_fluxTextModal) _fluxTextModal = new bootstrap.Modal(document.getElementById('fluxTextModal'));
   _fluxTextModal.show();
 }
