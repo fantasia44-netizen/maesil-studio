@@ -74,12 +74,21 @@
           {% if has_images %}
           <div class="mb-4">
             <div class="d-flex flex-wrap gap-2">
-              {% for img_url in od.images %}
-              {% if img_url and img_url is string %}
+              {% for img_item in od.images %}
+              {%- set img_src  = img_item.url  if img_item is mapping else img_item -%}
+              {%- set img_role = img_item.role if img_item is mapping else '' -%}
+              {% if img_src %}
               <div class="position-relative">
-                <img src="{{ img_url }}" alt="이미지"
+                <img src="{{ img_src }}" alt="{{ img_role or '이미지' }}"
                      style="height:160px;width:auto;object-fit:cover;border-radius:8px;border:1px solid #eee;cursor:pointer"
-                     onclick="openImg('{{ img_url }}')">
+                     onclick="openImg('{{ img_src }}')">
+                {% if img_role %}
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);
+                            color:#fff;font-size:.68rem;padding:.2rem .4rem;border-radius:0 0 8px 8px;
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                  {{ img_role }}
+                </div>
+                {% endif %}
               </div>
               {% endif %}
               {% endfor %}

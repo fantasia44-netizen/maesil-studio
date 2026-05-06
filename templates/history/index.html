@@ -111,7 +111,9 @@
                 <img src="{{ od.image_url }}" alt="썸네일"
                      style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #eee">
               {% elif od.images and od.images | length > 0 and od.images[0] %}
-                <img src="{{ od.images[0] }}" alt="썸네일"
+                {%- set _img0 = od.images[0] -%}
+                {%- set _thumb = _img0.url if _img0 is mapping else _img0 -%}
+                <img src="{{ _thumb }}" alt="썸네일"
                      style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #eee">
               {% else %}
                 <div style="width:54px;height:54px;border-radius:6px;background:{{ meta.tone }};
@@ -193,7 +195,9 @@
                 <img src="{{ od.image_url }}" alt="썸네일"
                      style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #eee">
               {% elif od.images and od.images | length > 0 and od.images[0] %}
-                <img src="{{ od.images[0] }}" alt="썸네일"
+                {%- set _img0 = od.images[0] -%}
+                {%- set _thumb = _img0.url if _img0 is mapping else _img0 -%}
+                <img src="{{ _thumb }}" alt="썸네일"
                      style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #eee">
               {% else %}
                 <div style="width:48px;height:48px;border-radius:6px;background:{{ meta.tone }};
