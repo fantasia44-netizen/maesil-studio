@@ -516,6 +516,7 @@
 // 전역 상태
 // ════════════════════════════════════════════
 const TEMPLATE_DATA = {{ templates | tojson }};
+const CSRF = '{{ csrf_token() }}';
 let blocks       = [];
 let templateMeta = null;
 let _uploadTargetId = null;  // 업로드 대상 블록 ID
@@ -701,7 +702,7 @@ async function genBlockText(blockId) {
   try {
     const res = await fetch('{{ url_for("create.dpb_gen_text") }}', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
       body: JSON.stringify({
         brand_id:         getBrandId(),
         template_id:      templateMeta?.id || '',
@@ -760,7 +761,7 @@ async function confirmGenImage() {
   try {
     const res = await fetch('{{ url_for("create.dpb_gen_image") }}', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
       body: JSON.stringify({
         brand_id:         getBrandId(),
         block_role:       b.role,
@@ -810,6 +811,7 @@ async function handleImageUpload(input) {
     // Supabase 업로드
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('csrf_token', CSRF);
     try {
       const res  = await fetch('{{ url_for("create.dpb_upload_image") }}', { method:'POST', body:fd });
       const data = await res.json();
@@ -1003,7 +1005,7 @@ async function confirmBgReplace() {
   try {
     const res = await fetch('{{ url_for("create.dpb_bg_replace") }}', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
       body: JSON.stringify({
         image_url:   b.imageUrl,
         bg_prompt:   bgPrompt,
@@ -1069,7 +1071,7 @@ async function confirmFluxText() {
   try {
     const res = await fetch('{{ url_for("create.dpb_flux_text") }}', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
       body: JSON.stringify({
         brand_id:    getBrandId(),
         bg_prompt:   bgPrompt,
