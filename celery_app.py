@@ -8,7 +8,7 @@ celery = Celery(
     'maesil',
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=['tasks.shorts_task'],
+    include=['tasks.shorts_task', 'tasks.banner_task'],
 )
 
 celery.conf.update(

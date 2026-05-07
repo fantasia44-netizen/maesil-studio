@@ -1,6 +1,5 @@
 """배너 이미지 생성 라우트"""
 import logging
-import threading
 import uuid
 
 from flask import render_template, request, jsonify, current_app
@@ -228,29 +227,28 @@ def banner_generate():
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')
 
-    # 백그라운드 실행
-    from services.banner_service import run_banner_pipeline
-    app = current_app._get_current_object()
+    # Celery 워커에서 실행
+    from tasks.banner_task import generate_banner
+    supabase_url = current_app.config.get('SUPABASE_URL', '')
+    supabase_key = (current_app.config.get('SUPABASE_SERVICE_KEY')
+                    or current_app.config.get('SUPABASE_KEY', ''))
 
-    def _run():
-        with app.app_context():
-            run_banner_pipeline(
-                creation_id=creation_id,
-                user_id=current_user.id,
-                headline=headline,
-                subline=subline,
-                cta=cta,
-                bg_type=bg_type,
-                bg_prompt=bg_prompt,
-                brand_color=brand_color,
-                layout=layout,
-                W=W,
-                H=H,
-                product_url=product_url,
-                supabase=supabase,
-            )
-
-    threading.Thread(target=_run, daemon=True).start()
+    generate_banner.delay(
+        creation_id=creation_id,
+        user_id=current_user.id,
+        headline=headline,
+        subline=subline,
+        cta=cta,
+        bg_type=bg_type,
+        bg_prompt=bg_prompt,
+        brand_color=brand_color,
+        layout=layout,
+        W=W,
+        H=H,
+        product_url=product_url,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+    )
     return jsonify(ok=True, creation_id=creation_id, cost=cost)
 
 

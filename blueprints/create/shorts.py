@@ -233,8 +233,12 @@ def shorts_generate():
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')
 
-    from services.shorts_service import start_shorts_pipeline
-    start_shorts_pipeline(
+    from tasks.shorts_task import generate_shorts_video
+    supabase_url = current_app.config.get('SUPABASE_URL', '')
+    supabase_key = (current_app.config.get('SUPABASE_SERVICE_KEY')
+                    or current_app.config.get('SUPABASE_KEY', ''))
+
+    generate_shorts_video.delay(
         creation_id=creation_id,
         user_id=current_user.id,
         scenes=scenes,
@@ -242,8 +246,8 @@ def shorts_generate():
         brand_color=brand_color,
         voice_key=voice_key,
         tts_speed=tts_speed,
-        supabase=supabase,
-        app=current_app._get_current_object(),
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
         bgm_volume=bgm_volume,
     )
 

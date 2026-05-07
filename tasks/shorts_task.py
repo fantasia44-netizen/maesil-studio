@@ -19,9 +19,7 @@ def generate_shorts_video(
     tts_speed: float,
     supabase_url: str,
     supabase_key: str,
-    product_image_url: str = '',
-    visual_mode: str = 'scene_mood',
-    bgm_key: str = 'none',
+    bgm_volume: float = 0.20,
 ):
     """Celery 워커에서 쇼츠 영상 생성.
 
@@ -41,7 +39,5 @@ def generate_shorts_video(
         voice_key=voice_key,
         tts_speed=tts_speed,
         supabase=supabase,
-        product_image_url=product_image_url,
-        visual_mode=visual_mode,
-        bgm_key=bgm_key,
+        bgm_volume=bgm_volume,
     )
