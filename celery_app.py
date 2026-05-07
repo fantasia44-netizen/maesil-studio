@@ -1,5 +1,12 @@
 """Celery 앱 — 쇼츠 영상 생성 등 CPU/시간 집약 작업을 별도 워커에서 처리"""
 import os
+import sys
+
+# 워커 프로세스에서 프로젝트 루트(services/, tasks/ 등)를 임포트할 수 있도록 sys.path에 추가
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 from celery import Celery
 
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
