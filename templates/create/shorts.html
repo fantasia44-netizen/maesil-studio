@@ -54,6 +54,29 @@
                placeholder="예: 신제품 출시 알리기 / 브랜드 인지도 높이기 / 구매 전환 유도">
       </div>
 
+      <!-- 이미지 방향 선택 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-2">이미지 방향</label>
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="visual-mode-card border rounded p-3 text-center active"
+                 style="cursor:pointer" data-mode="scene_mood" onclick="selectVisualMode('scene_mood', this)">
+              <div class="fs-4 mb-1">🌿</div>
+              <div class="fw-semibold small">감성 배경 중심</div>
+              <div class="text-muted" style="font-size:.7rem">분위기·라이프스타일 이미지<br>특화식품·서비스·브랜딩</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="visual-mode-card border rounded p-3 text-center"
+                 style="cursor:pointer" data-mode="product_focus" onclick="selectVisualMode('product_focus', this)">
+              <div class="fs-4 mb-1">📦</div>
+              <div class="fw-semibold small">제품 직접 노출</div>
+              <div class="text-muted" style="font-size:.7rem">제품이 화면에 직접 등장<br>화장품·의료기기·패키지 상품</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="d-flex justify-content-end mt-4">
         <button class="btn btn-primary" onclick="goStep2()">
           소구포인트 생성 <i class="bi bi-arrow-right ms-1"></i>
@@ -173,6 +196,29 @@
           <option value="1.1" selected>보통 (1.1×)</option>
           <option value="1.25">빠르게 (1.25×)</option>
         </select>
+      </div>
+
+      <!-- BGM -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">배경 음악 (BGM)</label>
+        <div class="row g-2">
+          {% for bk, bl, bd in [
+            ('none',      '없음',         '나레이션만'),
+            ('lofi',      '로파이 칠',    '잔잔·감성'),
+            ('upbeat',    '업비트 팝',    '경쾌·활기'),
+            ('cinematic', '시네마틱',     '고급·웅장'),
+          ] %}
+          <div class="col-6 col-md-3">
+            <div class="bgm-card border rounded p-2 text-center {% if bk == 'none' %}active{% endif %}"
+                 style="cursor:pointer" data-bgm="{{ bk }}"
+                 onclick="selectBgm('{{ bk }}', this)">
+              <div class="fw-semibold small">{{ bl }}</div>
+              <div class="text-muted" style="font-size:.68rem">{{ bd }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="form-text" style="font-size:.72rem">BGM 파일이 서버에 없으면 자동으로 나레이션만 사용됩니다.</div>
       </div>
 
       <!-- 브랜드 컬러 -->
@@ -308,6 +354,12 @@
 .angle-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
 .angle-card:hover { border-color:#d63384 !important; background:#fff0f8; }
 .angle-card.active { border-color:#d63384 !important; background:#fff0f8; }
+.visual-mode-card { transition:all .2s; }
+.visual-mode-card:hover { border-color:#d63384 !important; background:#fff0f8; }
+.visual-mode-card.active { border-color:#d63384 !important; background:#fff0f8; }
+.bgm-card { transition:all .2s; }
+.bgm-card:hover { border-color:#6c757d !important; background:#f8f9fa; }
+.bgm-card.active { border-color:#198754 !important; background:#f0fff4; }
 </style>
 
 <script>
@@ -318,6 +370,8 @@ let scriptScenes     = [];
 let selectedStyle    = null;
 let selectedVoice    = 'female_natural';
 let selectedBrandColor = '#e8355a';
+let selectedVisualMode = 'scene_mood';
+let selectedBgm        = 'none';
 let currentCreationId  = null;
 let pollTimer          = null;
 
@@ -424,10 +478,11 @@ async function loadScript() {
   const res  = await fetch('/create/shorts/script', {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({
-      brand_id:   document.getElementById('brandSelect').value,
-      product_id: document.getElementById('productSelect').value,
-      angle:      selectedAngle,
-      style:      selectedStyle || 'realistic_banner',
+      brand_id:    document.getElementById('brandSelect').value,
+      product_id:  document.getElementById('productSelect').value,
+      angle:       selectedAngle,
+      style:       selectedStyle || 'realistic_banner',
+      visual_mode: selectedVisualMode,
     })
   });
   const data = await res.json();
@@ -511,6 +566,18 @@ function selectColor(hex, el) {
   document.getElementById('customColor').value = hex;
 }
 
+function selectVisualMode(mode, el) {
+  document.querySelectorAll('.visual-mode-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedVisualMode = mode;
+}
+
+function selectBgm(key, el) {
+  document.querySelectorAll('.bgm-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedBgm = key;
+}
+
 function checkStep4Ready() {
   document.getElementById('step4Next').disabled = !(selectedStyle && selectedVoice);
 }
@@ -533,6 +600,9 @@ async function startGenerate() {
       voice:       selectedVoice,
       tts_speed:   parseFloat(document.getElementById('ttsSpeed').value),
       brand_id:    document.getElementById('brandSelect').value,
+      product_id:  document.getElementById('productSelect').value,
+      visual_mode: selectedVisualMode,
+      bgm_key:     selectedBgm,
     })
   });
   const data = await res.json();
@@ -624,9 +694,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (firstStyle) selectStyle(firstStyle.dataset.style, firstStyle);
   const firstVoice = document.querySelector('.voice-card');
   if (firstVoice) selectVoice(firstVoice.dataset.voice, firstVoice);
-  // 기본 컬러 표시
   const firstDot = document.querySelector('.color-dot');
   if (firstDot) selectColor(firstDot.title, firstDot);
+  // visual mode & bgm 기본 선택 표시
+  const firstVisual = document.querySelector('.visual-mode-card[data-mode="scene_mood"]');
+  if (firstVisual) firstVisual.classList.add('active');
+  const firstBgm = document.querySelector('.bgm-card[data-bgm="none"]');
+  if (firstBgm) firstBgm.classList.add('active');
 });
 </script>
 {% endblock %}

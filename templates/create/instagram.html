@@ -470,6 +470,38 @@
                 <button class="scale-btn btn btn-sm btn-outline-secondary active" data-s="1.0"  onclick="selectScale(1.0,this)">M</button>
                 <button class="scale-btn btn btn-sm btn-outline-secondary" data-s="1.35" onclick="selectScale(1.35,this)">L</button>
               </div>
+              <!-- 글자색 -->
+              <div class="mb-2">
+                <div class="small text-muted mb-1">글자 색</div>
+                <div class="d-flex gap-1 flex-wrap">
+                  <button class="tc-btn btn btn-sm active" data-tc="white"
+                          style="background:#fff;color:#111;border:2px solid #d63384"
+                          onclick="selectTextColor('white',this)">흰색</button>
+                  <button class="tc-btn btn btn-sm" data-tc="black"
+                          style="background:#111;color:#fff;border:2px solid transparent"
+                          onclick="selectTextColor('black',this)">검정</button>
+                  <button class="tc-btn btn btn-sm" data-tc="yellow"
+                          style="background:#ffe61e;color:#111;border:2px solid transparent"
+                          onclick="selectTextColor('yellow',this)">노랑</button>
+                  <label class="btn btn-sm d-flex align-items-center gap-1"
+                         style="border:2px dashed #ccc;cursor:pointer;padding:3px 8px">
+                    <span class="small">직접</span>
+                    <input type="color" id="customTextColor" value="#ffffff"
+                           oninput="selectTextColor(this.value, null)"
+                           style="width:22px;height:22px;border:none;padding:0;cursor:pointer">
+                  </label>
+                </div>
+              </div>
+              <!-- 배경 어둡기 -->
+              <div class="mb-3">
+                <div class="small text-muted mb-1">배경 어둡기</div>
+                <div class="d-flex gap-1">
+                  <button class="ov-btn btn btn-sm btn-outline-secondary" data-ov="none"   onclick="selectOverlay('none',this)">없음</button>
+                  <button class="ov-btn btn btn-sm btn-outline-secondary" data-ov="light"  onclick="selectOverlay('light',this)">약하게</button>
+                  <button class="ov-btn btn btn-sm btn-outline-secondary active" data-ov="medium" onclick="selectOverlay('medium',this)">보통</button>
+                  <button class="ov-btn btn btn-sm btn-outline-secondary" data-ov="dark"   onclick="selectOverlay('dark',this)">강하게</button>
+                </div>
+              </div>
               <button class="btn btn-sm w-100 fw-semibold" style="background:#d63384;color:#fff;border-radius:8px" onclick="recompositeSingle()">
                 <span class="spinner-border spinner-border-sm d-none me-1" id="recompSpin"></span>
                 <i class="bi bi-magic me-1"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
@@ -674,8 +706,10 @@ let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
 // selectedSubStyle removed — 세부화풍 섹션 삭제됨
 let currentCaptionTab  = 'short'; // Step 5 현재 캡션 탭
 let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
-let selectedGravity    = 'bottom-left';
-let selectedTextScale  = 1.0;
+let selectedGravity      = 'bottom-left';
+let selectedTextScale    = 1.0;
+let selectedTextColor    = 'white';
+let selectedOverlay      = 'medium';
 
 // ── 감성 스타일 수식어 (블로그와 동일) ───────────────────────
 const INSTA_STYLE_MODIFIERS = {
@@ -1326,14 +1360,16 @@ async function generateImage() {
   const finalPrompt = illustMod ? `${prompt}, ${illustMod}` : prompt;
 
   const body = {
-    style:       selectedStyle,
-    flux_prompt: finalPrompt,
-    size:        selectedRatio,
-    brand_color: selectedBrandColor || '#e8355a',
-    title:       document.getElementById('imgTitle')?.value.trim()    || '',
-    body_text:   document.getElementById('imgBody')?.value.trim()     || '',
-    dialogue1:   document.getElementById('dialogue1')?.value.trim()   || '',
-    dialogue2:   document.getElementById('dialogue2')?.value.trim()   || '',
+    style:            selectedStyle,
+    flux_prompt:      finalPrompt,
+    size:             selectedRatio,
+    brand_color:      selectedBrandColor || '#e8355a',
+    title:            document.getElementById('imgTitle')?.value.trim()    || '',
+    body_text:        document.getElementById('imgBody')?.value.trim()     || '',
+    dialogue1:        document.getElementById('dialogue1')?.value.trim()   || '',
+    dialogue2:        document.getElementById('dialogue2')?.value.trim()   || '',
+    text_color:       selectedTextColor,
+    overlay_strength: selectedOverlay,
   };
 
   try {
@@ -2034,6 +2070,17 @@ function selectScale(s, el) {
   document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
 }
+function selectTextColor(tc, el) {
+  selectedTextColor = tc;
+  document.querySelectorAll('.tc-btn').forEach(b => b.style.border = '2px solid transparent');
+  if (el) el.style.border = '2px solid #d63384';
+  if (tc.startsWith('#')) document.getElementById('customTextColor').value = tc;
+}
+function selectOverlay(ov, el) {
+  selectedOverlay = ov;
+  document.querySelectorAll('.ov-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
 async function recompositeSingle() {
   if (!bannerBaseUrl) { alert('먼저 이미지를 생성하세요.'); return; }
   const spin = document.getElementById('recompSpin');
@@ -2048,12 +2095,14 @@ async function recompositeSingle() {
     bubble_layout: selectedGravity,
   } : {
     base_image_url: bannerBaseUrl,
-    title:       document.getElementById('imgTitle')?.value.trim()    || '',
-    subtitle:    document.getElementById('imgSubtitle')?.value.trim() || '',
-    brand_color: selectedBrandColor || '#e8355a',
-    size:        selectedRatio,
-    text_gravity: selectedGravity,
-    text_scale:   selectedTextScale,
+    title:            document.getElementById('imgTitle')?.value.trim()    || '',
+    subtitle:         document.getElementById('imgSubtitle')?.value.trim() || '',
+    brand_color:      selectedBrandColor || '#e8355a',
+    size:             selectedRatio,
+    text_gravity:     selectedGravity,
+    text_scale:       selectedTextScale,
+    text_color:       selectedTextColor,
+    overlay_strength: selectedOverlay,
   };
   try {
     const res  = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify(body) });

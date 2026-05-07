@@ -195,6 +195,32 @@ def _register_hooks(app):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+
+        # HSTS — 프로덕션 전용 (HTTPS 강제, 1년)
+        if not app.debug:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
+        # Content-Security-Policy
+        # 인라인 스크립트/스타일이 광범위하게 사용되므로 unsafe-inline 허용,
+        # 외부 리소스는 명시된 출처만 허용
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "cdn.jsdelivr.net cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' "
+            "cdn.jsdelivr.net cdnjs.cloudflare.com fonts.googleapis.com; "
+            "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net cdnjs.cloudflare.com data:; "
+            "img-src 'self' data: blob: *.supabase.co *.supabase.in "
+            "storage.googleapis.com cdnjs.cloudflare.com; "
+            "media-src 'self' blob: *.supabase.co *.supabase.in; "
+            "connect-src 'self' *.supabase.co *.supabase.in; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
+        )
+        response.headers['Content-Security-Policy'] = csp
         return response
 
 

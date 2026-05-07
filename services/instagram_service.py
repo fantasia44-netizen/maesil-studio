@@ -129,14 +129,36 @@ def create_banner_image(bg_url: str,
                         brand_color: str = '#e8355a',
                         pil_size: tuple = (1080, 1080),
                         text_gravity: str = 'bottom-left',
-                        text_scale: float = 1.0) -> str:
+                        text_scale: float = 1.0,
+                        text_color: str = 'white',
+                        overlay_strength: str = 'medium') -> str:
     """FLUX 배경 + 그라디언트 배너 + 한글 텍스트 레이어
 
-    text_gravity: 'bottom-left'(기본), 'bottom-center', 'top-left', 'top-center', 'center-left'
-    text_scale:   폰트 사이즈 배율 (기본 1.0)
+    text_gravity:     'bottom-left'(기본), 'bottom-center', 'top-left', 'top-center', 'center-left'
+    text_scale:       폰트 사이즈 배율 (기본 1.0)
+    text_color:       'white' | 'black' | 'yellow' | '#rrggbb'
+    overlay_strength: 'none' | 'light' | 'medium' | 'dark'
     """
     img = _load(bg_url).resize(pil_size, Image.LANCZOS)
     W, H = img.size
+
+    # ── 텍스트 색상 파싱 ────────────────────────────────
+    _TEXT_COLORS = {
+        'white':  (255, 255, 255),
+        'black':  (20,  20,  20),
+        'yellow': (255, 230, 30),
+    }
+    if text_color.startswith('#'):
+        tc = _hex_rgb(text_color)
+    else:
+        tc = _TEXT_COLORS.get(text_color, (255, 255, 255))
+    # 그림자 색: 텍스트가 밝으면 검정 그림자, 어두우면 흰색 그림자
+    shadow_bright = sum(tc) > 380
+    shadow_color  = (0, 0, 0, 180) if shadow_bright else (255, 255, 255, 160)
+
+    # ── 오버레이 강도 ───────────────────────────────────
+    _OV_MAX = {'none': 0, 'light': 100, 'medium': 200, 'dark': 255}
+    ov_max = _OV_MAX.get(overlay_strength, 200)
 
     # ── 위치별 파라미터 결정 ─────────────────────────────
     is_top    = text_gravity.startswith('top')
@@ -148,7 +170,7 @@ def create_banner_image(bg_url: str,
     elif is_center:
         gs_top_ratio, gs_bot_ratio = 0.20, 0.75
         y_start,      x_start      = 0.32, 0.06
-    else:  # bottom-left / bottom-center — 본문 텍스트 여유 공간 확보
+    else:  # bottom-left / bottom-center
         gs_top_ratio, gs_bot_ratio = 0.42, 1.0
         y_start,      x_start      = 0.45, 0.06 if 'left' in text_gravity else 0.25
 
@@ -156,19 +178,18 @@ def create_banner_image(bg_url: str,
     ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     dov = ImageDraw.Draw(ov)
 
-    if is_top:
-        # 위에서 아래로 진하게 → 아래는 투명
-        top_end = int(H * gs_bot_ratio)
-        for y_px in range(0, top_end):
-            a = int(220 * (1 - y_px / top_end))
-            dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
-    else:
-        # 기존 방식 (bottom / center)
-        gs = int(H * gs_top_ratio)
-        gs_end = int(H * gs_bot_ratio) if not is_center else H
-        for y_px in range(gs, gs_end):
-            a = int(220 * (y_px - gs) / (gs_end - gs))
-            dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
+    if ov_max > 0:
+        if is_top:
+            top_end = int(H * gs_bot_ratio)
+            for y_px in range(0, top_end):
+                a = int(ov_max * (1 - y_px / top_end))
+                dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
+        else:
+            gs = int(H * gs_top_ratio)
+            gs_end = int(H * gs_bot_ratio) if not is_center else H
+            for y_px in range(gs, gs_end):
+                a = int(ov_max * (y_px - gs) / (gs_end - gs))
+                dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
 
     # 브랜드 컬러 바 (맨 아래 12px)
     br, bg_, bb = _hex_rgb(brand_color)
@@ -193,12 +214,11 @@ def create_banner_image(bg_url: str,
         if not text:
             continue
         font      = f1 if i == 0 else f2
-        max_lines = 2 if i == 0 else 6   # 본문은 최대 6줄
+        max_lines = 2 if i == 0 else 6
         lines = _wrap(text, font, max_w)[:max_lines]
         for ln in lines:
-            # 드롭 섀도
-            d.text((x + 2, y + 2), ln, font=font, fill=(0, 0, 0, 180))
-            d.text((x,     y    ), ln, font=font, fill=(255, 255, 255, 255))
+            d.text((x + 2, y + 2), ln, font=font, fill=shadow_color)
+            d.text((x,     y    ), ln, font=font, fill=(*tc, 255))
             bb = font.getbbox(ln)
             y += int((bb[3] - bb[1]) * 1.40)
         y += int(H * 0.012)

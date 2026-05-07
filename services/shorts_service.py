@@ -6,13 +6,16 @@
 from __future__ import annotations
 
 import base64
+import glob as _glob
 import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 from io import BytesIO
 
@@ -39,16 +42,15 @@ SHORTS_STYLE_PRESETS = {
     'disney':           'Pixar/Disney 3D render style, warm cinematic lighting, expressive, vertical 9:16',
 }
 
-_NO_CJK = (
-    ', no text, no letters, no words, no signs, no watermarks'
-    ', no Chinese characters, no Japanese characters, no Korean characters'
-    ', no kanji, no hanzi, no hangul, no CJK glyphs'
-    ', absolutely no writing of any kind on any surface'
+# 강력한 텍스트·해부학 네거티브 프롬프트
+_NO_TEXT = (
+    ', no text, no letters, no words, no captions, no subtitles, no signs, no labels, '
+    'no Chinese characters, no Japanese characters, no Korean characters, no kanji, no hanzi, no hangul, '
+    'no CJK text, no watermark, no typography, no writing, no inscriptions'
 )
 _NO_ANATOMY = (
-    ', anatomically correct, natural human proportions'
-    ', no extra limbs, no extra arms, no extra hands, no extra legs'
-    ', no duplicate body parts, realistic body structure'
+    ', correct human anatomy, exactly five fingers on each hand, natural hand proportions, '
+    'no extra limbs, no deformed hands, no missing fingers, no six fingers, realistic anatomy'
 )
 
 
@@ -56,8 +58,18 @@ _NO_ANATOMY = (
 # 1. 대본 생성
 # ════════════════════════════════════════════════════════
 
-def generate_shorts_script(brand_ctx: str, angle: dict, style: str = 'realistic_banner') -> list[dict]:
+def generate_shorts_script(
+    brand_ctx: str,
+    angle: dict,
+    style: str = 'realistic_banner',
+    visual_mode: str = 'scene_mood',
+    product_name: str = '',
+) -> list[dict]:
     """Claude로 5씬 쇼츠 대본 생성.
+
+    visual_mode:
+      'product_focus' — 각 씬에 실제 제품이 시각적으로 등장 (화장품·의료기기 등)
+      'scene_mood'    — 감성 배경/라이프스타일 위주, 제품 직접 노출 없음 (특화식품 등)
 
     Returns: [
       {role, role_ko, narration, overlay_title, overlay_body, flux_prompt}, ...
@@ -80,12 +92,18 @@ def generate_shorts_script(brand_ctx: str, angle: dict, style: str = 'realistic_
     angle_solution = angle.get('solution', '') if isinstance(angle, dict) else ''
     angle_result   = angle.get('result',   '') if isinstance(angle, dict) else ''
 
-    system = (
-        '당신은 숏폼 영상 전문 크리에이터입니다. '
-        '좋은 쇼츠 광고는 ① 문제 공감 → ② 해결책 제시 → ③ 변화/결과 의 서사 흐름을 갖습니다. '
-        '각 씬의 나레이션은 실제 TTS로 읽히므로 자연스러운 구어체로 작성하세요. '
-        '순수 JSON만 출력하세요.'
-    )
+    if visual_mode == 'product_focus':
+        visual_instruction = f"""[이미지 방향 — 제품 중심]
+각 씬의 flux_prompt에 실제 제품({product_name or '브랜드 제품'})이 화면에 직접 등장하도록 묘사하세요.
+제품의 외관·패키지·사용 장면을 구체적으로 설명하세요.
+scene 5(CTA)는 제품 단독 클로즈업 또는 제품을 들고 있는 장면으로 작성하세요."""
+    else:
+        visual_instruction = f"""[이미지 방향 — 감성 배경 중심]
+각 씬의 flux_prompt는 라이프스타일·분위기·감성을 담은 배경 이미지로 작성하세요.
+제품을 화면에 직접 보여주지 않고, 제품이 주는 감정·생활 방식·환경으로 표현하세요.
+scene 5(CTA)는 브랜드 감성을 담은 라이프스타일 장면으로 작성하세요."""
+
+    system = '당신은 숏폼 영상 전문 크리에이터입니다. 순수 JSON만 출력하세요.'
     prompt = f"""인스타 릴스/유튜브 쇼츠용 5씬 대본을 JSON으로 생성하세요.
 아래 소구포인트의 문제-해결 서사를 씬 전체에 일관되게 관통시키세요.
 
@@ -106,28 +124,30 @@ def generate_shorts_script(brand_ctx: str, angle: dict, style: str = 'realistic_
 [이미지 스타일]
 {style_guide}
 
-[출력 형식 — 순수 JSON 배열, 5개 씬]
+{visual_instruction}
+
+[flux_prompt 필수 규칙]
+- 영문만 사용, 50~70 단어
+- 9:16 vertical frame, full frame composition (피사체 잘림 없이 전체 포함)
+- 한글·한자·일본어·아랍어 등 어떤 문자도 절대 포함 금지
+- 사람이 등장할 경우 자연스러운 손 묘사 (손가락 5개)
+- 같은 분위기·색조 일관성 유지
+
+[출력 형식 — 순수 JSON 배열]
 [
   {{
     "role": "hook",
-    "narration": "나레이션 (구어체 한글, 2~4초 분량, 15~35자. 타겟의 문제 상황을 건드리는 질문·상황 묘사)",
-    "overlay_title": "화면 상단 임팩트 텍스트 (12자 이내, 시청자 시선 고정용)",
-    "overlay_body": "화면 하단 자막 (narration과 동일하거나 핵심만 축약)",
-    "flux_prompt": "FLUX 이미지 프롬프트 — 반드시 영문(English)만, 60~80단어, 9:16 vertical frame. 씬 내용과 분위기에 맞는 피사체·조명·배경을 구체적으로 묘사. 글자·텍스트·CJK 문자 절대 포함 금지"
+    "narration": "나레이션 텍스트 (한글, 2~4초 분량, 10~25자)",
+    "overlay_title": "화면 상단 굵은 텍스트 (한글, 12자 이내)",
+    "overlay_body": "화면 하단 자막 텍스트 (한글, narration과 동일 또는 축약)",
+    "flux_prompt": "영문 FLUX 이미지 프롬프트"
   }},
   ...5개 씬...
 ]
 
-씬별 작성 가이드:
-- hook: 타겟이 겪는 문제 상황을 생생하게 묘사 또는 질문 → 스크롤 멈추게
-- empathy: "맞죠? 저도 그랬어요" 톤으로 공감 깊게 — 문제의 감정적 공명
-- solution: 상품이 그 문제를 어떻게 해결하는지 구체적으로 (기능·방식 언급)
-- benefit: 해결 후 실제 변화·수치·감정 — 가장 강력한 한 가지
-- cta: 구체적 행동 유도 (링크 클릭/팔로우/댓글 등)
+순수 JSON 배열만 출력."""
 
-순수 JSON 배열만 출력"""
-
-    raw = generate_text(system, prompt, max_tokens=1500, model='claude-sonnet-4-6')
+    raw = generate_text(system, prompt, max_tokens=1400, model='claude-haiku-4-5-20251001')
     clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
     s, e = clean.find('['), clean.rfind(']') + 1
     if s >= 0 and e > s:
@@ -333,6 +353,82 @@ def composite_shorts_frame(
     return _jpeg_b64(combined)
 
 
+def composite_cta_product_frame(
+    product_url: str,
+    overlay_title: str,
+    overlay_body: str,
+    brand_color: str = '#e8355a',
+    pil_size: tuple = (1080, 1920),
+) -> str:
+    """CTA 씬: 브랜드 컬러 배경 위에 제품 이미지 centered fit + 텍스트 오버레이 → JPEG base64"""
+    from services.instagram_service import _load, _jpeg_b64, _hex_rgb
+
+    W, H = pil_size
+    br, bg_, bb = _hex_rgb(brand_color)
+
+    # 브랜드 컬러 그라디언트 배경
+    bg_canvas = Image.new('RGB', (W, H), (max(0, br - 40), max(0, bg_ - 40), max(0, bb - 40)))
+    draw_bg = ImageDraw.Draw(bg_canvas)
+    for y in range(H):
+        ratio = y / H
+        r = int(br * (1 - ratio * 0.4))
+        g = int(bg_ * (1 - ratio * 0.4))
+        b = int(bb * (1 - ratio * 0.4))
+        draw_bg.line([(0, y), (W, y)], fill=(r, g, b))
+
+    # 제품 이미지: 중앙 영역(10%~75% 높이)에 비율 유지 fit
+    try:
+        product_img = _load(product_url).convert('RGBA')
+        max_w = int(W * 0.82)
+        max_h = int(H * 0.60)
+        product_img.thumbnail((max_w, max_h), Image.LANCZOS)
+        pw, ph = product_img.size
+        px = (W - pw) // 2
+        py = int(H * 0.12)
+        bg_canvas.paste(product_img, (px, py), product_img if product_img.mode == 'RGBA' else None)
+    except Exception as e:
+        logger.warning('[cta_frame] 제품 이미지 로드 실패: %s', e)
+
+    img = bg_canvas.convert('RGBA')
+    ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d   = ImageDraw.Draw(ov)
+
+    # 상단 타이틀
+    if overlay_title:
+        tf = _font(bold=True, size=int(H * 0.052))
+        lines = _wrap_text(overlay_title, tf, int(W * 0.88))[:2]
+        ty = int(H * 0.035)
+        for ln in lines:
+            bb_box = tf.getbbox(ln)
+            lw = bb_box[2] - bb_box[0]
+            tx = (W - lw) // 2
+            d.text((tx + 2, ty + 2), ln, font=tf, fill=(0, 0, 0, 140))
+            d.text((tx, ty), ln, font=tf, fill=(255, 255, 255, 255))
+            ty += int((bb_box[3] - bb_box[1]) * 1.35)
+
+    # 하단 CTA 영역 (75%~100%)
+    cta_start = int(H * 0.76)
+    for y in range(cta_start, H):
+        a = int(220 * (y - cta_start) / (H - cta_start))
+        d.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+
+    d.rectangle([(0, H - 12), (W, H)], fill=(br, bg_, bb, 255))
+
+    if overlay_body:
+        bf = _font(bold=False, size=int(H * 0.038))
+        lines = _wrap_text(overlay_body, bf, int(W * 0.88))[:3]
+        ty = int(H * 0.78)
+        for ln in lines:
+            d.text((int(W * 0.06) + 2, ty + 2), ln, font=bf, fill=(0, 0, 0, 150))
+            d.text((int(W * 0.06), ty), ln, font=bf, fill=(255, 255, 255, 240))
+            bb_box = bf.getbbox(ln)
+            ty += int((bb_box[3] - bb_box[1]) * 1.45)
+
+    combined = Image.alpha_composite(img, ov)
+    from services.instagram_service import _jpeg_b64
+    return _jpeg_b64(combined)
+
+
 # ════════════════════════════════════════════════════════
 # 4. FFmpeg 조립
 # ════════════════════════════════════════════════════════
@@ -363,12 +459,33 @@ def _get_audio_duration(mp3_path: str) -> float:
     return 3.0
 
 
+BGM_FILES = {
+    'lofi':       'bgm_lofi_chill.mp3',
+    'upbeat':     'bgm_upbeat_pop.mp3',
+    'cinematic':  'bgm_cinematic_calm.mp3',
+}
+
+
+def _get_bgm_path(bgm_key: str) -> str | None:
+    """BGM 파일 경로 반환 (없으면 None)."""
+    if not bgm_key or bgm_key == 'none':
+        return None
+    fname = BGM_FILES.get(bgm_key)
+    if not fname:
+        return None
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, '..', 'static', 'audio', 'bgm', fname)
+    return path if os.path.exists(path) else None
+
+
 def assemble_shorts_video(
     clip_data: list[dict],  # [{image_path, audio_path}, ...]
     output_path: str,
+    bgm_path: str | None = None,
 ) -> str:
     """이미지+오디오 리스트 → MP4 (1080×1920).
 
+    bgm_path: BGM MP3 경로 (없으면 나레이션만)
     Returns: output_path
     """
     tmp_dir = os.path.dirname(output_path)
@@ -385,6 +502,7 @@ def assemble_shorts_video(
             '-i', audio_path,
             '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage',
+            '-threads', '2',
             '-c:a', 'aac', '-b:a', '128k',
             '-pix_fmt', 'yuv420p',
             '-shortest',
@@ -398,12 +516,30 @@ def assemble_shorts_video(
         for cp in clip_paths:
             f.write(f"file '{cp}'\n")
 
+    concat_out = os.path.join(tmp_dir, 'concat_raw.mp4')
     _ffmpeg(
         '-y',
         '-f', 'concat', '-safe', '0', '-i', concat_txt,
         '-c', 'copy',
-        output_path,
+        concat_out,
     )
+
+    # BGM 믹스 (파일이 있을 경우)
+    if bgm_path:
+        _ffmpeg(
+            '-y',
+            '-i', concat_out,
+            '-stream_loop', '-1', '-i', bgm_path,
+            '-filter_complex',
+            '[0:a]volume=1.0[narr];[1:a]volume=0.15[bgm];[narr][bgm]amix=inputs=2:duration=first[aout]',
+            '-map', '0:v', '-map', '[aout]',
+            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
+            '-shortest',
+            output_path,
+        )
+    else:
+        os.rename(concat_out, output_path)
+
     return output_path
 
 
@@ -420,6 +556,9 @@ def run_shorts_pipeline(
     voice_key: str,
     tts_speed: float,
     supabase,
+    product_image_url: str = '',
+    visual_mode: str = 'scene_mood',
+    bgm_key: str = 'none',
 ) -> None:
     """백그라운드 스레드에서 실행. Supabase creation 상태 업데이트."""
     tmp_dir = os.path.join(tempfile.gettempdir(), f'maesil_shorts_{creation_id}')
@@ -444,24 +583,44 @@ def run_shorts_pipeline(
 
         clip_data = []
         pil_size  = (1080, 1920)
+        style_mod = SHORTS_STYLE_PRESETS.get(style, '')
 
         for i, scene in enumerate(scenes):
             step = f'씬 {i+1}/{len(scenes)} 생성 중'
             _update('generating', {'progress': i, 'step': step})
 
-            # 이미지 생성
-            style_mod = SHORTS_STYLE_PRESETS.get(style, '')
-            flux_p = scene.get('flux_prompt', '') + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
-            img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
+            role = scene.get('role', '')
+            is_cta = (role == 'cta') or (i == len(scenes) - 1)
 
-            # PIL 오버레이
-            frame_b64 = composite_shorts_frame(
-                img_url,
-                scene.get('overlay_title', ''),
-                scene.get('overlay_body', scene.get('narration', '')),
-                brand_color,
-                pil_size,
-            )
+            # ── 이미지 생성 ──────────────────────────────────
+            if is_cta and product_image_url:
+                # CTA 씬: 실제 제품 이미지 사용
+                frame_b64 = composite_cta_product_frame(
+                    product_image_url,
+                    scene.get('overlay_title', ''),
+                    scene.get('overlay_body', scene.get('narration', '')),
+                    brand_color,
+                    pil_size,
+                )
+            else:
+                # FLUX 이미지 생성
+                flux_p = scene.get('flux_prompt', '')
+                if style_mod:
+                    flux_p = f'{flux_p}, {style_mod}'
+                flux_p += _NO_TEXT
+                # 사람이 등장할 가능성이 있는 씬에 해부학 네거티브 추가
+                if any(kw in flux_p.lower() for kw in ['person', 'woman', 'man', 'hand', 'people', 'human', 'mother', 'baby', 'child', 'girl', 'boy']):
+                    flux_p += _NO_ANATOMY
+
+                img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
+
+                frame_b64 = composite_shorts_frame(
+                    img_url,
+                    scene.get('overlay_title', ''),
+                    scene.get('overlay_body', scene.get('narration', '')),
+                    brand_color,
+                    pil_size,
+                )
 
             # 이미지 저장
             img_path = os.path.join(tmp_dir, f'scene_{i:02d}.jpg')
@@ -481,7 +640,8 @@ def run_shorts_pipeline(
         # FFmpeg 조립
         _update('generating', {'progress': len(scenes), 'step': 'FFmpeg 영상 조립 중'})
         output_mp4 = os.path.join(tmp_dir, 'shorts.mp4')
-        assemble_shorts_video(clip_data, output_mp4)
+        bgm_path = _get_bgm_path(bgm_key)
+        assemble_shorts_video(clip_data, output_mp4, bgm_path=bgm_path)
 
         # Supabase Storage 업로드
         _update('generating', {'progress': len(scenes) + 1, 'step': '업로드 중'})
@@ -501,12 +661,24 @@ def run_shorts_pipeline(
         logger.error('[shorts] 파이프라인 오류 (%s): %s', creation_id, e)
         _update('failed', {'error': str(e)})
     finally:
-        # 임시 파일 정리
-        import shutil
         try:
             shutil.rmtree(tmp_dir, ignore_errors=True)
         except Exception:
             pass
+        # 24시간 이상 된 고아 tmp 디렉토리 정리
+        _cleanup_stale_tmp_dirs()
+
+
+def _cleanup_stale_tmp_dirs(max_age_hours: int = 24) -> None:
+    """24시간 이상 된 maesil_shorts_* tmp 디렉토리 정리."""
+    try:
+        pattern = os.path.join(tempfile.gettempdir(), 'maesil_shorts_*')
+        cutoff = time.time() - max_age_hours * 3600
+        for d in _glob.glob(pattern):
+            if os.path.isdir(d) and os.path.getmtime(d) < cutoff:
+                shutil.rmtree(d, ignore_errors=True)
+    except Exception:
+        pass
 
 
 def start_shorts_pipeline(
@@ -519,21 +691,53 @@ def start_shorts_pipeline(
     tts_speed: float,
     supabase,
     app=None,
+    product_image_url: str = '',
+    visual_mode: str = 'scene_mood',
+    bgm_key: str = 'none',
 ) -> None:
+    """REDIS_URL이 설정된 경우 Celery 워커로 오프로드, 없으면 daemon thread 사용."""
+    import os
+
+    redis_url = os.environ.get('REDIS_URL', '')
+    if redis_url:
+        # Celery 워커로 오프로드 — Flask 앱과 별도 프로세스에서 실행
+        try:
+            from tasks.shorts_task import generate_shorts_video
+            supabase_url = os.environ.get('SUPABASE_URL', '')
+            supabase_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+            generate_shorts_video.delay(
+                creation_id=creation_id,
+                user_id=user_id,
+                scenes=scenes,
+                style=style,
+                brand_color=brand_color,
+                voice_key=voice_key,
+                tts_speed=tts_speed,
+                supabase_url=supabase_url,
+                supabase_key=supabase_key,
+                product_image_url=product_image_url,
+                visual_mode=visual_mode,
+                bgm_key=bgm_key,
+            )
+            logger.info('[shorts] Celery 워커로 오프로드: %s', creation_id)
+            return
+        except Exception as e:
+            logger.warning('[shorts] Celery 오프로드 실패, thread로 폴백: %s', e)
+
+    # 폴백: daemon thread (Redis 없는 개발 환경)
     def _run():
+        kwargs = dict(
+            creation_id=creation_id, user_id=user_id, scenes=scenes,
+            style=style, brand_color=brand_color, voice_key=voice_key,
+            tts_speed=tts_speed, supabase=supabase,
+            product_image_url=product_image_url,
+            visual_mode=visual_mode, bgm_key=bgm_key,
+        )
         if app:
             with app.app_context():
-                run_shorts_pipeline(
-                    creation_id=creation_id, user_id=user_id, scenes=scenes,
-                    style=style, brand_color=brand_color, voice_key=voice_key,
-                    tts_speed=tts_speed, supabase=supabase,
-                )
+                run_shorts_pipeline(**kwargs)
         else:
-            run_shorts_pipeline(
-                creation_id=creation_id, user_id=user_id, scenes=scenes,
-                style=style, brand_color=brand_color, voice_key=voice_key,
-                tts_speed=tts_speed, supabase=supabase,
-            )
+            run_shorts_pipeline(**kwargs)
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()

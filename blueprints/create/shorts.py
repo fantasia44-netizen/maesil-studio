@@ -10,6 +10,7 @@ from blueprints.create import create_bp
 from blueprints.create._base import get_accessible_brands, get_default_brand, get_brand_by_id
 from models import POINT_COSTS
 from services.tz_utils import now_kst
+from services.rate_limiter import check_ai_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,9 @@ def shorts_angles():
 @login_required
 def shorts_script():
     """5씬 쇼츠 대본 생성 (무료 — 포인트는 영상 생성 시 통합 차감)"""
+    err = check_ai_rate_limit('shorts_script', max_per_hour=15)
+    if err:
+        return jsonify(ok=False, message=err), 429
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
@@ -158,8 +162,15 @@ def shorts_script():
     except Exception as e:
         logger.warning('[shorts/script] creation insert: %s', e)
 
+    visual_mode  = (data.get('visual_mode') or 'scene_mood').strip()
+    product_name = product['name'] if product else ''
+
     try:
-        scenes = generate_shorts_script(brand_ctx, angle, style)
+        scenes = generate_shorts_script(
+            brand_ctx, angle, style,
+            visual_mode=visual_mode,
+            product_name=product_name,
+        )
         # 포인트 차감 없음 — 영상 생성(shorts/generate)에서 300P 통합 차감
 
         supabase.table('creations').update({
@@ -186,6 +197,9 @@ def shorts_script():
 @login_required
 def shorts_generate():
     """영상 생성 시작 → creation_id 즉시 반환, 백그라운드에서 진행 (300P)"""
+    err = check_ai_rate_limit('shorts_generate', max_per_hour=5)
+    if err:
+        return jsonify(ok=False, message=err), 429
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
@@ -195,6 +209,19 @@ def shorts_generate():
     voice_key   = (data.get('voice')       or 'female_natural').strip()
     tts_speed   = float(data.get('tts_speed') or 1.1)
     brand_id    = (data.get('brand_id')    or '').strip()
+    product_id  = (data.get('product_id')  or '').strip()
+    visual_mode = (data.get('visual_mode') or 'scene_mood').strip()
+    bgm_key     = (data.get('bgm_key')     or 'none').strip()
+
+    # 제품 이미지 URL 조회
+    product_image_url = ''
+    if product_id:
+        product = _get_product(supabase, product_id)
+        if product:
+            images = product.get('images') or []
+            if images:
+                first = images[0]
+                product_image_url = first if isinstance(first, str) else (first.get('url') or first.get('src') or '')
 
     if not scenes:
         return jsonify(ok=False, message='씬 데이터가 없습니다. 먼저 대본을 생성하세요.')
@@ -242,6 +269,9 @@ def shorts_generate():
         tts_speed=tts_speed,
         supabase=supabase,
         app=current_app._get_current_object(),
+        product_image_url=product_image_url,
+        visual_mode=visual_mode,
+        bgm_key=bgm_key,
     )
 
     return jsonify(ok=True, creation_id=creation_id, cost=cost)

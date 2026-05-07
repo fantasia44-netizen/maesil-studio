@@ -19,6 +19,7 @@ from blueprints.create._base import (
 )
 from models import POINT_COSTS
 from services.tz_utils import now_kst
+from services.rate_limiter import check_ai_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -551,17 +552,22 @@ def instagram_image_prompt():
 @login_required
 def instagram_image_generate():
     """이미지 생성 — 스타일별 FLUX/Ideogram + PIL 합성"""
+    err = check_ai_rate_limit('instagram_image', max_per_hour=20)
+    if err:
+        return jsonify(ok=False, message=err), 429
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
-    style        = (data.get('style')        or 'realistic_banner').strip()
-    flux_prompt  = (data.get('flux_prompt')  or '').strip()
-    img_size     = (data.get('size')         or '1:1').strip()
-    brand_color  = (data.get('brand_color')  or '#e8355a').strip()
-    title        = (data.get('title')        or '').strip()
-    body_text    = (data.get('body_text')    or '').strip()
-    dialogue1    = (data.get('dialogue1')    or '').strip()
-    dialogue2    = (data.get('dialogue2')    or '').strip()
+    style            = (data.get('style')            or 'realistic_banner').strip()
+    flux_prompt      = (data.get('flux_prompt')      or '').strip()
+    img_size         = (data.get('size')             or '1:1').strip()
+    brand_color      = (data.get('brand_color')      or '#e8355a').strip()
+    title            = (data.get('title')            or '').strip()
+    body_text        = (data.get('body_text')        or '').strip()
+    dialogue1        = (data.get('dialogue1')        or '').strip()
+    dialogue2        = (data.get('dialogue2')        or '').strip()
+    text_color       = (data.get('text_color')       or 'white').strip()
+    overlay_strength = (data.get('overlay_strength') or 'medium').strip()
 
     if not flux_prompt:
         return jsonify(ok=False, message='이미지 프롬프트를 입력하세요.')
@@ -622,7 +628,10 @@ def instagram_image_generate():
             bg_url = img_url
             texts = [t for t in [title, body_text] if t]
             if texts:
-                data_url  = create_banner_image(img_url, texts, brand_color, pil_size)
+                data_url  = create_banner_image(
+                    img_url, texts, brand_color, pil_size,
+                    text_color=text_color, overlay_strength=overlay_strength,
+                )
                 final_url = upload_to_supabase(data_url, current_user.id,
                                                f'insta_{style}_{creation_id[:8]}.jpg')
             else:
@@ -655,13 +664,15 @@ def instagram_image_generate():
 def instagram_recomposite_banner():
     """base_image_url + 텍스트 + 위치 → PIL 재합성 (포인트 소모 없음)"""
     data         = request.get_json(force=True) or {}
-    base_url     = (data.get('base_image_url') or '').strip()
-    title        = (data.get('title')          or '').strip()
-    body_text    = (data.get('body_text')      or data.get('subtitle') or '').strip()
-    brand_color  = (data.get('brand_color')    or '#e8355a').strip()
-    img_size     = (data.get('size')           or '1:1').strip()
-    text_gravity = (data.get('text_gravity')   or 'bottom-left').strip()
-    text_scale   = float(data.get('text_scale') or 1.0)
+    base_url         = (data.get('base_image_url')   or '').strip()
+    title            = (data.get('title')             or '').strip()
+    body_text        = (data.get('body_text')         or data.get('subtitle') or '').strip()
+    brand_color      = (data.get('brand_color')       or '#e8355a').strip()
+    img_size         = (data.get('size')              or '1:1').strip()
+    text_gravity     = (data.get('text_gravity')      or 'bottom-left').strip()
+    text_scale       = float(data.get('text_scale')   or 1.0)
+    text_color       = (data.get('text_color')        or 'white').strip()
+    overlay_strength = (data.get('overlay_strength')  or 'medium').strip()
 
     if not base_url:
         return jsonify(ok=False, message='base_image_url이 필요합니다.')
@@ -673,7 +684,10 @@ def instagram_recomposite_banner():
     _, pil_size = SIZE_MAP.get(img_size, SIZE_MAP['1:1'])
     texts = [t for t in [title, body_text] if t]
     try:
-        data_url  = create_banner_image(base_url, texts, brand_color, pil_size, text_gravity, text_scale)
+        data_url  = create_banner_image(
+            base_url, texts, brand_color, pil_size, text_gravity, text_scale,
+            text_color=text_color, overlay_strength=overlay_strength,
+        )
         filename  = f'insta_banner_r_{uuid.uuid4().hex[:8]}.jpg'
         final_url = upload_to_supabase(data_url, current_user.id, filename)
         return jsonify(ok=True, image_url=final_url)
