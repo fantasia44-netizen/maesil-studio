@@ -659,6 +659,9 @@ function showResult(videoUrl) {
   const dl = document.getElementById('downloadBtn');
   dl.href = videoUrl;
   dl.download = 'maesil_shorts.mp4';
+
+  // 포인트 잔액 즉시 갱신
+  if (window.refreshBalance) window.refreshBalance();
 }
 
 function showError(msg) {

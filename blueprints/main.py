@@ -249,6 +249,19 @@ def settings():
     return redirect(url_for('main.settings'))
 
 
+@main_bp.route('/api/balance')
+@login_required
+def api_balance():
+    """포인트 잔액 JSON API — topbar 실시간 갱신용."""
+    try:
+        from services.point_service import get_balance
+        balance = get_balance(current_user)
+        return jsonify(ok=True, balance=balance)
+    except Exception as e:
+        logger.error('[api/balance] %s', e)
+        return jsonify(ok=False, balance=0)
+
+
 @main_bp.route('/settings/change-password', methods=['POST'])
 @login_required
 def change_password():

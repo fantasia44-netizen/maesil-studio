@@ -197,6 +197,30 @@
   document.getElementById('sidebarToggle')?.addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('show');
   });
+
+  // ── 포인트 잔액 실시간 갱신 ────────────────────────────────
+  // 30초마다 /api/balance 폴링 — 쇼츠/이미지 생성 후 자동 반영
+  {% if current_user.is_authenticated %}
+  (function () {
+    function refreshBalance() {
+      fetch('/api/balance')
+        .then(r => r.json())
+        .then(d => {
+          if (d.ok) {
+            const el = document.getElementById('point-balance');
+            if (el) el.textContent = d.balance.toLocaleString();
+          }
+        })
+        .catch(() => {});
+    }
+    // 5초 뒤 첫 갱신 (페이지 로드 직후 생성 완료 케이스 반영)
+    setTimeout(refreshBalance, 5000);
+    // 이후 30초마다
+    setInterval(refreshBalance, 30000);
+    // 전역 함수로 노출 — 각 페이지의 성공 콜백에서 즉시 호출 가능
+    window.refreshBalance = refreshBalance;
+  })();
+  {% endif %}
 </script>
 {% block extra_script %}{% endblock %}
 
