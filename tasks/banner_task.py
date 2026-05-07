@@ -24,11 +24,12 @@ def generate_banner(
     supabase_url: str,
     supabase_key: str,
 ):
-    """Celery 워커에서 배너 이미지 생성.
+    """Celery 워커에서 배너 이미지 생성."""
+    import os, sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
 
-    Supabase 클라이언트는 워커에서 재생성 (직렬화 불가 → URL/Key 전달).
-    PYTHONPATH=/opt/render/project/src 환경변수로 services/ 임포트 보장 (render.yaml).
-    """
     from supabase import create_client
     from services.banner_service import run_banner_pipeline
 
