@@ -42,9 +42,21 @@
 
         {% if not is_done and creation.status != 'failed' %}
           <!-- 생성 중 -->
-          <div class="text-center py-5 text-muted">
+          <div class="text-center py-5 text-muted" id="generatingBlock">
             <div class="spinner-border mb-3" style="width:2rem;height:2rem;color:#e8355a"></div>
-            <p class="mb-0">생성 중입니다...</p>
+            <p class="mb-1 fw-semibold">생성 중입니다...</p>
+            {% if creation.creation_type == 'shorts_video' %}
+            <p class="small text-muted mb-2">약 1~2분 소요됩니다</p>
+            {% endif %}
+            <div id="liveStep" class="small text-muted">
+              {{ od.get('step', '') or '' }}
+            </div>
+            {% if od.get('progress') is not none and creation.creation_type == 'shorts_video' %}
+            <div class="progress mx-auto mt-2" style="max-width:260px;height:6px">
+              <div class="progress-bar progress-bar-striped progress-bar-animated"
+                   id="liveBar" style="width:{{ [5, od.get('progress',0) * 14] | max }}%"></div>
+            </div>
+            {% endif %}
           </div>
 
         {% elif creation.status == 'failed' %}
@@ -203,5 +215,56 @@ function openImg(url) {
   document.getElementById('modalDownload').href = url;
   new bootstrap.Modal(document.getElementById('imgModal')).show();
 }
+
+// ── 생성 중 자동 폴링 ────────────────────────────────────────
+{% if not is_done and creation.status != 'failed' %}
+(function () {
+  const creationId = '{{ creation.id }}';
+  const creationType = '{{ creation.creation_type }}';
+  let pollTimer;
+
+  function pollStatus() {
+    // shorts_video는 전용 엔드포인트, 나머지는 /history/:id 리로드
+    if (creationType === 'shorts_video') {
+      fetch(`/create/shorts/status/${creationId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok) { clearInterval(pollTimer); return; }
+
+          const step = data.output_data?.step || '';
+          const progress = data.output_data?.progress ?? 0;
+          const el = document.getElementById('liveStep');
+          if (el) el.textContent = step;
+          const bar = document.getElementById('liveBar');
+          if (bar) bar.style.width = Math.min(95, progress * 14) + '%';
+
+          if (data.status === 'done' || data.status === 'failed') {
+            clearInterval(pollTimer);
+            // 페이지 새로고침으로 최종 결과 표시
+            location.reload();
+          }
+        })
+        .catch(() => {});
+    } else {
+      // 다른 생성 유형은 4초마다 페이지 새로고침
+      fetch(location.href, { cache: 'no-store' })
+        .then(r => r.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const statusBadge = doc.querySelector('.badge');
+          const isGenerating = html.includes('생성 중입니다');
+          if (!isGenerating) {
+            clearInterval(pollTimer);
+            location.reload();
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  pollTimer = setInterval(pollStatus, 4000);
+})();
+{% endif %}
 </script>
 {% endblock %}
