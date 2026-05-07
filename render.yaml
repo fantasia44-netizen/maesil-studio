@@ -9,7 +9,8 @@ services:
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf" -o static/fonts/NanumGothic.ttf) &&
       ([ -f static/fonts/NanumGothicBold.ttf ] ||
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"    -o static/fonts/NanumGothicBold.ttf) ;
-      pip install -r requirements.txt
+      pip install -r requirements.txt ;
+      python scripts/generate_bgm.py
     startCommand: gunicorn app:app --workers 2 --timeout 300
     envVars:
       - key: FLASK_ENV
@@ -54,7 +55,8 @@ services:
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf" -o static/fonts/NanumGothic.ttf) &&
       ([ -f static/fonts/NanumGothicBold.ttf ] ||
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"    -o static/fonts/NanumGothicBold.ttf) ;
-      pip install -r requirements.txt
+      pip install -r requirements.txt ;
+      python scripts/generate_bgm.py
     startCommand: celery -A celery_app worker --loglevel=info --concurrency=1
     envVars:
       - key: SUPABASE_URL
