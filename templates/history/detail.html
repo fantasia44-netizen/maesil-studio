@@ -7,6 +7,7 @@
 {% set has_text      = od.text %}
 {% set has_image_url = od.image_url %}
 {% set has_images    = od.images and od.images | length > 0 %}
+{% set has_video_url = od.video_url %}
 {% set is_done       = creation.status == 'done' %}
 
 <div class="row justify-content-center">
@@ -28,6 +29,12 @@
             <i class="bi bi-clipboard me-1"></i>복사
           </button>
           {% endif %}
+          {% if has_video_url %}
+          <a href="{{ od.video_url }}" target="_blank" download="maesil_shorts.mp4"
+             class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-download me-1"></i>MP4 다운로드
+          </a>
+          {% endif %}
         </div>
       </div>
 
@@ -47,7 +54,7 @@
             <p class="mb-0">생성에 실패했습니다.</p>
           </div>
 
-        {% elif not has_text and not has_image_url and not has_images %}
+        {% elif not has_text and not has_image_url and not has_images and not has_video_url %}
           <!-- output_data 비어있음 -->
           <div class="text-center py-4 text-muted">
             <i class="bi bi-exclamation-circle fs-1 d-block mb-2" style="opacity:.3"></i>
@@ -56,7 +63,25 @@
 
         {% else %}
 
-          <!-- ① 이미지 (단일) -->
+          <!-- ① 쇼츠/릴스 영상 -->
+          {% if has_video_url %}
+          <div class="text-center mb-4">
+            <video src="{{ od.video_url }}" controls playsinline
+                   style="max-width:300px;width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15)"
+                   class="mb-3"></video>
+            <div class="mt-2 d-flex gap-2 justify-content-center flex-wrap">
+              <a href="{{ od.video_url }}" target="_blank" download="maesil_shorts.mp4"
+                 class="btn btn-sm btn-primary">
+                <i class="bi bi-download me-1"></i>MP4 다운로드
+              </a>
+              <a href="{{ url_for('create.shorts') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-plus-circle me-1"></i>새 영상 만들기
+              </a>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- ② 이미지 (단일) -->
           {% if has_image_url %}
           <div class="text-center mb-4">
             <img src="{{ od.image_url }}" class="img-fluid rounded shadow-sm" alt="생성 이미지"

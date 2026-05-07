@@ -115,6 +115,11 @@
                 {%- set _thumb = _img0.url if _img0 is mapping else _img0 -%}
                 <img src="{{ _thumb }}" alt="썸네일"
                      style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid #eee">
+              {% elif od.video_url %}
+                <div style="width:54px;height:54px;border-radius:6px;background:#fbe1e3;
+                            display:flex;align-items:center;justify-content:center">
+                  <i class="bi bi-play-btn-fill" style="color:#dc3545;font-size:1.4rem"></i>
+                </div>
               {% else %}
                 <div style="width:54px;height:54px;border-radius:6px;background:{{ meta.tone }};
                             display:flex;align-items:center;justify-content:center">
@@ -199,6 +204,11 @@
                 {%- set _thumb = _img0.url if _img0 is mapping else _img0 -%}
                 <img src="{{ _thumb }}" alt="썸네일"
                      style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #eee">
+              {% elif od.video_url %}
+                <div style="width:48px;height:48px;border-radius:6px;background:#fbe1e3;
+                            display:flex;align-items:center;justify-content:center">
+                  <i class="bi bi-play-btn-fill" style="color:#dc3545;font-size:1.3rem"></i>
+                </div>
               {% else %}
                 <div style="width:48px;height:48px;border-radius:6px;background:{{ meta.tone }};
                             display:flex;align-items:center;justify-content:center">
@@ -212,6 +222,8 @@
                 <span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
                   {{ od.text | truncate(120) }}
                 </span>
+              {% elif od.video_url %}
+                <span class="text-muted"><i class="bi bi-play-circle me-1"></i>쇼츠 영상 완료</span>
               {% elif od.image_url %}
                 <span class="text-muted">이미지 생성 완료</span>
               {% elif od.images %}
