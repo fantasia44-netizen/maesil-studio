@@ -63,6 +63,37 @@ def banner():
 
 
 # ─────────────────────────────────────────────────────────────
+# 의도 분석 → 배너 설정 추천 (무료, Haiku)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/banner/analyze', methods=['POST'])
+@login_required
+def banner_analyze():
+    """자유 텍스트 의도 → 사이즈·레이아웃·문구·배경 프롬프트 자동 추천 (무료)."""
+    supabase   = current_app.supabase
+    data       = request.get_json(force=True) or {}
+    brand_id   = (data.get('brand_id')   or '').strip()
+    product_id = (data.get('product_id') or '').strip()
+    intent     = (data.get('intent')     or '').strip()
+
+    if not intent:
+        return jsonify(ok=False, message='배너 목적을 입력해주세요.')
+
+    brand   = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+    product = _get_product(supabase, product_id)
+
+    from services.banner_service import analyze_banner_intent
+    try:
+        result = analyze_banner_intent(brand, product, intent)
+        return jsonify(ok=True, **result)
+    except Exception as e:
+        logger.error('[banner/analyze] %s', e)
+        return jsonify(ok=False, message=f'분석 실패: {e}')
+
+
+# ─────────────────────────────────────────────────────────────
 # 브랜드 변경 시 상품 목록
 # ─────────────────────────────────────────────────────────────
 

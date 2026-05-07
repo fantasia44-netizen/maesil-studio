@@ -576,3 +576,79 @@ def run_banner_pipeline(
     except Exception as e:
         logger.error('[banner] 파이프라인 오류 (%s): %s', creation_id, e)
         _update('failed', {'error': str(e)})
+
+
+# ════════════════════════════════════════════════════════
+# AI 의도 분석 — 자유 텍스트 → 배너 설정 추천
+# ════════════════════════════════════════════════════════
+
+def analyze_banner_intent(brand: dict, product: dict | None, intent: str) -> dict:
+    """사용자 의도(자유 텍스트) → 최적 배너 설정 JSON 추천 (Claude Haiku, 무료)."""
+    from services.claude_service import build_brand_context, generate_text
+
+    brand_ctx  = build_brand_context(brand, product)
+    sizes_info = '\n'.join(
+        f'  "{k}": "{v["label"]} ({v["w"]}x{v["h"]})"'
+        for k, v in BANNER_SIZES.items() if k != 'custom'
+    )
+
+    system = (
+        '당신은 마케팅 배너 전문가입니다. '
+        '브랜드 정보와 사용자 의도를 분석해 최적의 배너 설정을 추천합니다. '
+        '순수 JSON만 출력하세요.'
+    )
+    prompt = f"""[브랜드·상품 정보]
+{brand_ctx}
+
+[사용자 의도]
+{intent}
+
+[선택 가능한 사이즈]
+{sizes_info}
+
+위 정보를 분석해 배너 설정을 JSON으로 추천하세요:
+
+{{
+  "size_key":    "sns_square|sns_portrait|sns_story|youtube_thumb|og_image|kakao_banner|smartstore",
+  "layout":      "overlay|panel|split_lr",
+  "bg_type":     "flux_ai|solid|gradient",
+  "headline":    "임팩트 있는 헤드라인 (15자 이내, 이모지 1개 가능)",
+  "subline":     "혜택·특징 한 줄 (25자 이내)",
+  "cta":         "버튼 문구 (8자 이내)",
+  "flux_prompt": "ENGLISH ONLY background image prompt for FLUX (40-60 words). Scene, lighting, mood. NO text, NO speech bubbles.",
+  "reasoning":   "이 설정을 추천하는 이유 한 줄 (한글)"
+}}
+
+순수 JSON만:"""
+
+    try:
+        raw   = generate_text(system, prompt, max_tokens=600, model='claude-haiku-4-5-20251001')
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
+        s, e  = clean.find('{'), clean.rfind('}') + 1
+        if s >= 0 and e > s:
+            clean = clean[s:e]
+        data = json.loads(clean)
+
+        # size 메타 보강
+        sk = data.get('size_key', 'sns_square')
+        if sk in BANNER_SIZES and BANNER_SIZES[sk]['w']:
+            data['size_w']     = BANNER_SIZES[sk]['w']
+            data['size_h']     = BANNER_SIZES[sk]['h']
+            data['size_label'] = BANNER_SIZES[sk]['label']
+        else:
+            data.setdefault('size_w', 1080)
+            data.setdefault('size_h', 1080)
+            data.setdefault('size_label', BANNER_SIZES.get(sk, {}).get('label', ''))
+
+        return data
+
+    except Exception as ex:
+        logger.error('[banner/analyze] 분석 실패: %s', ex)
+        return {
+            'size_key': 'sns_square', 'size_w': 1080, 'size_h': 1080,
+            'size_label': '인스타그램 정사각 (1:1)',
+            'layout': 'overlay', 'bg_type': 'flux_ai',
+            'headline': '', 'subline': '', 'cta': '지금 바로',
+            'flux_prompt': '',
+            'reasoning': '기본 설정으로 시작합니다.',
+        }
