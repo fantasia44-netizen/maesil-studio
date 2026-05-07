@@ -57,8 +57,10 @@ services:
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"    -o static/fonts/NanumGothicBold.ttf) ;
       pip install -r requirements.txt ;
       python scripts/generate_bgm.py
-    startCommand: bash -c "cd /opt/render/project/src && PYTHONPATH=/opt/render/project/src celery -A celery_app worker --loglevel=info --concurrency=3 --prefetch-multiplier=1"
+    startCommand: celery -A celery_app worker --loglevel=info --concurrency=3 --prefetch-multiplier=1
     envVars:
+      - key: PYTHONPATH
+        value: /opt/render/project/src
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
