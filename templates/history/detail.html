@@ -155,13 +155,19 @@
       <div class="card-body p-3">
         <div class="row g-2">
           {% for key, val in creation.input_data.items() %}
-          {% if val and val != '' and val != [] and val != {} %}
+          {%- set skip_keys = ['scenes', 'angle', 'images', 'image_urls'] -%}
+          {% if val and val != '' and val != [] and val != {} and key not in skip_keys %}
           <div class="col-sm-6">
             <div class="small">
               <span class="text-muted">{{ key }}:</span>
               <span class="fw-semibold ms-1">
-                {% if val is iterable and val is not string %}{{ val | join(', ') }}
-                {% else %}{{ val }}{% endif %}
+                {%- if val is mapping -%}
+                  {{ val.get('title') or val.get('name') or '(설정됨)' }}
+                {%- elif val is iterable and val is not string -%}
+                  {%- set first = val | first -%}
+                  {%- if first is mapping -%}{{ val | length }}개 항목
+                  {%- else -%}{{ val | join(', ') }}{%- endif -%}
+                {%- else -%}{{ val }}{%- endif -%}
               </span>
             </div>
           </div>

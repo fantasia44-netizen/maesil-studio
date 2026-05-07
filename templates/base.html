@@ -165,7 +165,7 @@
     <div class="d-flex align-items-center gap-3">
       <span class="point-badge">
         <i class="bi bi-coin me-1"></i>
-        <span id="point-balance">{{ session.get('balance', '') }}</span>P
+        <span id="point-balance">{{ nav_balance | number if nav_balance is not none else '' }}</span>P
       </span>
       <span class="text-muted small">{{ current_user.name }}</span>
     </div>

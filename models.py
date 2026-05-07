@@ -174,6 +174,7 @@ CREATION_LABELS = {
     'card_news':        '인스타 카드뉴스',
     'logo':             '브랜드 로고',
     # 영상
+    'shorts_script':   '쇼츠 대본',
     'shorts_video':    '쇼츠/릴스 영상',
     # 홍보 자료
     'business_proposal':    '거래처 제안서',
@@ -181,6 +182,8 @@ CREATION_LABELS = {
     'catalog':              '카탈로그',
     'leaflet':              '리플릿',
     'flyer':                '전단지',
+    'brand_package':        '브랜드 패키지',
+    'product_launch':       '신제품 출시 자료',
 }
 
 

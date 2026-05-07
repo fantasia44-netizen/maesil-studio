@@ -70,12 +70,21 @@ def _init_jinja_filters(app):
     @app.context_processor
     def inject_globals():
         from models import PLAN_FEATURES, POINT_COSTS, CREATION_LABELS
-        return {
+        ctx = {
             'app_name': app.config.get('APP_NAME', '매실 스튜디오'),
             'PLAN_FEATURES': PLAN_FEATURES,
             'POINT_COSTS': POINT_COSTS,
             'CREATION_LABELS': CREATION_LABELS,
+            'nav_balance': None,
         }
+        # 로그인 사용자: 네비게이션 포인트 잔액 주입 (캐시된 user_loader 이후라 DB 추가 조회 없음)
+        if current_user.is_authenticated:
+            try:
+                from services.point_service import get_balance
+                ctx['nav_balance'] = get_balance(current_user)
+            except Exception:
+                pass
+        return ctx
 
 
 def _init_csrf(app):

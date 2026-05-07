@@ -11,6 +11,7 @@ from blueprints.create._base import get_accessible_brands, get_default_brand, ge
 from models import POINT_COSTS
 from services.tz_utils import now_kst
 from services.rate_limiter import check_ai_rate_limit
+from services.point_service import get_balance, use_points, InsufficientPoints
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,6 @@ def shorts_script():
 
     from services.claude_service import build_brand_context
     from services.shorts_service import generate_shorts_script
-    from services.point_service import InsufficientPoints
 
     brand_ctx = build_brand_context(brand, product)
     creation_id = str(uuid.uuid4())
@@ -181,9 +181,6 @@ def shorts_script():
 
         return jsonify(ok=True, scenes=scenes, creation_id=creation_id)
 
-    except InsufficientPoints:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message='포인트가 부족합니다.')
     except Exception as e:
         logger.error('[shorts/script] %s', e)
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
@@ -228,8 +225,7 @@ def shorts_generate():
         return jsonify(ok=False, message='씬 데이터가 없습니다. 먼저 대본을 생성하세요.')
 
     cost = POINT_COSTS.get('shorts_video', 300)
-    from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -254,7 +250,7 @@ def shorts_generate():
         logger.warning('[shorts/generate] creation insert: %s', e)
 
     try:
-        use_points(current_user.id, 'shorts_video', creation_id)
+        use_points(current_user, 'shorts_video', creation_id)
     except InsufficientPoints:
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')
