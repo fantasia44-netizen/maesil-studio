@@ -17,8 +17,8 @@ celery.conf.update(
     accept_content=['json'],
     timezone='Asia/Seoul',
     enable_utc=True,
-    worker_max_tasks_per_child=5,        # 5개 처리 후 워커 재시작 (메모리 누수 방지)
-    worker_max_memory_per_child=512000,  # 512MB 초과 시 워커 자동 재시작 (KB 단위)
+    worker_max_tasks_per_child=5,          # 5개 처리 후 워커 재시작 (메모리 누수 방지)
+    worker_max_memory_per_child=1500000,  # 1.5GB 초과 시 워커 자동 재시작 (KB 단위, 서버 2GB 기준)
     worker_concurrency=1,                # 영상 생성은 한 번에 하나씩 (CPU 보호)
     task_soft_time_limit=600,            # 10분 소프트 타임아웃 (SoftTimeLimitExceeded)
     task_time_limit=720,                 # 12분 하드 타임아웃 (강제 종료)
