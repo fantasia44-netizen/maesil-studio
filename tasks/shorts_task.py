@@ -1,6 +1,12 @@
 """쇼츠 영상 생성 Celery 태스크"""
 import logging
 import os
+import sys
+
+# ForkPoolWorker 자식 프로세스에서도 프로젝트 루트가 sys.path에 있도록 보장
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # tasks/ -> 프로젝트 루트
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 from celery_app import celery
 
