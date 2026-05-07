@@ -139,6 +139,7 @@ def shorts_script():
 
     from services.claude_service import build_brand_context
     from services.shorts_service import generate_shorts_script
+    from services.point_service import InsufficientPoints
 
     brand_ctx = build_brand_context(brand, product)
     creation_id = str(uuid.uuid4())
