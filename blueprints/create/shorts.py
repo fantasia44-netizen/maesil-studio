@@ -102,7 +102,7 @@ def shorts_angles():
 순수 JSON 배열만 출력."""
 
     try:
-        raw   = generate_text(system, prompt, max_tokens=800, model='claude-haiku-4-5-20251001')
+        raw   = generate_text(system, prompt, max_tokens=900, model='claude-sonnet-4-6')
         clean = _re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:

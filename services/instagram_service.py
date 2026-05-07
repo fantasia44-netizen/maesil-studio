@@ -191,20 +191,33 @@ def create_banner_image(bg_url: str,
                 a = int(ov_max * (y_px - gs) / (gs_end - gs))
                 dov.line([(0, y_px), (W, y_px)], fill=(8, 8, 8, a))
 
-    # 브랜드 컬러 바 (맨 아래 12px)
+    # 브랜드 컬러 바 (40px + 하이라이트 라인 4px)
     br, bg_, bb = _hex_rgb(brand_color)
-    dov.rectangle([(0, H - 12), (W, H)], fill=(br, bg_, bb, 255))
+    dov.rectangle([(0, H - 40), (W, H)], fill=(br, bg_, bb, 255))
+    dov.rectangle([(0, H - 44), (W, H - 40)],
+                  fill=(min(255, br + 50), min(255, bg_ + 50), min(255, bb + 50), 210))
 
     combined = Image.alpha_composite(img, ov)
     d = ImageDraw.Draw(combined)
 
-    # ── 폰트 ────────────────────────────────────────────
+    # ── 폰트 (헤드라인 크기 상향 — 위계감 강화) ────────────────
     try:
         fp = _font(bold=True)
-        f1 = ImageFont.truetype(fp, int(H * 0.068 * text_scale))  # 헤드라인
-        f2 = ImageFont.truetype(fp, int(H * 0.038 * text_scale))  # 본문
+        f1 = ImageFont.truetype(fp, int(H * 0.080 * text_scale))  # 헤드라인 (0.068 → 0.080)
+        f2 = ImageFont.truetype(fp, int(H * 0.038 * text_scale))  # 본문 유지
     except Exception:
         f1 = f2 = ImageFont.load_default()
+
+    def _draw_stroked(draw, pos, text, font, fill, stroke_w=3):
+        """스트로크(외곽선) 효과로 어떤 배경에서도 가독성 보장."""
+        x0, y0 = pos
+        stroke_color = (0, 0, 0, 200) if sum(fill[:3]) > 380 else (255, 255, 255, 160)
+        for dx in range(-stroke_w, stroke_w + 1):
+            for dy in range(-stroke_w, stroke_w + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                draw.text((x0 + dx, y0 + dy), text, font=font, fill=stroke_color)
+        draw.text((x0, y0), text, font=font, fill=fill)
 
     y = int(H * y_start)
     x = int(W * x_start)
@@ -215,12 +228,12 @@ def create_banner_image(bg_url: str,
             continue
         font      = f1 if i == 0 else f2
         max_lines = 2 if i == 0 else 6
+        stroke_w  = 4 if i == 0 else 3
         lines = _wrap(text, font, max_w)[:max_lines]
         for ln in lines:
-            d.text((x + 2, y + 2), ln, font=font, fill=shadow_color)
-            d.text((x,     y    ), ln, font=font, fill=(*tc, 255))
+            _draw_stroked(d, (x, y), ln, font, fill=(*tc, 255), stroke_w=stroke_w)
             bb = font.getbbox(ln)
-            y += int((bb[3] - bb[1]) * 1.40)
+            y += int((bb[3] - bb[1]) * 1.38)
         y += int(H * 0.012)
 
     return _jpeg_b64(combined)

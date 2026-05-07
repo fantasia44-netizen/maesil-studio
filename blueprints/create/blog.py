@@ -548,8 +548,8 @@ JSON 배열 형식:
 순수 JSON만 출력하세요."""
 
     try:
-        raw = generate_text(system_prompt, user_prompt, max_tokens=1200,
-                            model='claude-haiku-4-5-20251001')
+        raw = generate_text(system_prompt, user_prompt, max_tokens=1400,
+                            model='claude-sonnet-4-6')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         arr_start = clean.find('[')
         arr_end   = clean.rfind(']') + 1

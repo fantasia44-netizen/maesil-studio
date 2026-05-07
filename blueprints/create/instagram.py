@@ -229,7 +229,7 @@ def instagram_angles():
 [{{"id":"angle_1","title":"...","hook":"...","target":"...","tone":"...","story_arc":"...","arc_flow":"...","image_vibe":"...","key_message":["...","..."]}},...]\n"""
 
     try:
-        raw   = generate_text(system, prompt, max_tokens=1200, model='claude-haiku-4-5-20251001')
+        raw   = generate_text(system, prompt, max_tokens=1400, model='claude-sonnet-4-6')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:
@@ -438,7 +438,7 @@ def instagram_story_plan():
     try:
         raw    = generate_text(system, prompt,
                                max_tokens=quantity * 500,
-                               model='claude-haiku-4-5-20251001')
+                               model='claude-sonnet-4-6')
         clean  = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e   = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:
@@ -532,7 +532,7 @@ def instagram_image_prompt():
 스타일: {style} / 비율: {img_size}"""
 
     try:
-        raw   = generate_text(system, prompt, max_tokens=500, model='claude-haiku-4-5-20251001')
+        raw   = generate_text(system, prompt, max_tokens=700, model='claude-sonnet-4-6')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e  = clean.find('{'), clean.rfind('}') + 1
         if s >= 0 and e > s:

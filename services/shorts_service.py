@@ -35,11 +35,36 @@ SCENE_ROLES = [
 
 # ── 이미지 스타일 프리셋 ────────────────────────────────────
 SHORTS_STYLE_PRESETS = {
-    'realistic_banner': 'cinematic lifestyle photography, vertical 9:16 frame, warm bokeh, Korean aesthetic',
-    'webtoon':          'Korean webtoon illustration, clean line art, vibrant colors, vertical composition',
-    'ghibli':           'Studio Ghibli watercolor style, soft pastel, whimsical natural background, 9:16',
-    'flat_modern':      'modern flat illustration, bold color blocks, editorial vector art, vertical frame',
-    'disney':           'Pixar/Disney 3D render style, warm cinematic lighting, expressive, vertical 9:16',
+    'realistic_banner': (
+        'cinematic lifestyle photography, 9:16 vertical frame, 35mm lens f/1.8 shallow depth of field, '
+        'warm golden-hour bokeh, soft directional window light, rich muted color palette, '
+        'Korean aesthetic, editorial commercial quality, ultra-sharp foreground, '
+        'professional color grading, clean modern composition'
+    ),
+    'webtoon': (
+        'Korean webtoon manhwa illustration, bold confident line art with clean outlines, '
+        'vibrant saturated colors with cel shading, dynamic vertical panel composition, '
+        'expressive characters with detailed facial features, professional comic art quality, '
+        'dramatic lighting with rim light accents, high contrast shadows'
+    ),
+    'ghibli': (
+        'Studio Ghibli hand-painted watercolor animation, lush detailed natural backgrounds, '
+        'soft warm pastel color palette, gentle dreamy atmosphere, delicate painterly textures, '
+        'Hayao Miyazaki inspired, 9:16 vertical composition, golden sunlight through foliage, '
+        'cinematic wide shot, professional animation quality'
+    ),
+    'flat_modern': (
+        'modern flat design vector illustration, bold geometric color blocks, '
+        'clean editorial graphic style, Scandinavian minimalist aesthetic, '
+        'professional brand identity quality, strong visual hierarchy, '
+        'carefully chosen duotone color palette, sophisticated negative space, 9:16 vertical frame'
+    ),
+    'disney': (
+        'Pixar Disney 3D CGI animation style, vibrant polished photorealistic render, '
+        'expressive rounded characters, warm cinematic three-point lighting, '
+        'subsurface skin scattering, rich volumetric light rays, '
+        'family-friendly commercial quality, ultra-detailed, 9:16 vertical frame'
+    ),
 }
 
 # 강력한 텍스트·해부학 네거티브 프롬프트
@@ -51,6 +76,11 @@ _NO_TEXT = (
 _NO_ANATOMY = (
     ', correct human anatomy, exactly five fingers on each hand, natural hand proportions, '
     'no extra limbs, no deformed hands, no missing fingers, no six fingers, realistic anatomy'
+)
+# FLUX Schnell 퀄리티 최대화 suffix — 비용 추가 없이 품질 향상
+_QUALITY_SUFFIX = (
+    ', masterpiece, best quality, highly detailed, professional photography, '
+    'sharp focus, high resolution, perfect composition, award-winning'
 )
 
 
@@ -127,11 +157,13 @@ scene 5(CTA)는 브랜드 감성을 담은 라이프스타일 장면으로 작�
 {visual_instruction}
 
 [flux_prompt 필수 규칙]
-- 영문만 사용, 50~70 단어
+- 영문만 사용, 65~90 단어 (더 구체적일수록 품질 향상)
 - 9:16 vertical frame, full frame composition (피사체 잘림 없이 전체 포함)
 - 한글·한자·일본어·아랍어 등 어떤 문자도 절대 포함 금지
 - 사람이 등장할 경우 자연스러운 손 묘사 (손가락 5개)
-- 같은 분위기·색조 일관성 유지
+- 5씬 전체가 동일한 색조·조명·무드를 유지해야 함 (시각적 연속성)
+- 씬 역할별 카메라 앵글 변화: hook=클로즈업/드라마틱, empathy=미디엄샷/감성적, solution=제품+인물, benefit=밝고 자신감있는, cta=와이드/브랜드샷
+- 조명·색조·렌즈 특성을 반드시 명시 (예: "soft rim light, f/2.8 shallow DOF, warm golden tones")
 
 [출력 형식 — 순수 JSON 배열]
 [
@@ -147,7 +179,7 @@ scene 5(CTA)는 브랜드 감성을 담은 라이프스타일 장면으로 작�
 
 순수 JSON 배열만 출력."""
 
-    raw = generate_text(system, prompt, max_tokens=1400, model='claude-haiku-4-5-20251001')
+    raw = generate_text(system, prompt, max_tokens=1600, model='claude-sonnet-4-6')
     clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
     s, e = clean.find('['), clean.rfind(']') + 1
     if s >= 0 and e > s:
@@ -166,10 +198,21 @@ scene 5(CTA)는 브랜드 감성을 담은 라이프스타일 장면으로 작�
 # ════════════════════════════════════════════════════════
 
 VOICE_OPTIONS = {
-    'female_natural': ('ko-KR', 'ko-KR-Neural2-A', 'Neural2'),
-    'male_calm':      ('ko-KR', 'ko-KR-Neural2-C', 'Neural2'),
-    'female_bright':  ('ko-KR', 'ko-KR-Neural2-B', 'Neural2'),
-    'male_clear':     ('ko-KR', 'ko-KR-Wavenet-C', 'Wavenet'),
+    'female_natural': ('ko-KR', 'ko-KR-Neural2-A',  'Neural2'),
+    'male_calm':      ('ko-KR', 'ko-KR-Neural2-C',  'Neural2'),
+    'female_bright':  ('ko-KR', 'ko-KR-Neural2-B',  'Neural2'),
+    'male_clear':     ('ko-KR', 'ko-KR-Wavenet-C',  'Wavenet'),
+    'female_studio':  ('ko-KR', 'ko-KR-Studio-B',   'Studio'),  # 최고급 자연스러운 여성
+    'male_studio':    ('ko-KR', 'ko-KR-Studio-O',   'Studio'),  # 최고급 자연스러운 남성
+}
+
+# 씬 역할별 TTS 파라미터 — 감정·속도 변화로 생동감 향상
+_SCENE_TTS = {
+    'hook':     {'pitch': +1.5, 'rate_delta': +0.08},   # 훅: 약간 높고 빠르게
+    'empathy':  {'pitch': -0.5, 'rate_delta': -0.06},   # 공감: 낮고 차분하게
+    'solution': {'pitch':  0.0, 'rate_delta':  0.00},   # 해결: 기본
+    'benefit':  {'pitch': +1.0, 'rate_delta': +0.04},   # 혜택: 밝고 자신있게
+    'cta':      {'pitch': -1.0, 'rate_delta': -0.04},   # CTA: 낮고 신뢰감있게
 }
 
 
@@ -202,18 +245,35 @@ def _normalize_tts_text(text: str) -> str:
 
 def tts_synthesize(text: str, api_key: str,
                    voice_key: str = 'female_natural',
-                   speed: float = 1.1) -> bytes:
-    """Google TTS REST API → MP3 bytes."""
-    lang, name, _ = VOICE_OPTIONS.get(voice_key, VOICE_OPTIONS['female_natural'])
+                   speed: float = 1.1,
+                   scene_role: str = '') -> bytes:
+    """Google TTS REST API → MP3 bytes.
+
+    scene_role: 씬 역할('hook'/'empathy'/'solution'/'benefit'/'cta')
+                전달 시 역할별 피치·속도 자동 보정으로 생동감 향상.
+    """
+    lang, name, model = VOICE_OPTIONS.get(voice_key, VOICE_OPTIONS['female_natural'])
+
+    # 씬 역할별 피치·속도 보정
+    scene_cfg = _SCENE_TTS.get(scene_role, {'pitch': 0.0, 'rate_delta': 0.0})
+    pitch     = scene_cfg['pitch']
+    final_spd = round(max(0.7, min(1.5, speed + scene_cfg['rate_delta'])), 2)
+
+    # Studio 음성은 v1beta1 API 사용
+    api_ver  = 'v1beta1' if model == 'Studio' else 'v1'
+    endpoint = f'https://texttospeech.googleapis.com/{api_ver}/text:synthesize?key={api_key}'
+
     resp = requests.post(
-        f'https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}',
+        endpoint,
         json={
             'input': {'text': text},
             'voice': {'languageCode': lang, 'name': name},
             'audioConfig': {
-                'audioEncoding': 'MP3',
-                'speakingRate': speed,
-                'pitch': 0.0,
+                'audioEncoding':    'MP3',
+                'speakingRate':     final_spd,
+                'pitch':            pitch,
+                'volumeGainDb':     1.5,
+                'effectsProfileId': ['headphone-class-device'],
             },
         },
         timeout=20,
@@ -293,6 +353,18 @@ def _wrap_text(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
     return lines
 
 
+def _draw_text_stroke(d: ImageDraw.ImageDraw, pos: tuple, text: str,
+                      font, fill: tuple, stroke_fill: tuple, stroke_w: int = 3):
+    """텍스트 스트로크(외곽선) 효과 — 8방향 오프셋으로 선명한 윤곽선 생성."""
+    x, y = pos
+    for dx in range(-stroke_w, stroke_w + 1):
+        for dy in range(-stroke_w, stroke_w + 1):
+            if dx == 0 and dy == 0:
+                continue
+            d.text((x + dx, y + dy), text, font=font, fill=stroke_fill)
+    d.text((x, y), text, font=font, fill=fill)
+
+
 def composite_shorts_frame(
     bg_url_or_b64: str,
     overlay_title: str,
@@ -300,54 +372,79 @@ def composite_shorts_frame(
     brand_color: str = '#e8355a',
     pil_size: tuple = (1080, 1920),
 ) -> str:
-    """배경 이미지 + 상단 제목 + 하단 자막 → JPEG base64"""
+    """배경 이미지 + 전문적 텍스트 오버레이 → JPEG base64
+
+    개선사항:
+    - 스트로크(외곽선) 효과로 어떤 배경에서도 텍스트 가독성 보장
+    - 브랜드 컬러 tint 그라디언트 (순수 검정 대신)
+    - 상단 타이틀: 중앙 정렬, 대형 Bold
+    - 하단 자막: 반투명 카드 배경 + 브랜드 컬러 바 (40px)
+    """
     from services.instagram_service import _load, _jpeg_b64, _hex_rgb
 
     img = _load(bg_url_or_b64).resize(pil_size, Image.LANCZOS)
     W, H = img.size
 
-    ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    d   = ImageDraw.Draw(ov)
+    ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d  = ImageDraw.Draw(ov)
 
     br, bg_, bb = _hex_rgb(brand_color)
 
-    # ── 상단 타이틀 배너 (0~18%) ────────────────────────
+    # ── 상단 타이틀 배너 (0~22%) ────────────────────────────
     if overlay_title:
-        top_h = int(H * 0.18)
+        top_h = int(H * 0.22)
+        # 브랜드 컬러 tint 그라디언트 (순수 검정보다 세련됨)
         for y in range(0, top_h):
-            a = int(200 * (1 - y / top_h))
-            d.line([(0, y), (W, y)], fill=(8, 8, 8, a))
+            ratio = 1 - (y / top_h)
+            r = int(br * 0.3 * ratio)
+            g = int(bg_ * 0.3 * ratio)
+            b_c = int(bb * 0.3 * ratio)
+            a = int(210 * ratio)
+            d.line([(0, y), (W, y)], fill=(r, g, b_c, a))
 
-        tf = _font(bold=True, size=int(H * 0.055))
-        lines = _wrap_text(overlay_title, tf, int(W * 0.88))[:2]
-        ty = int(H * 0.03)
+        tf = _font(bold=True, size=int(H * 0.062))
+        lines = _wrap_text(overlay_title, tf, int(W * 0.84))[:2]
+        ty = int(H * 0.028)
         for ln in lines:
             bb_box = tf.getbbox(ln)
             lw = bb_box[2] - bb_box[0]
             tx = (W - lw) // 2
-            d.text((tx + 2, ty + 2), ln, font=tf, fill=(0, 0, 0, 160))
-            d.text((tx,     ty    ), ln, font=tf, fill=(255, 255, 255, 255))
-            ty += int((bb_box[3] - bb_box[1]) * 1.35)
+            _draw_text_stroke(d, (tx, ty), ln, tf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 220), stroke_w=4)
+            ty += int((bb_box[3] - bb_box[1]) * 1.3)
 
-    # ── 하단 자막 배너 (82%~100%) ───────────────────────
+    # ── 하단 자막 배너 (78%~100%) ───────────────────────────
     if overlay_body:
-        bot_start = int(H * 0.82)
+        bot_start = int(H * 0.78)
+        # 브랜드 컬러 tint 그라디언트
         for y in range(bot_start, H):
-            a = int(210 * (y - bot_start) / (H - bot_start))
-            d.line([(0, y), (W, y)], fill=(8, 8, 8, a))
+            ratio = (y - bot_start) / (H - bot_start)
+            r = int(max(0, br * 0.25))
+            g = int(max(0, bg_ * 0.25))
+            b_c = int(max(0, bb * 0.25))
+            a = int(230 * ratio)
+            d.line([(0, y), (W, y)], fill=(r, g, b_c, a))
 
-        # 브랜드 컬러 바 (맨 아래 10px)
-        d.rectangle([(0, H - 10), (W, H)], fill=(br, bg_, bb, 255))
+        # 하단 자막 카드 배경 (반투명 라운드 느낌)
+        card_top = int(H * 0.795)
+        card_bot = H - 52
+        d.rectangle([(0, card_top), (W, card_bot)], fill=(0, 0, 0, 110))
 
-        bf  = _font(bold=False, size=int(H * 0.038))
+        # 브랜드 컬러 바 (40px — 존재감 있는 두께)
+        d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
+
+        bf = _font(bold=True, size=int(H * 0.042))
         max_w = int(W * 0.88)
         lines = _wrap_text(overlay_body, bf, max_w)[:3]
-        ty = int(H * 0.836)
+        ty = card_top + int(H * 0.010)
+        pad = int(W * 0.055)
         for ln in lines:
-            d.text((int(W * 0.06) + 2, ty + 2), ln, font=bf, fill=(0, 0, 0, 150))
-            d.text((int(W * 0.06),     ty    ), ln, font=bf, fill=(255, 255, 255, 240))
+            _draw_text_stroke(d, (pad, ty), ln, bf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 200), stroke_w=3)
             bb_box = bf.getbbox(ln)
-            ty += int((bb_box[3] - bb_box[1]) * 1.45)
+            ty += int((bb_box[3] - bb_box[1]) * 1.4)
 
     combined = Image.alpha_composite(img, ov)
     return _jpeg_b64(combined)
@@ -526,12 +623,19 @@ def assemble_shorts_video(
 
     # BGM 믹스 (파일이 있을 경우)
     if bgm_path:
+        # 총 재생시간 파악 (페이드아웃 시작점 계산용)
+        total_dur = _get_audio_duration(concat_out) or 20.0
+        fade_out_st = max(0, total_dur - 1.0)
         _ffmpeg(
             '-y',
             '-i', concat_out,
             '-stream_loop', '-1', '-i', bgm_path,
             '-filter_complex',
-            '[0:a]volume=1.0[narr];[1:a]volume=0.15[bgm];[narr][bgm]amix=inputs=2:duration=first[aout]',
+            # 나레이션: 볼륨 유지
+            # BGM: 0.13볼륨 + 0.5초 페이드인 + 마지막 1초 페이드아웃
+            f'[0:a]volume=1.0[narr];'
+            f'[1:a]volume=0.13,afade=t=in:st=0:d=0.8,afade=t=out:st={fade_out_st:.2f}:d=1.0[bgm];'
+            f'[narr][bgm]amix=inputs=2:duration=first:dropout_transition=0.5[aout]',
             '-map', '0:v', '-map', '[aout]',
             '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
             '-shortest',
@@ -603,10 +707,11 @@ def run_shorts_pipeline(
                     pil_size,
                 )
             else:
-                # FLUX 이미지 생성
+                # FLUX 이미지 생성 (Schnell + 퀄리티 최적화 프롬프트)
                 flux_p = scene.get('flux_prompt', '')
                 if style_mod:
                     flux_p = f'{flux_p}, {style_mod}'
+                flux_p += _QUALITY_SUFFIX
                 flux_p += _NO_TEXT
                 # 사람이 등장할 가능성이 있는 씬에 해부학 네거티브 추가
                 if any(kw in flux_p.lower() for kw in ['person', 'woman', 'man', 'hand', 'people', 'human', 'mother', 'baby', 'child', 'girl', 'boy']):
@@ -628,9 +733,10 @@ def run_shorts_pipeline(
             with open(img_path, 'wb') as f:
                 f.write(base64.b64decode(b64data))
 
-            # TTS
-            narration = _normalize_tts_text(scene.get('narration', ''))
-            mp3_bytes = tts_synthesize(narration, tts_api_key, voice_key, tts_speed)
+            # TTS (씬 역할별 피치·속도 자동 적용)
+            narration  = _normalize_tts_text(scene.get('narration', ''))
+            scene_role = scene.get('role', '')
+            mp3_bytes  = tts_synthesize(narration, tts_api_key, voice_key, tts_speed, scene_role)
             audio_path = os.path.join(tmp_dir, f'scene_{i:02d}.mp3')
             with open(audio_path, 'wb') as f:
                 f.write(mp3_bytes)

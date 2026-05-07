@@ -170,18 +170,23 @@
       <div class="mb-4">
         <label class="form-label fw-semibold small mb-2">나레이션 음성</label>
         <div class="row g-2">
-          {% for vk, vlabel, vdesc in [
-            ('female_natural', '여성 자연스럽게', 'Neural2-A'),
-            ('male_calm',      '남성 차분하게',   'Neural2-C'),
-            ('female_bright',  '여성 밝게',       'Neural2-B'),
-            ('male_clear',     '남성 또렷하게',   'Wavenet-C'),
+          {% for vk, vlabel, vdesc, vbadge in [
+            ('female_studio',  '여성 스튜디오',   '가장 자연스러움', 'bg-warning text-dark'),
+            ('male_studio',    '남성 스튜디오',   '가장 자연스러움', 'bg-warning text-dark'),
+            ('female_natural', '여성 자연스럽게', 'Neural2',         'bg-light text-muted'),
+            ('male_calm',      '남성 차분하게',   'Neural2',         'bg-light text-muted'),
+            ('female_bright',  '여성 밝게',       'Neural2',         'bg-light text-muted'),
+            ('male_clear',     '남성 또렷하게',   'Wavenet',         'bg-light text-muted'),
           ] %}
-          <div class="col-6">
+          <div class="col-6 col-md-4">
             <div class="voice-card border rounded p-2 text-center"
                  style="cursor:pointer" data-voice="{{ vk }}"
                  onclick="selectVoice('{{ vk }}', this)">
               <div class="fw-semibold small">{{ vlabel }}</div>
-              <div class="text-muted" style="font-size:.68rem">{{ vdesc }}</div>
+              <div class="text-muted" style="font-size:.65rem">{{ vdesc }}</div>
+              {% if 'warning' in vbadge %}
+              <span class="badge {{ vbadge }} mt-1" style="font-size:.6rem">⭐ 추천</span>
+              {% endif %}
             </div>
           </div>
           {% endfor %}

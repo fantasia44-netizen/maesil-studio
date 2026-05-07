@@ -189,7 +189,7 @@ def dpb_gen_text():
 - 브랜드 톤앤매너를 유지하세요."""
 
     try:
-        text = generate_text(system, user, max_tokens=800, model='claude-haiku-4-5-20251001')
+        text = generate_text(system, user, max_tokens=1500, model='claude-sonnet-4-6')
         return jsonify(ok=True, text=text.strip())
     except Exception as e:
         logger.error(f'[DPB] gen-text error: {e}')
@@ -682,7 +682,7 @@ def dpb_story_plan():
 
     try:
         from services.claude_service import generate_text
-        raw = generate_text(system, user, max_tokens=2500, model='claude-haiku-4-5-20251001')
+        raw = generate_text(system, user, max_tokens=3500, model='claude-sonnet-4-6')
         raw = raw.strip()
         # ── 코드블록 제거
         if '```' in raw:
