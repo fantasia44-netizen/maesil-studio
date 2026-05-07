@@ -122,8 +122,8 @@ def history():
     # shorts.py → shorts_script / shorts_video
     TYPE_ORDER = [
         'blog', 'instagram', 'detail_page', 'thumbnail_text', 'ad_copy',
-        'press_release', 'thumbnail_image', 'detail_image', 'card_news',
-        'img_preview', 'img_ideogram', 'img_card_news', 'image_generation',
+        'press_release', 'thumbnail_image', 'detail_image', 'detail_page_image',
+        'card_news', 'img_preview', 'img_ideogram', 'img_card_news', 'image_generation',
         'bg_replace', 'bg_remove_adv',
         'logo', 'shorts_script', 'shorts_video',
         'business_proposal', 'sponsorship_proposal', 'catalog', 'leaflet', 'flyer',
@@ -247,6 +247,19 @@ def settings():
         flash('오류가 발생했습니다.', 'danger')
 
     return redirect(url_for('main.settings'))
+
+
+@main_bp.route('/api/balance')
+@login_required
+def api_balance():
+    """포인트 잔액 JSON API — topbar 실시간 갱신용."""
+    try:
+        from services.point_service import get_balance
+        balance = get_balance(current_user)
+        return jsonify(ok=True, balance=balance)
+    except Exception as e:
+        logger.error('[api/balance] %s', e)
+        return jsonify(ok=False, balance=0)
 
 
 @main_bp.route('/settings/change-password', methods=['POST'])

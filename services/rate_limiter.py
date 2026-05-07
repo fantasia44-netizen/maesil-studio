@@ -48,3 +48,27 @@ def get_rate_limiter():
         pass
     _limiter = InMemoryRateLimiter()
     return _limiter
+
+
+# ── AI 생성 엔드포인트용 사용자 레이트 리밋 헬퍼 ─────────────────────
+# 사용법: err = check_ai_rate_limit('shorts', max_per_hour=5)
+#         if err: return jsonify(error=err), 429
+
+def check_ai_rate_limit(resource: str, max_per_hour: int = 20) -> 'str | None':
+    """현재 로그인 유저 기준 AI 생성 레이트 리밋 체크.
+
+    초과 시 오류 메시지 반환, 통과 시 None 반환.
+    resource: 'shorts' | 'image' | 'instagram' | 'blog' 등 엔드포인트 구분자
+    """
+    try:
+        from flask_login import current_user
+        if not current_user or not current_user.is_authenticated:
+            return None  # 비인증 → @login_required에서 처리
+        user_id = str(current_user.get_id())
+        key = f'ai:{resource}:{user_id}'
+        limited = get_rate_limiter().is_rate_limited(key, max_per_hour, 3600)
+        if limited:
+            return f'요청이 너무 많습니다. 1시간에 최대 {max_per_hour}회 생성 가능합니다.'
+    except Exception:
+        pass  # 레이트 리밋 오류는 무시 (서비스 중단 방지)
+    return None

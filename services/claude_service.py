@@ -29,13 +29,19 @@ def build_brand_context(brand: dict,
                         merged_avoid_words: list[str] | None = None) -> str:
     """브랜드(+선택적 상품) → 시스템 프롬프트 컨텍스트.
 
+    브랜드 기본 정보 + 회사 정보(연혁·성과·거래처 등)를 모두 포함해
+    Claude 가 풍부한 배경 지식을 갖고 고품질 콘텐츠를 생성하도록 한다.
+
     Args:
       brand: brand_profiles row.
       product: 선택. products row — 상품 기반 생성 시 컨텍스트에 추가 주입.
-      merged_avoid_words: 3-tier 합집합 금지어 (services.regulatory.combine_avoid_words).
+      merged_avoid_words: 3-tier 합집합 금지어.
                           None 이면 brand.avoid_words 만 표시 (이전 호환).
     """
     parts = []
+
+    # ── 1. 브랜드 기본 ────────────────────────────────────────
+    parts.append('[브랜드 기본 정보]')
     if brand.get('name'):
         parts.append(f'- 브랜드명: {brand["name"]}')
     if brand.get('industry'):
@@ -49,9 +55,43 @@ def build_brand_context(brand: dict,
         kws = brand['keywords'] if isinstance(brand['keywords'], list) else [brand['keywords']]
         parts.append(f'- 핵심 키워드: {", ".join(kws)}')
     if brand.get('extra_context'):
-        parts.append(f'- 브랜드 추가 정보: {brand["extra_context"]}')
+        parts.append(f'- 브랜드 스토리/추가 정보: {brand["extra_context"]}')
 
-    # ── 상품 컨텍스트 (있을 때) ──────────────────────────────
+    # ── 2. 회사 정보 (있을 때만) ─────────────────────────────
+    company_fields = []
+    if brand.get('founded_year'):
+        company_fields.append(f'- 창업 연도: {brand["founded_year"]}년')
+    if brand.get('ceo_name'):
+        company_fields.append(f'- 대표자: {brand["ceo_name"]}')
+    if brand.get('employee_count'):
+        company_fields.append(f'- 직원 규모: {brand["employee_count"]}')
+    if brand.get('website'):
+        company_fields.append(f'- 홈페이지: {brand["website"]}')
+    if brand.get('address'):
+        company_fields.append(f'- 소재지: {brand["address"]}')
+    if brand.get('contact_phone'):
+        company_fields.append(f'- 연락처: {brand["contact_phone"]}')
+    if brand.get('contact_email'):
+        company_fields.append(f'- 이메일: {brand["contact_email"]}')
+    if company_fields:
+        parts.append('')
+        parts.append('[회사 정보]')
+        parts.extend(company_fields)
+
+    # ── 3. 회사 이력·성과·신뢰도 (있을 때만) ─────────────────
+    cred_fields = []
+    if brand.get('certifications'):
+        cred_fields.append(f'- 인증·수상 이력: {brand["certifications"]}')
+    if brand.get('key_stats'):
+        cred_fields.append(f'- 핵심 성과 수치: {brand["key_stats"]}')
+    if brand.get('references_text'):
+        cred_fields.append(f'- 주요 거래처·납품처: {brand["references_text"]}')
+    if cred_fields:
+        parts.append('')
+        parts.append('[신뢰도·성과 지표]')
+        parts.extend(cred_fields)
+
+    # ── 4. 상품 컨텍스트 (있을 때) ──────────────────────────
     if product:
         parts.append('')
         parts.append('[상품 정보]')
@@ -64,6 +104,8 @@ def build_brand_context(brand: dict,
                 parts.append(f'- 가격: {int(product["price"]):,}원')
             except (TypeError, ValueError):
                 pass
+        if product.get('description'):
+            parts.append(f'- 상품 설명: {product["description"]}')
         feats = product.get('features')
         if feats:
             feats_list = feats if isinstance(feats, list) else [feats]
@@ -72,7 +114,7 @@ def build_brand_context(brand: dict,
                 for f in feats_list:
                     parts.append(f'  · {f}')
 
-    # ── 금지 표현 (3-tier 합집합 우선, 없으면 브랜드만) ──────
+    # ── 5. 금지 표현 ─────────────────────────────────────────
     if merged_avoid_words is None:
         if brand.get('avoid_words'):
             avoids = brand['avoid_words'] if isinstance(brand['avoid_words'], list) else [brand['avoid_words']]
@@ -80,7 +122,7 @@ def build_brand_context(brand: dict,
     if merged_avoid_words:
         parts.append('')
         parts.append('[절대 사용 금지 표현 — 위반 시 광고법 등 법적 리스크]')
-        parts.append(f'다음 표현은 본문/제목/태그/메타에 절대 사용하지 마시오:')
+        parts.append('다음 표현은 본문/제목/태그/메타에 절대 사용하지 마시오:')
         parts.append(f'  {", ".join(merged_avoid_words)}')
 
     return '\n'.join(parts) if parts else '브랜드 정보 없음'

@@ -161,6 +161,20 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return {'ok': False, 'error': 'points', 'message': str(ip) or '포인트가 부족합니다.'}
     except Exception as e:
-        logger.error(f'[CREATE] {creation_type} error: {e}')
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return {'ok': False, 'error': 'api', 'message': 'AI 생성 중 오류가 발생했습니다.'}
+        err_str = str(e)
+        logger.error(f'[CREATE] {creation_type} error: {err_str}', exc_info=True)
+        try:
+            supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        except Exception:
+            pass
+        # 사용자에게 구체적 에러 표시 (민감 정보 제외)
+        safe_msg = 'AI 생성 중 오류가 발생했습니다.'
+        if 'overloaded' in err_str.lower() or 'rate_limit' in err_str.lower():
+            safe_msg = 'AI 서버가 잠시 과부하 상태입니다. 1~2분 후 다시 시도해 주세요.'
+        elif 'context_length' in err_str.lower() or 'too long' in err_str.lower():
+            safe_msg = '입력 내용이 너무 깁니다. 핵심 내용을 줄여서 다시 시도해 주세요.'
+        elif 'invalid_api_key' in err_str.lower() or 'authentication' in err_str.lower():
+            safe_msg = 'AI API 인증 오류입니다. 관리자에게 문의해 주세요.'
+        elif 'model' in err_str.lower() and 'not found' in err_str.lower():
+            safe_msg = f'AI 모델 오류입니다. 관리자에게 문의해 주세요. ({err_str[:80]})'
+        return {'ok': False, 'error': 'api', 'message': safe_msg}

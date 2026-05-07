@@ -25,18 +25,40 @@ _ENV_MAP = {
 }
 
 
-def get_config(key: str) -> str:
-    """설정값 조회 — 환경변수 우선, 없으면 saas_config DB"""
+def get_config(key: str, _supabase=None) -> str:
+    """설정값 조회 — 환경변수 우선, 없으면 saas_config DB.
+
+    _supabase: Celery 워커 등 Flask 컨텍스트 없는 환경에서 직접 클라이언트 전달 가능.
+    """
     env_key = _ENV_MAP.get(key, key.upper())
     val = os.environ.get(env_key, '')
     if val:
         return val
 
+    # Supabase 클라이언트 획득 (직접 전달 → Flask current_app → 포기)
+    supabase = _supabase
+    if supabase is None:
+        try:
+            from flask import current_app
+            supabase = current_app.supabase
+        except Exception:
+            pass
+
+    if supabase is None:
+        # 환경변수에서 URL/KEY로 직접 생성 (워커 폴백)
+        try:
+            sb_url = os.environ.get('SUPABASE_URL', '')
+            sb_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+            if sb_url and sb_key:
+                from supabase import create_client
+                supabase = create_client(sb_url, sb_key)
+        except Exception:
+            pass
+
+    if supabase is None:
+        return ''
+
     try:
-        from flask import current_app
-        supabase = current_app.supabase
-        if not supabase:
-            return ''
         row = supabase.table('saas_config').select(
             'value_text, value_secret'
         ).eq('key', key).execute()

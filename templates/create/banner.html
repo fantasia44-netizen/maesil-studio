@@ -1,0 +1,650 @@
+{% extends 'base.html' %}
+{% block title %}배너 만들기 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 배너 만들기{% endblock %}
+
+{% block content %}
+
+<!-- 스텝 인디케이터 -->
+<div class="d-flex align-items-center mb-4" style="max-width:760px">
+  {% for n, label in [(1,'기본 설정'),(2,'사이즈·레이아웃'),(3,'문구 설정'),(4,'배너 생성')] %}
+  <div class="d-flex align-items-center {% if not loop.last %}flex-fill{% endif %}">
+    <div class="d-flex align-items-center gap-1">
+      <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+           id="sc{{ n }}" style="width:26px;height:26px;font-size:.75rem;background:#ddd;color:#888;flex-shrink:0;transition:all .3s">{{ n }}</div>
+      <span class="small fw-semibold d-none d-md-inline" id="sl{{ n }}" style="color:#aaa;white-space:nowrap">{{ label }}</span>
+    </div>
+    {% if not loop.last %}
+    <div class="flex-fill mx-1" id="sline{{ n }}" style="height:2px;background:#ddd;transition:all .3s;min-width:12px"></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ══════ Step 1: 기본 설정 ══════ -->
+<div id="step1" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-images me-2" style="color:#0d6efd"></i>어떤 브랜드·상품의 배너를 만들까요?</h6>
+    </div>
+    <div class="card-body p-4">
+      <input type="hidden" id="csrfToken" value="{{ csrf_token() }}">
+
+      <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small">브랜드</label>
+          <select id="brandSelect" class="form-select form-select-sm" onchange="onBrandChange(this.value)">
+            {% for b in brands %}
+            <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small">상품 <span class="text-muted fw-normal">(선택)</span></label>
+          <select id="productSelect" class="form-select form-select-sm" onchange="onProductChange(this.value)">
+            <option value="">— 상품 미지정 —</option>
+            {% for p in products %}
+            <option value="{{ p.id }}" data-img="{{ (p.images or [''])[0] if p.images else '' }}">
+              {{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">배너 목적 <span class="text-muted fw-normal">(선택)</span></label>
+        <input id="purposeInput" class="form-control form-control-sm"
+               placeholder="예: 신제품 출시 알리기 / 특가 이벤트 홍보 / 브랜드 인지도 향상">
+      </div>
+
+      <!-- 제품 이미지 미리보기 -->
+      <div id="productImgPreview" class="d-none mb-3">
+        <label class="form-label fw-semibold small">선택된 제품 이미지</label>
+        <div class="d-flex align-items-center gap-3">
+          <img id="productImgThumb" src="" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6">
+          <div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="useProductImg" checked>
+              <label class="form-check-label small" for="useProductImg">배너에 제품 이미지 포함</label>
+            </div>
+            <div class="text-muted" style="font-size:.72rem">배경 위에 제품을 오버레이합니다</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4">
+        <button class="btn btn-primary" onclick="goStep(2)">
+          사이즈 설정 <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 2: 사이즈·레이아웃 ══════ -->
+<div id="step2" class="d-none" style="max-width:760px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-rulers me-2" style="color:#0d6efd"></i>사이즈 & 레이아웃 설정</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 사이즈 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">배너 사이즈</label>
+        {% set groups = {} %}
+        {% for sk, sm in banner_sizes.items() %}
+          {% if sk != 'custom' %}
+          <div class="d-inline-block me-2 mb-2">
+            <div class="size-card border rounded px-3 py-2 text-center"
+                 style="cursor:pointer;min-width:120px" data-size="{{ sk }}"
+                 data-w="{{ sm.w }}" data-h="{{ sm.h }}"
+                 onclick="selectSize('{{ sk }}', {{ sm.w }}, {{ sm.h }}, this)">
+              <div class="fw-semibold" style="font-size:.78rem">{{ sm.label.split('(')[0].strip() }}</div>
+              <div class="text-muted" style="font-size:.68rem">{{ sm.w }}×{{ sm.h }}</div>
+              {% if sm.group %}
+              <span class="badge bg-light text-muted" style="font-size:.6rem">{{ sm.group }}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        {% endfor %}
+        <!-- 커스텀 -->
+        <div class="d-inline-block me-2 mb-2">
+          <div class="size-card border rounded px-3 py-2 text-center"
+               style="cursor:pointer;min-width:120px" data-size="custom" data-w="" data-h=""
+               onclick="selectSize('custom', null, null, this)">
+            <div class="fw-semibold" style="font-size:.78rem">직접 입력</div>
+            <div class="text-muted" style="font-size:.68rem">원하는 사이즈</div>
+          </div>
+        </div>
+        <!-- 커스텀 입력 -->
+        <div id="customSizeRow" class="d-none mt-2">
+          <div class="d-flex gap-2 align-items-center">
+            <input type="number" id="customW" class="form-control form-control-sm" style="width:90px" placeholder="너비 (px)" min="200" max="2400">
+            <span class="text-muted">×</span>
+            <input type="number" id="customH" class="form-control form-control-sm" style="width:90px" placeholder="높이 (px)" min="200" max="2400">
+            <span class="text-muted small">px</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 레이아웃 선택 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">레이아웃</label>
+        <div class="row g-2">
+          {% for lk, lm in banner_layouts.items() %}
+          <div class="col-md-4">
+            <div class="layout-card border rounded p-3 text-center h-100"
+                 style="cursor:pointer" data-layout="{{ lk }}"
+                 onclick="selectLayout('{{ lk }}', this)">
+              <i class="{{ lm.icon }} d-block mb-1" style="font-size:1.4rem;color:#6c757d"></i>
+              <div class="fw-semibold small">{{ lm.label }}</div>
+              <div class="text-muted" style="font-size:.7rem;line-height:1.4">{{ lm.desc }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 배경 유형 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">배경 유형</label>
+        <div class="row g-2">
+          {% for bk, blabel in banner_bg_types.items() %}
+          <div class="col-md-4">
+            <div class="bg-type-card border rounded p-3 text-center"
+                 style="cursor:pointer" data-bgtype="{{ bk }}"
+                 onclick="selectBgType('{{ bk }}', this)">
+              {% if bk == 'flux_ai' %}
+              <i class="bi bi-stars d-block mb-1" style="font-size:1.3rem;color:#f59e0b"></i>
+              {% elif bk == 'solid' %}
+              <i class="bi bi-square-fill d-block mb-1" style="font-size:1.3rem;color:#6c757d"></i>
+              {% else %}
+              <i class="bi bi-gradient d-block mb-1" style="font-size:1.3rem;color:#8b5cf6"></i>
+              {% endif %}
+              <div class="fw-semibold small">{{ blabel }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- AI 배경 프롬프트 힌트 -->
+        <div id="bgPromptRow" class="mt-3 d-none">
+          <label class="form-label small fw-semibold">AI 배경 이미지 설명 <span class="text-muted fw-normal">(선택 — 영문/한글)</span></label>
+          <input id="bgPromptInput" class="form-control form-control-sm"
+                 placeholder="예: fresh morning kitchen, soft natural light / 따뜻한 카페 분위기">
+          <div class="text-muted mt-1" style="font-size:.72rem">비워두면 브랜드 분위기에 맞게 자동 생성됩니다</div>
+        </div>
+      </div>
+
+      <!-- 브랜드 컬러 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">브랜드 강조 컬러</label>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          {% for c in ['#e8355a','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#111111','#ffffff'] %}
+          <div class="color-dot rounded-circle border"
+               style="width:26px;height:26px;background:{{ c }};cursor:pointer;flex-shrink:0{% if c == '#ffffff' %};border-color:#dee2e6!important{% endif %}"
+               onclick="selectColor('{{ c }}', this)" title="{{ c }}"></div>
+          {% endfor %}
+          <input type="color" id="customColor" value="#e8355a"
+                 oninput="selectColor(this.value, null)"
+                 class="form-control form-control-color" style="width:36px;height:26px;padding:0;border:none;cursor:pointer">
+        </div>
+        <input type="hidden" id="selectedColor" value="#e8355a">
+      </div>
+
+      <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(1)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+        <button class="btn btn-primary" id="step2Next" onclick="goStep3()" disabled>
+          문구 설정 <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 3: 문구 설정 ══════ -->
+<div id="step3" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2" style="color:#0d6efd"></i>배너 문구 설정</h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="genCopy()">
+        <i class="bi bi-stars me-1 text-warning"></i>AI 문구 생성
+      </button>
+    </div>
+    <div class="card-body p-4">
+
+      <div id="copyLoading" class="d-none text-center py-3">
+        <div class="spinner-border spinner-border-sm text-primary me-2"></div>문구 생성 중...
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">
+          제목 (Headline) <span class="text-muted fw-normal">15자 이내 권장</span>
+        </label>
+        <input id="headlineInput" class="form-control" placeholder="핵심 메시지를 입력하세요"
+               maxlength="30" oninput="checkStep3Ready()">
+        <div class="d-flex justify-content-end mt-1">
+          <span id="headlineCount" class="text-muted" style="font-size:.72rem">0 / 30</span>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">
+          부제목 (Subline) <span class="text-muted fw-normal">25자 이내 권장</span>
+        </label>
+        <input id="sublineInput" class="form-control" placeholder="혜택 또는 특징 한 가지"
+               maxlength="50">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">
+          버튼 문구 (CTA) <span class="text-muted fw-normal">8자 이내 권장</span>
+        </label>
+        <input id="ctaInput" class="form-control" placeholder="지금 확인하기 / 무료 체험 / 바로 구매"
+               maxlength="20">
+      </div>
+
+      <!-- 미리보기 설정 요약 -->
+      <div class="alert alert-light border py-2 px-3 mt-3" style="font-size:.78rem">
+        <div class="d-flex gap-3 flex-wrap">
+          <span><i class="bi bi-aspect-ratio me-1 text-primary"></i><span id="summarySize">—</span></span>
+          <span><i class="bi bi-layout-split me-1 text-success"></i><span id="summaryLayout">—</span></span>
+          <span><i class="bi bi-image me-1 text-warning"></i><span id="summaryBg">—</span></span>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between mt-4">
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+        <button class="btn btn-primary" id="step3Next" onclick="startGenerate()" disabled>
+          <i class="bi bi-images me-1"></i>배너 생성
+          <span class="badge bg-white text-dark ms-1" style="font-size:.7rem">{{ cost }}P</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Step 4: 생성 결과 ══════ -->
+<div id="step4" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-images me-2" style="color:#0d6efd"></i>배너 생성</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 진행 중 -->
+      <div id="genProgress" class="text-center py-5">
+        <div class="mb-3">
+          <div class="spinner-border text-primary" style="width:3rem;height:3rem"></div>
+        </div>
+        <div class="fw-semibold mb-1" id="progressStep">배너 생성 중...</div>
+        <div class="text-muted small mb-3">약 15~30초 소요됩니다</div>
+        <div class="progress mx-auto" style="max-width:280px;height:6px">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+               id="progressBar" style="width:10%"></div>
+        </div>
+      </div>
+
+      <!-- 완료 -->
+      <div id="genResult" class="d-none text-center">
+        <div class="mb-3">
+          <i class="bi bi-check-circle-fill text-success" style="font-size:2.5rem"></i>
+        </div>
+        <h6 class="fw-bold mb-1">배너 생성 완료!</h6>
+        <p class="text-muted small mb-4">클릭해서 크게 보거나 다운로드하세요</p>
+
+        <div class="mb-4 position-relative d-inline-block">
+          <img id="resultImg" src="" alt="생성된 배너"
+               style="max-width:100%;max-height:420px;border-radius:10px;
+                      box-shadow:0 4px 20px rgba(0,0,0,.15);cursor:zoom-in"
+               onclick="openFullSize()"
+               class="d-block mx-auto">
+          <div class="text-muted small mt-2" id="resultDimensions"></div>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <a id="downloadBtn" href="#" download="banner.jpg" class="btn btn-primary">
+            <i class="bi bi-download me-1"></i>JPG 다운로드
+          </a>
+          <button class="btn btn-outline-secondary" onclick="regenBanner()">
+            <i class="bi bi-arrow-clockwise me-1"></i>재생성
+          </button>
+          <button class="btn btn-outline-secondary" onclick="goStep(1); resetAll()">
+            <i class="bi bi-plus-circle me-1"></i>새 배너 만들기
+          </button>
+        </div>
+      </div>
+
+      <!-- 실패 -->
+      <div id="genError" class="d-none text-center py-4">
+        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:2rem"></i>
+        <p class="fw-semibold mt-2 mb-1">배너 생성 실패</p>
+        <p class="text-muted small" id="errorMsg"></p>
+        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(3)">다시 시도</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 전체 보기 모달 -->
+<div class="modal fade" id="fullModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content bg-dark border-0">
+      <div class="modal-body p-2 text-center">
+        <img id="fullImg" src="" alt="" style="max-width:100%;max-height:90vh;object-fit:contain">
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.size-card:hover,  .size-card.active  { border-color:#0d6efd !important; background:#f0f4ff; }
+.layout-card:hover,.layout-card.active{ border-color:#0d6efd !important; background:#f0f4ff; }
+.bg-type-card:hover,.bg-type-card.active{ border-color:#f59e0b !important; background:#fffbeb; }
+.color-dot:hover { transform:scale(1.15); }
+</style>
+
+<script>
+const CSRF = document.getElementById('csrfToken').value;
+const COST = {{ cost }};
+
+let selectedSizeKey  = null;
+let selectedW        = null;
+let selectedH        = null;
+let selectedLayout   = null;
+let selectedBgType   = null;
+let selectedColor    = '#e8355a';
+let currentCreationId= null;
+let pollTimer        = null;
+let lastImageUrl     = null;
+
+const LAYOUT_LABELS = {{ banner_layouts | tojson }};
+const BG_LABELS     = {{ banner_bg_types | tojson }};
+
+// ── 스텝 이동 ──────────────────────────────────────────────
+function goStep(n) {
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById(`step${i}`);
+    if (el) el.classList.toggle('d-none', i !== n);
+  });
+  for (let i = 1; i <= 4; i++) {
+    const c = document.getElementById(`sc${i}`);
+    const l = document.getElementById(`sl${i}`);
+    const ln= document.getElementById(`sline${i}`);
+    if (!c) continue;
+    if (i < n) {
+      c.style.background = '#198754'; c.style.color = '#fff';
+      c.innerHTML = '<i class="bi bi-check" style="font-size:.65rem"></i>';
+    } else if (i === n) {
+      c.style.background = '#0d6efd'; c.style.color = '#fff';
+      c.textContent = i;
+    } else {
+      c.style.background = '#ddd'; c.style.color = '#888';
+      c.textContent = i;
+    }
+    if (l) l.style.color = i <= n ? '#333' : '#aaa';
+    if (ln) ln.style.background = i < n ? '#198754' : '#ddd';
+  }
+}
+
+// ── Step 2 선택 ────────────────────────────────────────────
+function selectSize(key, w, h, el) {
+  document.querySelectorAll('.size-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedSizeKey = key;
+  selectedW = w; selectedH = h;
+  document.getElementById('customSizeRow').classList.toggle('d-none', key !== 'custom');
+  checkStep2Ready();
+}
+
+function selectLayout(key, el) {
+  document.querySelectorAll('.layout-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedLayout = key;
+  checkStep2Ready();
+}
+
+function selectBgType(key, el) {
+  document.querySelectorAll('.bg-type-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedBgType = key;
+  document.getElementById('bgPromptRow').classList.toggle('d-none', key !== 'flux_ai');
+  checkStep2Ready();
+}
+
+function selectColor(hex, el) {
+  document.querySelectorAll('.color-dot').forEach(d => { d.style.outline=''; d.style.outlineOffset=''; });
+  if (el && el.classList.contains('color-dot')) {
+    el.style.outline = '2px solid #333';
+    el.style.outlineOffset = '2px';
+  }
+  selectedColor = hex;
+  document.getElementById('selectedColor').value = hex;
+  document.getElementById('customColor').value = hex;
+}
+
+function checkStep2Ready() {
+  const ready = selectedSizeKey && selectedLayout && selectedBgType;
+  document.getElementById('step2Next').disabled = !ready;
+}
+
+// ── Step 3: 문구 이동 ────────────────────────────────────────
+function goStep3() {
+  // 설정 요약 업데이트
+  const sizeLabel = document.querySelector('.size-card.active')?.querySelector('.fw-semibold')?.textContent || '—';
+  const layoutLabel = selectedLayout ? LAYOUT_LABELS[selectedLayout]?.label || '—' : '—';
+  const bgLabel = selectedBgType ? BG_LABELS[selectedBgType] || '—' : '—';
+  const dimText = (selectedSizeKey === 'custom') ? '직접 입력' :
+    (selectedW && selectedH ? `${selectedW}×${selectedH}` : '—');
+
+  document.getElementById('summarySize').textContent   = `${sizeLabel} (${dimText})`;
+  document.getElementById('summaryLayout').textContent = layoutLabel;
+  document.getElementById('summaryBg').textContent     = bgLabel;
+  goStep(3);
+}
+
+// ── 문구 AI 생성 ────────────────────────────────────────────
+async function genCopy() {
+  document.getElementById('copyLoading').classList.remove('d-none');
+  try {
+    const res = await fetch('/create/banner/copy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        brand_id:   document.getElementById('brandSelect').value,
+        product_id: document.getElementById('productSelect').value,
+        purpose:    document.getElementById('purposeInput').value.trim(),
+        size_key:   selectedSizeKey || 'sns_square',
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('headlineInput').value = data.headline || '';
+      document.getElementById('sublineInput').value  = data.subline  || '';
+      document.getElementById('ctaInput').value      = data.cta      || '';
+      updateHeadlineCount();
+      checkStep3Ready();
+    } else {
+      alert(data.message || '문구 생성 실패');
+    }
+  } catch(e) {
+    alert('오류: ' + e.message);
+  } finally {
+    document.getElementById('copyLoading').classList.add('d-none');
+  }
+}
+
+function updateHeadlineCount() {
+  const v = document.getElementById('headlineInput').value;
+  document.getElementById('headlineCount').textContent = `${v.length} / 30`;
+}
+
+document.getElementById('headlineInput').addEventListener('input', () => {
+  updateHeadlineCount();
+  checkStep3Ready();
+});
+
+function checkStep3Ready() {
+  const ok = document.getElementById('headlineInput').value.trim().length > 0;
+  document.getElementById('step3Next').disabled = !ok;
+}
+
+// ── 배너 생성 ────────────────────────────────────────────────
+async function startGenerate() {
+  goStep(4);
+  document.getElementById('genProgress').classList.remove('d-none');
+  document.getElementById('genResult').classList.add('d-none');
+  document.getElementById('genError').classList.add('d-none');
+
+  // 커스텀 사이즈 읽기
+  let cw = selectedW, ch = selectedH;
+  if (selectedSizeKey === 'custom') {
+    cw = parseInt(document.getElementById('customW').value) || 1080;
+    ch = parseInt(document.getElementById('customH').value) || 1080;
+  }
+
+  const body = {
+    brand_id:      document.getElementById('brandSelect').value,
+    product_id:    document.getElementById('productSelect').value,
+    headline:      document.getElementById('headlineInput').value.trim(),
+    subline:       document.getElementById('sublineInput').value.trim(),
+    cta:           document.getElementById('ctaInput').value.trim(),
+    bg_type:       selectedBgType,
+    bg_prompt:     document.getElementById('bgPromptInput')?.value?.trim() || '',
+    brand_color:   selectedColor,
+    layout:        selectedLayout,
+    size_key:      selectedSizeKey,
+    custom_w:      cw,
+    custom_h:      ch,
+    use_product_img: document.getElementById('useProductImg')?.checked ?? true,
+  };
+
+  try {
+    const res  = await fetch('/create/banner/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.ok) { showError(data.message); return; }
+    currentCreationId = data.creation_id;
+    startPolling();
+  } catch(e) {
+    showError(e.message);
+  }
+}
+
+function startPolling() {
+  pollTimer = setInterval(async () => {
+    try {
+      const res  = await fetch(`/create/banner/status/${currentCreationId}`);
+      const data = await res.json();
+      if (!data.ok) { clearInterval(pollTimer); return; }
+
+      const pct  = data.output_data?.progress ?? 10;
+      const step = data.output_data?.step     || '처리 중...';
+      document.getElementById('progressBar').style.width = Math.min(95, pct) + '%';
+      document.getElementById('progressStep').textContent = step;
+
+      if (data.status === 'done') {
+        clearInterval(pollTimer);
+        document.getElementById('progressBar').style.width = '100%';
+        setTimeout(() => showResult(data.output_data.image_url), 300);
+      } else if (data.status === 'failed') {
+        clearInterval(pollTimer);
+        showError(data.output_data?.error || '알 수 없는 오류');
+      }
+    } catch(e) { console.error('[poll]', e); }
+  }, 3000);
+}
+
+function showResult(url) {
+  lastImageUrl = url;
+  document.getElementById('genProgress').classList.add('d-none');
+  document.getElementById('genResult').classList.remove('d-none');
+
+  const img = document.getElementById('resultImg');
+  img.src = url;
+
+  const dl = document.getElementById('downloadBtn');
+  dl.href = url;
+  dl.download = `maesil_banner_${selectedSizeKey || 'custom'}.jpg`;
+
+  const dimText = selectedSizeKey === 'custom'
+    ? `${document.getElementById('customW').value}×${document.getElementById('customH').value}px`
+    : (selectedW && selectedH ? `${selectedW}×${selectedH}px` : '');
+  document.getElementById('resultDimensions').textContent = dimText;
+}
+
+function showError(msg) {
+  document.getElementById('genProgress').classList.add('d-none');
+  document.getElementById('genError').classList.remove('d-none');
+  document.getElementById('errorMsg').textContent = msg;
+}
+
+function openFullSize() {
+  if (!lastImageUrl) return;
+  document.getElementById('fullImg').src = lastImageUrl;
+  new bootstrap.Modal(document.getElementById('fullModal')).show();
+}
+
+function regenBanner() {
+  goStep(3);
+}
+
+function resetAll() {
+  if (pollTimer) clearInterval(pollTimer);
+  currentCreationId = null;
+  lastImageUrl = null;
+}
+
+// ── 브랜드 변경 ─────────────────────────────────────────────
+async function onBrandChange(brandId) {
+  const sel = document.getElementById('productSelect');
+  sel.innerHTML = '<option value="">로딩 중...</option>';
+  const res = await fetch(`/create/banner/products?brand_id=${brandId}`);
+  const data = await res.json();
+  sel.innerHTML = '<option value="">— 상품 미지정 —</option>' +
+    (data.products || []).map(p =>
+      `<option value="${p.id}" data-img="${(p.images||[''])[0]||''}">${p.name}${p.category?' · '+p.category:''}</option>`
+    ).join('');
+  onProductChange('');
+}
+
+function onProductChange(val) {
+  const sel = document.getElementById('productSelect');
+  const opt = sel.options[sel.selectedIndex];
+  const imgUrl = opt?.dataset?.img || '';
+  const preview = document.getElementById('productImgPreview');
+  const thumb   = document.getElementById('productImgThumb');
+  if (imgUrl) {
+    thumb.src = imgUrl;
+    preview.classList.remove('d-none');
+  } else {
+    preview.classList.add('d-none');
+  }
+}
+
+// ── 초기화 ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  goStep(1);
+  // 기본 선택
+  const firstSize = document.querySelector('.size-card');
+  if (firstSize) firstSize.click();
+  const firstLayout = document.querySelector('.layout-card');
+  if (firstLayout) firstLayout.click();
+  const firstBg = document.querySelector('.bg-type-card');
+  if (firstBg) firstBg.click();
+  // 기본 컬러
+  const firstDot = document.querySelector('.color-dot');
+  if (firstDot) { firstDot.style.outline='2px solid #333'; firstDot.style.outlineOffset='2px'; }
+  // 상품 이미지 초기
+  onProductChange('');
+  updateHeadlineCount();
+});
+</script>
+
+{% endblock %}

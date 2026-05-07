@@ -105,6 +105,13 @@ def _get_owned_brand(supabase, brand_id: str):
 
 
 def _save_brand(supabase, brand_id):
+    # founded_year — int 또는 None
+    _fy = request.form.get('founded_year', '').strip()
+    try:
+        founded_year = int(_fy) if _fy else None
+    except ValueError:
+        founded_year = None
+
     data = {
         'name': request.form.get('name', '').strip(),
         'industry': request.form.get('industry', '').strip(),
@@ -115,6 +122,18 @@ def _save_brand(supabase, brand_id):
         'keywords': _parse_list_field(request.form.get('keywords', '')),
         'avoid_words': _parse_list_field(request.form.get('avoid_words', '')),
         'extra_context': request.form.get('extra_context', '').strip(),
+        # ── 회사 정보
+        'founded_year':    founded_year,
+        'ceo_name':        request.form.get('ceo_name', '').strip() or None,
+        'employee_count':  request.form.get('employee_count', '').strip() or None,
+        'contact_phone':   request.form.get('contact_phone', '').strip() or None,
+        'contact_email':   request.form.get('contact_email', '').strip() or None,
+        'website':         request.form.get('website', '').strip() or None,
+        'address':         request.form.get('address', '').strip() or None,
+        # ── 회사 이력·성과
+        'certifications':  request.form.get('certifications', '').strip() or None,
+        'key_stats':       request.form.get('key_stats', '').strip() or None,
+        'references_text': request.form.get('references_text', '').strip() or None,
         'updated_at': now_kst().isoformat(),
     }
 
