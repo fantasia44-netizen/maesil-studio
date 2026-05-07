@@ -699,10 +699,12 @@ let productImageUrl    = '';
 let selectedBrandColor = '{{ (default_brand.primary_color if default_brand and default_brand.primary_color else "#e8355a") }}';
 let panelPlans         = [];
 let generatedImages    = [];
+let baseFluxImages     = [];   // 각 패널의 FLUX 원본 URL (말풍선 재합성 기준점)
 let panelManualImages  = [];   // 각 패널의 수동 업로드 이미지 URL (null = AI 생성)
 let carouselIdx        = 0;
 let regenModalIdx      = -1;   // 수정생성 팝업 대상 패널 인덱스
 let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
+let regenPreviewBaseUrl= null; // 팝업 이미지의 FLUX 원본 URL
 // selectedSubStyle removed — 세부화풍 섹션 삭제됨
 let currentCaptionTab  = 'short'; // Step 5 현재 캡션 탭
 let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
@@ -948,6 +950,7 @@ async function generateProductSlide() {
     if (!data.ok) throw new Error(data.message);
 
     generatedImages.push(data.image_url);
+    baseFluxImages.push(data.image_url);  // 제품슬라이드는 합성본이 곧 베이스
     panelManualImages.push(null);
     document.getElementById('singleImageView').classList.add('d-none');
     document.getElementById('carouselView').classList.remove('d-none');
@@ -1228,6 +1231,7 @@ function _updateImgSections() {
     if (!planMatchesQty) {
       panelPlans = [];
       generatedImages = [];
+      baseFluxImages = [];
       panelManualImages = [];
       document.getElementById('panelCards').innerHTML = '';
       document.getElementById('storyPlanBtn').classList.remove('d-none');
@@ -1277,6 +1281,7 @@ function selectStyle(styleId, el) {
   if (styleChanged && panelPlans.length > 0) {
     panelPlans = [];
     generatedImages = [];
+    baseFluxImages = [];
     panelManualImages = [];
     document.getElementById('panelCards').innerHTML = '';
     document.getElementById('genAllSection').classList.add('d-none');
@@ -1384,6 +1389,7 @@ async function generateImage() {
     bannerBaseUrl     = data.base_image_url || null;
     generatedImageUrl = data.image_url;
     generatedImages   = [data.image_url];
+    baseFluxImages    = [data.base_image_url || data.image_url];
     _showStep5Single(false, data.image_url);
     if (data.translated_prompt) {
       document.getElementById('fluxTranslatedText').textContent = data.translated_prompt;
@@ -1438,6 +1444,7 @@ async function generateStoryPlan() {
   document.getElementById('step4Error').classList.add('d-none');
   panelPlans        = [];
   generatedImages   = new Array(selectedQuantity).fill(null);
+  baseFluxImages    = new Array(selectedQuantity).fill(null);
   panelManualImages = new Array(selectedQuantity).fill(null);
 
   try {
@@ -1567,6 +1574,7 @@ async function generateAllImages() {
   progress.classList.remove('d-none');
 
   generatedImages = new Array(panelPlans.length).fill(null);
+  baseFluxImages  = new Array(panelPlans.length).fill(null);
 
   for (let i = 0; i < panelPlans.length; i++) {
     const p = panelPlans[i];
@@ -1584,6 +1592,7 @@ async function generateAllImages() {
     // 수동 업로드된 패널은 생성 건너뜀
     if (panelManualImages[i]) {
       generatedImages[i] = panelManualImages[i];
+      baseFluxImages[i]  = panelManualImages[i];
       if (statusEl) {
         statusEl.style.background='#e0f2fe'; statusEl.style.color='#0369a1';
         statusEl.textContent='✓ 수동';
@@ -1615,12 +1624,14 @@ async function generateAllImages() {
       if (!data.ok) throw new Error(data.message);
 
       generatedImages[i] = data.image_url;
+      baseFluxImages[i]  = data.base_image_url || data.image_url;
       if (statusEl) {
         statusEl.style.background='#dcfce7'; statusEl.style.color='#166534';
         statusEl.textContent='✓ 완료';
       }
     } catch (err) {
       generatedImages[i] = null;
+      baseFluxImages[i]  = null;
       if (statusEl) {
         statusEl.style.background='#fee2e2'; statusEl.style.color='#991b1b';
         statusEl.textContent='실패';
@@ -1700,10 +1711,12 @@ function _buildThumbStrip() {
       const dst = i;
       if (src === dst || src < 0) return;
       // 배열 순서 변경
-      const imgMoved    = generatedImages.splice(src, 1)[0];
-      const manualMoved = panelManualImages.splice(src, 1)[0];
-      const planMoved   = panelPlans.splice(src, 1)[0];
+      const imgMoved     = generatedImages.splice(src, 1)[0];
+      const baseImgMoved = baseFluxImages.splice(src, 1)[0];
+      const manualMoved  = panelManualImages.splice(src, 1)[0];
+      const planMoved    = panelPlans.splice(src, 1)[0];
       generatedImages.splice(dst, 0, imgMoved);
+      baseFluxImages.splice(dst, 0, baseImgMoved);
       panelManualImages.splice(dst, 0, manualMoved);
       panelPlans.splice(dst, 0, planMoved);
       // 현재 포커스 인덱스 보정
@@ -1868,7 +1881,8 @@ async function regenModalGenerate() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
-    regenPreviewUrl = data.image_url;
+    regenPreviewUrl     = data.image_url;
+    regenPreviewBaseUrl = data.base_image_url || data.image_url;
     document.getElementById('regenPreviewImg').src = regenPreviewUrl;
     document.getElementById('regenPreviewArea').classList.remove('d-none');
     document.getElementById('regenFooterGenerate').classList.add('d-none');
@@ -1889,6 +1903,7 @@ async function regenModalGenerate() {
 function regenModalReplace() {
   if (!regenPreviewUrl || regenModalIdx < 0) return;
   generatedImages[regenModalIdx] = regenPreviewUrl;
+  baseFluxImages[regenModalIdx]  = regenPreviewBaseUrl || regenPreviewUrl;
   _buildThumbStrip();
   carouselShowImage(regenModalIdx);
   bootstrap.Modal.getOrCreateInstance(document.getElementById('regenModal')).hide();
@@ -2021,7 +2036,7 @@ async function recompositeWebtoon() {
 
   const inCarousel = !document.getElementById('carouselView').classList.contains('d-none');
   const baseUrl = inCarousel
-    ? generatedImages[carouselIdx]
+    ? (baseFluxImages[carouselIdx] || generatedImages[carouselIdx])
     : (bannerBaseUrl || generatedImageUrl);
 
   try {
