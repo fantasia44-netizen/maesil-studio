@@ -15,10 +15,10 @@
     <div class="card">
       <div class="card-header py-3"><h6 class="mb-0 fw-bold">충전 패키지 선택</h6></div>
       <div class="card-body">
-        {% for i, pkg in enumerate(POINT_PACKAGES) %}
+        {% for pkg in POINT_PACKAGES %}
         <div class="border rounded-3 p-3 mb-2 d-flex align-items-center justify-content-between
                     {% if pkg.get('badge') %}border-success{% endif %}"
-             style="cursor:pointer" onclick="selectPackage({{ i }})">
+             style="cursor:pointer" onclick="selectPackage({{ loop.index0 }})">
           <div>
             <div class="fw-bold">{{ pkg.label }}</div>
             <div class="text-muted small">{{ pkg.price | number }}원

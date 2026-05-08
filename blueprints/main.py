@@ -224,6 +224,58 @@ def history_detail(creation_id):
                            CREATION_LABELS=CREATION_LABELS)
 
 
+@main_bp.route('/history/<creation_id>/cancel', methods=['POST'])
+@login_required
+def history_cancel(creation_id):
+    """생성 중 멈춘 작업을 사용자가 직접 취소 + 포인트 환불."""
+    supabase = current_app.supabase
+    try:
+        # 접근 권한 확인 (본인 또는 같은 operator)
+        q = supabase.table('creations').select(
+            'id, status, user_id, operator_id, points_used'
+        ).eq('id', creation_id)
+        if current_user.operator_id:
+            q = q.eq('operator_id', current_user.operator_id)
+        else:
+            q = q.eq('user_id', current_user.id)
+        result = q.maybe_single().execute()
+
+        if not result or not result.data:
+            return jsonify(ok=False, message='작업을 찾을 수 없습니다.'), 404
+
+        creation = result.data
+        if creation.get('status') != 'generating':
+            return jsonify(ok=False, message=f"취소 불가 — 현재 상태: {creation.get('status')}"), 400
+
+        pts      = int(creation.get('points_used') or 0)
+        user_id  = creation.get('user_id') or current_user.id
+        op_id    = creation.get('operator_id')
+
+        # status → failed
+        supabase.table('creations').update({
+            'status': 'failed',
+            'output_data': {'error': '사용자가 직접 취소한 작업'},
+        }).eq('id', creation_id).execute()
+
+        # 포인트 환불
+        refunded = 0
+        if pts > 0:
+            from services.point_service import add_points
+            add_points(
+                current_user, pts, 'refund',
+                ref_id=creation_id,
+                note='쇼츠 영상 생성 취소 — 포인트 환불',
+            )
+            refunded = pts
+
+        logger.info('[history_cancel] creation=%s user=%s refunded=%dP', creation_id, user_id, refunded)
+        return jsonify(ok=True, message=f'취소 완료. {refunded}P 환불되었습니다.', refunded=refunded)
+
+    except Exception as e:
+        logger.error('[history_cancel] error: %s', e)
+        return jsonify(ok=False, message=f'오류: {e}'), 500
+
+
 @main_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():

@@ -57,6 +57,14 @@
                    id="liveBar" style="width:{{ [5, od.get('progress',0) * 14] | max }}%"></div>
             </div>
             {% endif %}
+
+            <!-- 취소 버튼: 생성 중 상태에서만 표시 -->
+            <div class="mt-4">
+              <button id="cancelBtn" class="btn btn-sm btn-outline-danger" onclick="cancelGeneration()">
+                <i class="bi bi-x-circle me-1"></i>취소 및 포인트 환불
+              </button>
+              <p class="small text-muted mt-1" style="font-size:0.75rem">서버 오류로 멈춘 경우 취소하면 {{ creation.points_used | number }}P가 즉시 환불됩니다</p>
+            </div>
           </div>
 
         {% elif creation.status == 'failed' %}
@@ -64,6 +72,9 @@
           <div class="text-center py-4 text-muted">
             <i class="bi bi-exclamation-triangle fs-1 d-block mb-2 text-danger" style="opacity:.6"></i>
             <p class="mb-0">생성에 실패했습니다.</p>
+            {% if od.get('error') %}
+            <p class="small text-danger mt-1">{{ od.error }}</p>
+            {% endif %}
           </div>
 
         {% elif not has_text and not has_image_url and not has_images and not has_video_url %}
@@ -222,6 +233,37 @@ function openImg(url) {
   new bootstrap.Modal(document.getElementById('imgModal')).show();
 }
 
+// ── 취소 및 포인트 환불 ──────────────────────────────────────
+{% if not is_done and creation.status != 'failed' %}
+function cancelGeneration() {
+  if (!confirm('생성을 취소하고 {{ creation.points_used | number }}P를 환불받겠습니까?')) return;
+  const btn = document.getElementById('cancelBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>취소 중...';
+
+  fetch('/history/{{ creation.id }}/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() if csrf_token is defined else "" }}' },
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      if (window.refreshBalance) window.refreshBalance();
+      location.reload();
+    } else {
+      alert('오류: ' + (data.message || '알 수 없는 오류'));
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>취소 및 포인트 환불';
+    }
+  })
+  .catch(() => {
+    alert('네트워크 오류가 발생했습니다.');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>취소 및 포인트 환불';
+  });
+}
+{% endif %}
+
 // ── 생성 중 자동 폴링 ────────────────────────────────────────
 {% if not is_done and creation.status != 'failed' %}
 (function () {
@@ -256,9 +298,6 @@ function openImg(url) {
       fetch(location.href, { cache: 'no-store' })
         .then(r => r.text())
         .then(html => {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, 'text/html');
-          const statusBadge = doc.querySelector('.badge');
           const isGenerating = html.includes('생성 중입니다');
           if (!isGenerating) {
             clearInterval(pollTimer);
