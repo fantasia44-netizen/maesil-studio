@@ -1,5 +1,6 @@
 """쇼츠 영상 생성 Celery 태스크"""
 import logging
+import os
 
 from celery_app import celery
 
