@@ -131,13 +131,17 @@ def create_banner_image(bg_url: str,
                         text_gravity: str = 'bottom-left',
                         text_scale: float = 1.0,
                         text_color: str = 'white',
-                        overlay_strength: str = 'medium') -> str:
+                        overlay_strength: str = 'medium',
+                        text_x_ratio: float | None = None,
+                        text_y_ratio: float | None = None) -> str:
     """FLUX 배경 + 그라디언트 배너 + 한글 텍스트 레이어
 
     text_gravity:     'bottom-left'(기본), 'bottom-center', 'top-left', 'top-center', 'center-left'
     text_scale:       폰트 사이즈 배율 (기본 1.0)
     text_color:       'white' | 'black' | 'yellow' | '#rrggbb'
     overlay_strength: 'none' | 'light' | 'medium' | 'dark'
+    text_x_ratio:     자유 위치 X 비율 (0.0~1.0). 설정 시 text_gravity 무시.
+    text_y_ratio:     자유 위치 Y 비율 (0.0~1.0). 설정 시 text_gravity 무시.
     """
     img = _load(bg_url).resize(pil_size, Image.LANCZOS)
     W, H = img.size
@@ -160,26 +164,40 @@ def create_banner_image(bg_url: str,
     _OV_MAX = {'none': 0, 'light': 100, 'medium': 200, 'dark': 255}
     ov_max = _OV_MAX.get(overlay_strength, 200)
 
-    # ── 위치별 파라미터 결정 ─────────────────────────────
-    is_top    = text_gravity.startswith('top')
-    is_center = text_gravity.startswith('center')
+    # ── 자유 위치 여부 결정 ──────────────────────────────
+    _free_pos = (text_x_ratio is not None and text_y_ratio is not None)
 
-    if is_top:
-        gs_top_ratio, gs_bot_ratio = 0.0,  0.45
-        y_start,      x_start      = 0.05, 0.06 if 'left' in text_gravity else 0.25
-    elif is_center:
-        gs_top_ratio, gs_bot_ratio = 0.20, 0.75
-        y_start,      x_start      = 0.32, 0.06
-    else:  # bottom-left / bottom-center
-        gs_top_ratio, gs_bot_ratio = 0.42, 1.0
-        y_start,      x_start      = 0.45, 0.06 if 'left' in text_gravity else 0.25
+    if _free_pos:
+        x_start   = float(text_x_ratio)
+        y_start   = float(text_y_ratio)
+        is_top    = False
+        is_center = False
+        gs_top_ratio = gs_bot_ratio = 0.0  # 그라디언트 미사용
+    else:
+        # ── 위치별 파라미터 결정 ─────────────────────────
+        is_top    = text_gravity.startswith('top')
+        is_center = text_gravity.startswith('center')
 
-    # ── 그라디언트 오버레이 ──────────────────────────────
+        if is_top:
+            gs_top_ratio, gs_bot_ratio = 0.0,  0.45
+            y_start,      x_start      = 0.05, 0.06 if 'left' in text_gravity else 0.25
+        elif is_center:
+            gs_top_ratio, gs_bot_ratio = 0.20, 0.75
+            y_start,      x_start      = 0.32, 0.06
+        else:  # bottom-left / bottom-center
+            gs_top_ratio, gs_bot_ratio = 0.42, 1.0
+            y_start,      x_start      = 0.45, 0.06 if 'left' in text_gravity else 0.25
+
+    # ── 그라디언트/균일 오버레이 ─────────────────────────
     ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     dov = ImageDraw.Draw(ov)
 
     if ov_max > 0:
-        if is_top:
+        if _free_pos:
+            # 자유 위치: 전체 균일 오버레이 (가독성 확보)
+            ov = Image.new('RGBA', (W, H), (8, 8, 8, min(ov_max, 110)))
+            dov = ImageDraw.Draw(ov)
+        elif is_top:
             top_end = int(H * gs_bot_ratio)
             for y_px in range(0, top_end):
                 a = int(ov_max * (1 - y_px / top_end))

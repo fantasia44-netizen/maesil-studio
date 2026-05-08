@@ -674,6 +674,13 @@ def instagram_recomposite_banner():
     text_color       = (data.get('text_color')        or 'white').strip()
     overlay_strength = (data.get('overlay_strength')  or 'medium').strip()
 
+    # 자유 위치 파라미터 (드래그 에디터)
+    try:
+        text_x_ratio = float(data['text_x_ratio']) if data.get('text_x_ratio') is not None else None
+        text_y_ratio = float(data['text_y_ratio']) if data.get('text_y_ratio') is not None else None
+    except (ValueError, TypeError):
+        text_x_ratio = text_y_ratio = None
+
     if not base_url:
         return jsonify(ok=False, message='base_image_url이 필요합니다.')
 
@@ -687,6 +694,7 @@ def instagram_recomposite_banner():
         data_url  = create_banner_image(
             base_url, texts, brand_color, pil_size, text_gravity, text_scale,
             text_color=text_color, overlay_strength=overlay_strength,
+            text_x_ratio=text_x_ratio, text_y_ratio=text_y_ratio,
         )
         filename  = f'insta_banner_r_{uuid.uuid4().hex[:8]}.jpg'
         final_url = upload_to_supabase(data_url, current_user.id, filename)
@@ -694,6 +702,41 @@ def instagram_recomposite_banner():
     except Exception as e:
         logger.error(f'[recomposite-banner] {e}')
         return jsonify(ok=False, message=str(e))
+
+
+@create_bp.route('/instagram/image-library', methods=['GET'])
+@login_required
+def instagram_image_library():
+    """최근 생성된 이미지 목록 (이미지 삽입 라이브러리용, img_preview / img_ideogram)"""
+    supabase = current_app.supabase
+    try:
+        uid = current_user.id
+        oid = getattr(current_user, 'operator_id', None)
+        q = supabase.table('creations') \
+            .select('id, output_data, created_at, creation_type')
+        if oid:
+            q = q.eq('operator_id', oid)
+        else:
+            q = q.eq('user_id', uid)
+        rows = (q.in_('creation_type', ['img_preview', 'img_ideogram'])
+                 .eq('status', 'done')
+                 .order('created_at', desc=True)
+                 .limit(30)
+                 .execute()).data or []
+    except Exception as e:
+        logger.debug(f'[insta] image-library 조회 실패: {e}')
+        return jsonify(ok=True, images=[])
+
+    images = []
+    for r in rows:
+        url = (r.get('output_data') or {}).get('image_url', '')
+        if url:
+            images.append({
+                'url':        url,
+                'created_at': (r.get('created_at') or '')[:10],
+                'type':       r.get('creation_type', ''),
+            })
+    return jsonify(ok=True, images=images)
 
 
 @create_bp.route('/instagram/product-slide', methods=['POST'])
