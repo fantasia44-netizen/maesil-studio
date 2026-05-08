@@ -20,7 +20,7 @@ ENGINE_COST_MAP = {
 @create_bp.route('/image/generate', methods=['POST'])
 @login_required
 def image_generate():
-    err = check_ai_rate_limit('image_generate', max_per_hour=30)
+    err = check_ai_rate_limit('image_generate', max_per_hour=100)
     if err:
         return jsonify(ok=False, message=err), 429
     supabase = current_app.supabase

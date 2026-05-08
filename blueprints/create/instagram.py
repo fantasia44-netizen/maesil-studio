@@ -552,7 +552,7 @@ def instagram_image_prompt():
 @login_required
 def instagram_image_generate():
     """이미지 생성 — 스타일별 FLUX/Ideogram + PIL 합성"""
-    err = check_ai_rate_limit('instagram_image', max_per_hour=20)
+    err = check_ai_rate_limit('instagram_image', max_per_hour=100)
     if err:
         return jsonify(ok=False, message=err), 429
     supabase = current_app.supabase
