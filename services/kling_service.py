@@ -173,19 +173,22 @@ def submit_image2video(
     duration: int = 5,
     cfg_scale: float = 0.5,
     base_url: str = _BASE_URL,
+    max_retries: int = 4,
 ) -> str:
     """이미지 URL → Kling image2video 제출 → task_id 반환.
+
+    429 Too Many Requests 시 지수 백오프 재시도 (최대 4회).
 
     Args:
         image_url: 공개 접근 가능한 이미지 URL (FLUX 생성 결과)
         scene_role: 씬 역할 (hook/empathy/solution/benefit/cta)
         model: kling-v1-6, kling-v2 등
         duration: 5 또는 10 (초)
+        max_retries: 429 발생 시 최대 재시도 횟수
     Returns:
         task_id 문자열
     """
     motion_prompt = KLING_MOTION_BY_ROLE.get(scene_role, _DEFAULT_MOTION)
-    # 9:16 세로 광고 최적 추가
     full_prompt = f'{motion_prompt}, vertical 9:16 shorts format, no text, no watermark'
 
     payload = {
@@ -200,24 +203,45 @@ def submit_image2video(
     }
 
     url = f'{base_url.rstrip("/")}/v1/videos/image2video'
-    resp = requests.post(
-        url,
-        json=payload,
-        headers=_headers(access_key, secret_key),
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
 
-    code = data.get('code', -1)
-    if code != 0:
-        raise RuntimeError(f'Kling API 오류 (code={code}): {data.get("message", data)}')
+    for attempt in range(max_retries + 1):
+        resp = requests.post(
+            url,
+            json=payload,
+            headers=_headers(access_key, secret_key),
+            timeout=30,
+        )
 
-    task_id = data.get('data', {}).get('task_id', '')
-    if not task_id:
-        raise RuntimeError(f'task_id 없음: {data}')
-    logger.info('[kling] 제출 완료: task_id=%s scene_role=%s', task_id, scene_role)
-    return task_id
+        if resp.status_code == 429:
+            # Retry-After 헤더 있으면 그 값, 없으면 지수 백오프 (15→30→60→120초)
+            retry_after = int(resp.headers.get('Retry-After', 0))
+            wait = retry_after if retry_after > 0 else min(15 * (2 ** attempt), 120)
+            if attempt < max_retries:
+                logger.warning('[kling] 429 rate limit — %d초 후 재시도 (attempt %d/%d)',
+                               wait, attempt + 1, max_retries)
+                time.sleep(wait)
+                continue
+            else:
+                raise RuntimeError(
+                    f'Kling API rate limit 초과 — {max_retries}회 재시도 실패. '
+                    '잠시 후 다시 시도해주세요. (429 Too Many Requests)'
+                )
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        code = data.get('code', -1)
+        if code != 0:
+            raise RuntimeError(f'Kling API 오류 (code={code}): {data.get("message", data)}')
+
+        task_id = data.get('data', {}).get('task_id', '')
+        if not task_id:
+            raise RuntimeError(f'task_id 없음: {data}')
+        logger.info('[kling] 제출 완료: task_id=%s scene_role=%s (attempt %d)',
+                    task_id, scene_role, attempt + 1)
+        return task_id
+
+    raise RuntimeError('Kling 제출 실패 — 재시도 횟수 초과')
 
 
 # ════════════════════════════════════════════════════════════

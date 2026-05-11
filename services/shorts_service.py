@@ -13,6 +13,7 @@ import random
 import re
 import subprocess
 import tempfile
+import time
 import threading
 import uuid
 from io import BytesIO
@@ -1275,6 +1276,10 @@ def run_kling_shorts_pipeline(
                 'progress': step_base,
                 'step': f'씬{i+1}/{n} Kling 영상 생성 제출 중',
             })
+            # 첫 씬 이후 씬 간 딜레이 — rate limit 회피 (3초)
+            if i > 0:
+                time.sleep(3)
+
             task_id = submit_image2video(
                 image_url=current_img_url,
                 scene_role=role,
