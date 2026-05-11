@@ -313,6 +313,64 @@ def shorts_upload_ref_image():
 
 
 # ─────────────────────────────────────────────────────────────
+# 내가 생성한 이미지 이력 (Step 5 기준 이미지 선택용)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/my-images', methods=['GET'])
+@login_required
+def shorts_my_images():
+    """최근 생성 이미지 목록 반환 (이미지 생성 이력 + 상품 이미지).
+
+    Step 5에서 기준 이미지를 기존 생성물에서 선택할 때 사용.
+    """
+    supabase = current_app.supabase
+
+    # 1) 이미지 생성 이력 — output_data.image_url 이 있는 creation 타입만
+    IMAGE_TYPES = (
+        'image_generation', 'img_preview', 'img_ideogram',
+        'bg_replace', 'bg_remove_adv', 'banner', 'banner_product', 'banner_text',
+    )
+    try:
+        rows = supabase.table('creations').select(
+            'id, creation_type, output_data, created_at'
+        ).eq('user_id', current_user.id).eq('status', 'done').in_(
+            'creation_type', list(IMAGE_TYPES)
+        ).order('created_at', desc=True).limit(40).execute()
+    except Exception as e:
+        logger.error('[shorts/my-images] creations query: %s', e)
+        rows = None
+
+    images = []
+    seen = set()
+    for row in (rows.data or []):
+        od = row.get('output_data') or {}
+        url = od.get('image_url') or ''
+        if url and url not in seen:
+            seen.add(url)
+            images.append({
+                'url':   url,
+                'type':  row.get('creation_type', ''),
+                'date':  (row.get('created_at') or '')[:10],
+            })
+
+    # 2) 상품 이미지 — 브랜드 상관없이 유저 상품 전체
+    try:
+        prods = supabase.table('products').select(
+            'name, images'
+        ).eq('user_id', current_user.id).order('created_at', desc=True).limit(30).execute()
+        for p in (prods.data or []):
+            imgs = p.get('images') or []
+            for img in (imgs if isinstance(imgs, list) else []):
+                if isinstance(img, str) and img and img not in seen:
+                    seen.add(img)
+                    images.append({'url': img, 'type': 'product', 'label': p.get('name', '상품')})
+    except Exception as e:
+        logger.warning('[shorts/my-images] products query: %s', e)
+
+    return jsonify(ok=True, images=images[:60])
+
+
+# ─────────────────────────────────────────────────────────────
 # 영상 생성 (비동기 백그라운드)
 # ─────────────────────────────────────────────────────────────
 

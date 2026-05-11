@@ -217,6 +217,9 @@
                 <i class="bi bi-upload me-1"></i>내 이미지 사용
                 <input type="file" id="customImgInput" accept="image/*" class="d-none" onchange="onCustomImage(this)">
               </label>
+              <button class="btn btn-sm btn-outline-secondary" onclick="openMyImagesModal()">
+                <i class="bi bi-images me-1"></i>이전 이미지 불러오기
+              </button>
               <button class="btn btn-sm btn-primary" onclick="approveImageAndNext()">
                 <i class="bi bi-check-lg me-1"></i>이 이미지로 진행
               </button>
@@ -228,6 +231,31 @@
       <div id="imgPreviewError" class="d-none"></div>
       <div class="d-flex justify-content-between mt-4">
         <button class="btn btn-outline-secondary btn-sm" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ 이전 이미지 선택 모달 ══════ -->
+<div class="modal fade" id="myImagesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-images me-2"></i>이전 이미지 불러오기</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div id="myImagesLoading" class="text-center py-4">
+          <div class="spinner-border text-primary spinner-border-sm"></div>
+          <div class="small text-muted mt-2">이미지 불러오는 중...</div>
+        </div>
+        <div id="myImagesEmpty" class="d-none text-center py-4 text-muted small">
+          생성된 이미지가 없습니다.
+        </div>
+        <div id="myImagesGrid" class="d-none">
+          <div class="text-muted small mb-2">클릭하면 기준 이미지로 선택됩니다.</div>
+          <div id="myImagesItems" class="d-flex flex-wrap gap-2"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -776,6 +804,75 @@ async function onCustomImage(input) {
     alert('업로드 오류: ' + err.message);
     document.getElementById('imgPreviewResult').classList.remove('d-none');
   }
+}
+
+// ══════════════════════════════════════════════════════
+// 이전 이미지 불러오기 모달
+// ══════════════════════════════════════════════════════
+
+let _myImagesLoaded = false;
+
+async function openMyImagesModal() {
+  const modal = new bootstrap.Modal(document.getElementById('myImagesModal'));
+  modal.show();
+  if (_myImagesLoaded) return;
+
+  document.getElementById('myImagesLoading').classList.remove('d-none');
+  document.getElementById('myImagesEmpty').classList.add('d-none');
+  document.getElementById('myImagesGrid').classList.add('d-none');
+
+  try {
+    const res  = await fetch('/create/shorts/my-images', {
+      headers: {'X-CSRFToken': CSRF},
+    });
+    const data = await res.json();
+    document.getElementById('myImagesLoading').classList.add('d-none');
+
+    if (!data.ok || !data.images || data.images.length === 0) {
+      document.getElementById('myImagesEmpty').classList.remove('d-none');
+      return;
+    }
+
+    const container = document.getElementById('myImagesItems');
+    container.innerHTML = '';
+    data.images.forEach(img => {
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'position:relative;cursor:pointer;border-radius:6px;overflow:hidden;border:2px solid transparent;transition:.15s';
+      wrapper.onmouseenter = () => wrapper.style.borderColor = '#0d6efd';
+      wrapper.onmouseleave = () => wrapper.style.borderColor = 'transparent';
+      wrapper.onclick = () => selectMyImage(img.url);
+
+      const el = document.createElement('img');
+      el.src = img.url;
+      el.style.cssText = 'width:90px;height:120px;object-fit:cover;display:block';
+      el.alt = img.label || img.type || '';
+
+      const badge = document.createElement('div');
+      badge.style.cssText = 'position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:.6rem;padding:2px 4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      badge.textContent = img.label || img.date || img.type || '';
+
+      wrapper.appendChild(el);
+      wrapper.appendChild(badge);
+      container.appendChild(wrapper);
+    });
+
+    document.getElementById('myImagesGrid').classList.remove('d-none');
+    _myImagesLoaded = true;
+
+  } catch (err) {
+    document.getElementById('myImagesLoading').classList.add('d-none');
+    document.getElementById('myImagesEmpty').textContent = '불러오기 실패: ' + err.message;
+    document.getElementById('myImagesEmpty').classList.remove('d-none');
+  }
+}
+
+function selectMyImage(url) {
+  bootstrap.Modal.getInstance(document.getElementById('myImagesModal'))?.hide();
+  window._previewImageUrl = url;
+  document.getElementById('previewImg').src = url;
+  document.getElementById('imgPreviewLoading').classList.add('d-none');
+  document.getElementById('imgPreviewResult').classList.remove('d-none');
+  document.getElementById('imgPreviewError').classList.add('d-none');
 }
 
 // ══════════════════════════════════════════════════════
