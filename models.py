@@ -77,6 +77,8 @@ POINT_COSTS = {
     'dp_flux_text':        300,  # FLUX 배경 + PIL 텍스트 오버레이
     # 상세페이지 이미지 세트 — 스토리 빌더 섹션별
     'detail_page_image':   250,  # 스토리 섹션 이미지 (PIL 합성, 실제 비용은 섹션별 override)
+    # 배너 이미지
+    'banner':               80,  # FLUX Schnell 배경 + PIL 합성 (장당)
 }
 
 # ──────────────────────────────────────────
@@ -142,6 +144,7 @@ CREATION_MODELS = {
     'instagram':      _HAIKU,
     'thumbnail_text': _HAIKU,
     'ad_copy':        _HAIKU,
+    'banner_copy':    _HAIKU,
     # Sonnet — 고품질 / 설득형 문서
     'detail_page':          _SONNET,
     'press_release':        _SONNET,
@@ -173,7 +176,9 @@ CREATION_LABELS = {
     'detail_page_image':'상세페이지 이미지 세트',
     'card_news':        '인스타 카드뉴스',
     'logo':             '브랜드 로고',
+    'banner':           '배너 이미지',
     # 영상
+    'shorts_script':   '쇼츠 대본',
     'shorts_video':    '쇼츠/릴스 영상',
     # 홍보 자료
     'business_proposal':    '거래처 제안서',
@@ -181,6 +186,8 @@ CREATION_LABELS = {
     'catalog':              '카탈로그',
     'leaflet':              '리플릿',
     'flyer':                '전단지',
+    'brand_package':        '브랜드 패키지',
+    'product_launch':       '신제품 출시 자료',
 }
 
 
@@ -199,6 +206,7 @@ MENU_REGISTRY = [
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
     ('상세페이지 빌더', 'bi-layout-text-sidebar', 'create.detail_page_builder', None, '콘텐츠 생성'),
     # ── 홍보물
+    ('배너 만들기',   'bi-images',             'create.banner',    None, '홍보물'),
     ('홍보물 만들기', 'bi-megaphone',          'create.promo',     None, '홍보물'),
     # ── 관리
     ('생성 이력',   'bi-clock-history',       'main.history',         None,  '관리'),

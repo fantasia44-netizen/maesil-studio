@@ -155,6 +155,7 @@ _NO_CJK = (
     ', no text, no letters, no words, no signs, no labels, no watermarks'
     ', no Chinese characters, no Japanese characters, no Korean characters'
     ', no kanji, no hanzi, no hangul, no CJK glyphs'
+    ', no speech bubbles, no word balloons, no dialogue bubbles, no comic balloons'
     ', absolutely no writing of any language on any surface'
 )
 

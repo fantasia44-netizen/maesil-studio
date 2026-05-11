@@ -1,7 +1,7 @@
 """쇼츠/릴스 영상 자동 생성 파이프라인
 
 구조: 훅 → 공감 → 해결 → 핵심혜택 → CTA  (5씬, 7~20초)
-엔진: FLUX Schnell(이미지) + Google TTS(나레이션) + FFmpeg(조립)
+엔진: FLUX Schnell(이미지) + Google TTS(나레이션) + FFmpeg(조립) + Suno BGM(배경음)
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import base64
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 import tempfile
@@ -20,6 +21,42 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
+
+# ── FFmpeg 프로세스 추적 레지스트리 (좀비 방지) ──────────────────
+_tracked_procs: set = set()
+_tracked_procs_lock = threading.Lock()
+
+
+def _register_proc(proc) -> None:
+    """실행 중인 FFmpeg 프로세스 등록."""
+    with _tracked_procs_lock:
+        _tracked_procs.add(proc)
+
+
+def _unregister_proc(proc) -> None:
+    """FFmpeg 프로세스 추적 해제."""
+    with _tracked_procs_lock:
+        _tracked_procs.discard(proc)
+
+
+def _kill_all_tracked_procs() -> None:
+    """워커 종료 시 추적 중인 모든 FFmpeg 프로세스 그룹 강제 종료."""
+    import signal as _signal
+    with _tracked_procs_lock:
+        procs = list(_tracked_procs)
+    for proc in procs:
+        try:
+            if hasattr(os, 'killpg'):  # POSIX(Linux) only
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, _signal.SIGKILL)
+            else:
+                proc.kill()  # Windows fallback
+            logger.info('[ffmpeg] 좀비 방지 — PID %d 프로세스 그룹 종료', proc.pid)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
 
 # ── 씬 역할 정의 ─────────────────────────────────────────────
 SCENE_ROLES = [
@@ -50,6 +87,195 @@ _NO_ANATOMY = (
     ', no extra limbs, no extra arms, no extra hands, no extra legs'
     ', no duplicate body parts, realistic body structure'
 )
+
+
+# ════════════════════════════════════════════════════════
+# BGM 분위기 정의 (Suno 생성 폴더 구조)
+# static/sounds/bgm/{mood_key}/ 에 MP3 파일 보관
+# ════════════════════════════════════════════════════════
+
+BGM_MOODS: dict[str, dict] = {
+    'energetic': {
+        'label': '에너지틱',
+        'desc': '역동적·트렌디 — 스포츠·건강기능식품·다이어트',
+        'suno_prompt': (
+            'upbeat energetic pop electronic, driving synth bass, '
+            'punchy drums, motivational vibe, no lyrics, instrumental, '
+            '120-128 BPM, Korean commercial ad style, 30 seconds'
+        ),
+    },
+    'emotional': {
+        'label': '감성적',
+        'desc': '따뜻하고 공감되는 — 화장품·라이프스타일·육아',
+        'suno_prompt': (
+            'warm emotional acoustic pop, soft piano melody, '
+            'gentle strings, heartfelt mood, no lyrics, instrumental, '
+            '80-90 BPM, cinematic warmth, 30 seconds'
+        ),
+    },
+    'upbeat_pop': {
+        'label': '경쾌한 팝',
+        'desc': '밝고 신나는 — 식품·음료·일상 소비재',
+        'suno_prompt': (
+            'bright cheerful K-pop style, light guitar strum, '
+            'happy whistling, summer vibes, no lyrics, instrumental, '
+            '100-110 BPM, fresh and fun, 30 seconds'
+        ),
+    },
+    'luxury': {
+        'label': '고급스러운',
+        'desc': '우아하고 세련된 — 럭셔리 뷰티·패션·프리미엄',
+        'suno_prompt': (
+            'elegant cinematic luxury, soft jazz piano, '
+            'subtle orchestral sweep, sophisticated mood, no lyrics, '
+            'instrumental, 70-80 BPM, premium brand feel, 30 seconds'
+        ),
+    },
+    'playful': {
+        'label': '귀엽고 재미있는',
+        'desc': '캐릭터·어린이·캐주얼 앱·게임',
+        'suno_prompt': (
+            'cute playful cartoon style, xylophone melody, '
+            'bouncy ukulele, fun quirky sound effects, no lyrics, '
+            'instrumental, 115-125 BPM, light and whimsical, 30 seconds'
+        ),
+    },
+    'dramatic': {
+        'label': '드라마틱',
+        'desc': '강렬한 훅·문제 제시 — 보험·법률·솔루션 서비스',
+        'suno_prompt': (
+            'dramatic cinematic tension, pulsing low synth, '
+            'building percussion, suspenseful mood, no lyrics, '
+            'instrumental, 90-100 BPM, problem-aware tone, 30 seconds'
+        ),
+    },
+    'calm_ambient': {
+        'label': '차분한 앰비언트',
+        'desc': '힐링·웰니스·명상·수면',
+        'suno_prompt': (
+            'calm lo-fi ambient, soft pad chords, '
+            'gentle nature sounds, relaxing meditation vibe, no lyrics, '
+            'instrumental, 60-70 BPM, peaceful and serene, 30 seconds'
+        ),
+    },
+    'trendy_hiphop': {
+        'label': '트렌디 힙합',
+        'desc': '패션·뷰티·MZ세대 타겟',
+        'suno_prompt': (
+            'trendy lo-fi hip hop beat, warm vinyl crackle, '
+            'chill boom-bap, modern Korean street vibe, no lyrics, '
+            'instrumental, 85-95 BPM, cool and stylish, 30 seconds'
+        ),
+    },
+    'inspiring': {
+        'label': '영감·동기부여',
+        'desc': '교육·비즈니스·자기계발·SaaS',
+        'suno_prompt': (
+            'inspiring uplifting corporate, light piano arpeggios, '
+            'rising strings, motivational crescendo, no lyrics, '
+            'instrumental, 95-105 BPM, forward momentum, 30 seconds'
+        ),
+    },
+    'korean_vibe': {
+        'label': '한국 감성',
+        'desc': 'K-뷰티·전통·한식·국내 정서',
+        'suno_prompt': (
+            'modern K-indie acoustic, soft gayageum-inspired melody, '
+            'gentle acoustic guitar, nostalgic Korean sentiment, no lyrics, '
+            'instrumental, 80-90 BPM, warm and familiar, 30 seconds'
+        ),
+    },
+}
+
+# 이미지 스타일 → BGM 분위기 매핑
+STYLE_TO_MOOD: dict[str, list[str]] = {
+    'realistic_banner': ['emotional', 'inspiring', 'luxury'],
+    'webtoon':          ['playful',   'upbeat_pop', 'trendy_hiphop'],
+    'ghibli':           ['calm_ambient', 'emotional', 'korean_vibe'],
+    'flat_modern':      ['trendy_hiphop', 'energetic', 'upbeat_pop'],
+    'disney':           ['playful',   'upbeat_pop', 'inspiring'],
+}
+
+_BGM_ROOT: str = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'static', 'sounds', 'bgm'
+)
+
+
+def _list_bgm_files(mood: str | None = None) -> list[str]:
+    """지정 mood 폴더(또는 전체)에서 MP3 파일 목록 반환."""
+    root = os.path.normpath(_BGM_ROOT)
+    if mood:
+        folder = os.path.join(root, mood)
+        if os.path.isdir(folder):
+            return [
+                os.path.join(folder, f)
+                for f in os.listdir(folder)
+                if f.lower().endswith(('.mp3', '.wav', '.ogg'))
+            ]
+    # 전체 탐색 (하위 폴더 포함)
+    result = []
+    if not os.path.isdir(root):
+        return result
+    for dirpath, _, files in os.walk(root):
+        for f in files:
+            if f.lower().endswith(('.mp3', '.wav', '.ogg')):
+                result.append(os.path.join(dirpath, f))
+    return result
+
+
+def pick_bgm(style: str | None = None) -> str | None:
+    """스타일에 맞는 BGM 파일 경로 랜덤 반환. 없으면 None."""
+    candidates: list[str] = []
+
+    # 1) 스타일 → mood 우선 탐색
+    if style and style in STYLE_TO_MOOD:
+        for mood in STYLE_TO_MOOD[style]:
+            candidates = _list_bgm_files(mood)
+            if candidates:
+                break
+
+    # 2) mood 폴더에 파일 없으면 전체 탐색
+    if not candidates:
+        candidates = _list_bgm_files()
+
+    if not candidates:
+        return None
+    return random.choice(candidates)
+
+
+def mix_bgm_into_video(
+    raw_mp4: str,
+    bgm_path: str,
+    output_mp4: str,
+    volume: float = 0.20,
+) -> str:
+    """TTS가 포함된 영상에 BGM을 낮은 볼륨으로 믹싱해 새 MP4 반환.
+
+    - BGM은 영상 길이에 맞춰 자동 루프/트림
+    - volume: 0.0 ~ 1.0 (기본 0.20 = 20%)
+    """
+    vol = max(0.01, min(1.0, volume))
+    # amix duration=first → TTS 음성 끝나면 BGM도 종료
+    filter_str = (
+        f'[1:a]volume={vol:.2f},aloop=loop=-1:size=2147483647[bgm];'
+        f'[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]'
+    )
+    cmd = [
+        'ffmpeg', '-y',
+        '-i', raw_mp4,
+        '-stream_loop', '-1', '-i', bgm_path,
+        '-filter_complex', filter_str,
+        '-map', '0:v',
+        '-map', '[aout]',
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-shortest',
+        output_mp4,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    if result.returncode != 0:
+        raise RuntimeError(f'BGM 믹싱 오류:\n{result.stderr[-1500:]}')
+    return output_mp4
 
 
 # ════════════════════════════════════════════════════════
@@ -286,6 +512,113 @@ def composite_shorts_frame(
     img = _load(bg_url_or_b64).resize(pil_size, Image.LANCZOS)
     W, H = img.size
 
+    ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d  = ImageDraw.Draw(ov)
+
+    br, bg_, bb = _hex_rgb(brand_color)
+
+    # ── 상단 타이틀 배너 (0~22%) ────────────────────────────
+    if overlay_title:
+        top_h = int(H * 0.22)
+        # 브랜드 컬러 tint 그라디언트
+        for y in range(0, top_h):
+            ratio = 1 - (y / top_h)
+            r = int(br * 0.3 * ratio)
+            g = int(bg_ * 0.3 * ratio)
+            b_c = int(bb * 0.3 * ratio)
+            a = int(210 * ratio)
+            d.line([(0, y), (W, y)], fill=(r, g, b_c, a))
+
+        tf = _font(bold=True, size=int(H * 0.062))
+        lines = _wrap_text(overlay_title, tf, int(W * 0.84))[:2]
+        ty = int(H * 0.028)
+        for ln in lines:
+            bb_box = tf.getbbox(ln)
+            lw = bb_box[2] - bb_box[0]
+            tx = (W - lw) // 2
+            _draw_text_stroke(d, (tx, ty), ln, tf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 220), stroke_w=4)
+            ty += int((bb_box[3] - bb_box[1]) * 1.3)
+
+    # ── 하단 자막 배너 (78%~100%) ───────────────────────────
+    if overlay_body:
+        bot_start = int(H * 0.78)
+        # 브랜드 컬러 tint 그라디언트
+        for y in range(bot_start, H):
+            ratio = (y - bot_start) / (H - bot_start)
+            r = int(max(0, br * 0.25))
+            g = int(max(0, bg_ * 0.25))
+            b_c = int(max(0, bb * 0.25))
+            a = int(230 * ratio)
+            d.line([(0, y), (W, y)], fill=(r, g, b_c, a))
+
+        # 하단 자막 카드 배경
+        card_top = int(H * 0.795)
+        card_bot = H - 52
+        d.rectangle([(0, card_top), (W, card_bot)], fill=(0, 0, 0, 110))
+
+        # 브랜드 컬러 바
+        d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
+
+        bf = _font(bold=True, size=int(H * 0.042))
+        max_w = int(W * 0.88)
+        lines = _wrap_text(overlay_body, bf, max_w)[:3]
+        ty = card_top + int(H * 0.010)
+        pad = int(W * 0.055)
+        for ln in lines:
+            _draw_text_stroke(d, (pad, ty), ln, bf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 200), stroke_w=3)
+            bb_box = bf.getbbox(ln)
+            ty += int((bb_box[3] - bb_box[1]) * 1.4)
+
+    combined = Image.alpha_composite(img, ov)
+    result = _jpeg_b64(combined)
+    # PIL 이미지 명시적 해제 (메모리 반환)
+    img.close()
+    ov.close()
+    combined.close()
+    return result
+
+
+def composite_cta_product_frame(
+    product_url: str,
+    overlay_title: str,
+    overlay_body: str,
+    brand_color: str = '#e8355a',
+    pil_size: tuple = (1080, 1920),
+) -> str:
+    """CTA 씬: 브랜드 컬러 배경 위에 제품 이미지 centered fit + 텍스트 오버레이 → JPEG base64"""
+    from services.instagram_service import _load, _jpeg_b64, _hex_rgb
+
+    W, H = pil_size
+    br, bg_, bb = _hex_rgb(brand_color)
+
+    # 브랜드 컬러 그라디언트 배경
+    bg_canvas = Image.new('RGB', (W, H), (max(0, br - 40), max(0, bg_ - 40), max(0, bb - 40)))
+    draw_bg = ImageDraw.Draw(bg_canvas)
+    for y in range(H):
+        ratio = y / H
+        r = int(br * (1 - ratio * 0.4))
+        g = int(bg_ * (1 - ratio * 0.4))
+        b = int(bb * (1 - ratio * 0.4))
+        draw_bg.line([(0, y), (W, y)], fill=(r, g, b))
+
+    # 제품 이미지: 중앙 영역(10%~75% 높이)에 비율 유지 fit
+    try:
+        product_img = _load(product_url).convert('RGBA')
+        max_w = int(W * 0.82)
+        max_h = int(H * 0.60)
+        product_img.thumbnail((max_w, max_h), Image.LANCZOS)
+        pw, ph = product_img.size
+        px = (W - pw) // 2
+        py = int(H * 0.12)
+        bg_canvas.paste(product_img, (px, py), product_img if product_img.mode == 'RGBA' else None)
+    except Exception as e:
+        logger.warning('[cta_frame] 제품 이미지 로드 실패: %s', e)
+
+    img = bg_canvas.convert('RGBA')
     ov  = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     d   = ImageDraw.Draw(ov)
 
@@ -330,7 +663,13 @@ def composite_shorts_frame(
             ty += int((bb_box[3] - bb_box[1]) * 1.45)
 
     combined = Image.alpha_composite(img, ov)
-    return _jpeg_b64(combined)
+    from services.instagram_service import _jpeg_b64
+    result = _jpeg_b64(combined)
+    bg_canvas.close()
+    img.close()
+    ov.close()
+    combined.close()
+    return result
 
 
 # ════════════════════════════════════════════════════════
@@ -338,11 +677,41 @@ def composite_shorts_frame(
 # ════════════════════════════════════════════════════════
 
 def _ffmpeg(*args: str) -> subprocess.CompletedProcess:
+    """FFmpeg 실행 — 좀비 프로세스 방지.
+
+    - start_new_session=True: 워커와 별도 세션/프로세스 그룹 → 워커 OOM Kill 시
+      자식 FFmpeg 도 OS가 함께 정리 (SIGHUP propagation).
+    - timeout=300: 5분 초과 시 TimeoutExpired → 프로세스 강제 종료.
+    """
     cmd = ['ffmpeg'] + list(args)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    if result.returncode != 0:
-        raise RuntimeError(f'ffmpeg 오류:\n{result.stderr[-2000:]}')
-    return result
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,  # 좀비 방지 — 독립 프로세스 그룹
+        )
+        _register_proc(proc)  # 워커 종료 시 정리용 추적 등록
+        stdout, stderr = proc.communicate(timeout=300)
+        if proc.returncode != 0:
+            raise RuntimeError(f'ffmpeg 오류:\n{stderr.decode(errors="replace")[-2000:]}')
+        return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+    except subprocess.TimeoutExpired:
+        if proc:
+            try:
+                import signal as _sig
+                if hasattr(os, 'killpg'):  # POSIX(Linux)
+                    os.killpg(os.getpgid(proc.pid), _sig.SIGKILL)
+                else:
+                    proc.kill()  # Windows fallback
+            except Exception:
+                proc.kill()
+            proc.wait()
+        raise RuntimeError('ffmpeg 타임아웃 (300초 초과) — 프로세스 강제 종료됨')
+    finally:
+        if proc:
+            _unregister_proc(proc)  # 정상/비정상 종료 모두 추적 해제
 
 
 def _get_audio_duration(mp3_path: str) -> float:
@@ -420,8 +789,12 @@ def run_shorts_pipeline(
     voice_key: str,
     tts_speed: float,
     supabase,
+    bgm_volume: float = 0.20,
 ) -> None:
-    """백그라운드 스레드에서 실행. Supabase creation 상태 업데이트."""
+    """백그라운드 스레드에서 실행. Supabase creation 상태 업데이트.
+
+    bgm_volume: 0.0 = BGM 없음, 0.01~1.0 = 볼륨 (기본 0.20)
+    """
     tmp_dir = os.path.join(tempfile.gettempdir(), f'maesil_shorts_{creation_id}')
     os.makedirs(tmp_dir, exist_ok=True)
 
@@ -435,6 +808,7 @@ def run_shorts_pipeline(
             logger.error('[shorts] supabase update error: %s', e)
 
     try:
+        import gc
         from services.config_service import get_config
         from services.imagen_service import _generate_flux, upload_to_supabase
 
@@ -463,11 +837,12 @@ def run_shorts_pipeline(
                 pil_size,
             )
 
-            # 이미지 저장
+            # 이미지 저장 후 즉시 base64 해제 (메모리 절약)
             img_path = os.path.join(tmp_dir, f'scene_{i:02d}.jpg')
             _, b64data = frame_b64.split(',', 1)
             with open(img_path, 'wb') as f:
                 f.write(base64.b64decode(b64data))
+            del frame_b64, b64data  # base64 문자열 즉시 해제
 
             # TTS
             narration = _normalize_tts_text(scene.get('narration', ''))
@@ -475,23 +850,49 @@ def run_shorts_pipeline(
             audio_path = os.path.join(tmp_dir, f'scene_{i:02d}.mp3')
             with open(audio_path, 'wb') as f:
                 f.write(mp3_bytes)
+            del mp3_bytes  # TTS bytes 즉시 해제
 
             clip_data.append({'image_path': img_path, 'audio_path': audio_path})
+            gc.collect()  # 씬마다 GC — FLUX+PIL 잔여 객체 정리
 
-        # FFmpeg 조립
+        # FFmpeg 조립 (TTS만)
         _update('generating', {'progress': len(scenes), 'step': 'FFmpeg 영상 조립 중'})
+        raw_mp4    = os.path.join(tmp_dir, 'shorts_raw.mp4')
         output_mp4 = os.path.join(tmp_dir, 'shorts.mp4')
-        assemble_shorts_video(clip_data, output_mp4)
+        assemble_shorts_video(clip_data, raw_mp4)
+        del clip_data  # clip_data 해제 (path 목록은 더 이상 불필요)
+        gc.collect()
 
-        # Supabase Storage 업로드
+        # BGM 믹싱
+        if bgm_volume > 0:
+            bgm_path = pick_bgm(style)
+            if bgm_path:
+                _update('generating', {
+                    'progress': len(scenes),
+                    'step': f'BGM 믹싱 중 ({os.path.basename(bgm_path)})',
+                })
+                try:
+                    mix_bgm_into_video(raw_mp4, bgm_path, output_mp4, bgm_volume)
+                    logger.info('[shorts] BGM 믹싱 완료: %s', bgm_path)
+                except Exception as bgm_err:
+                    logger.warning('[shorts] BGM 믹싱 실패 (BGM 없이 진행): %s', bgm_err)
+                    import shutil as _sh
+                    _sh.copy2(raw_mp4, output_mp4)
+            else:
+                logger.info('[shorts] BGM 파일 없음 (static/sounds/bgm/ 폴더를 확인하세요)')
+                import shutil as _sh
+                _sh.copy2(raw_mp4, output_mp4)
+        else:
+            import shutil as _sh
+            _sh.copy2(raw_mp4, output_mp4)
+
+        # Supabase Storage 업로드 — 파일 스트리밍 (전체 bytes 메모리 로드 금지)
         _update('generating', {'progress': len(scenes) + 1, 'step': '업로드 중'})
-        with open(output_mp4, 'rb') as f:
-            video_bytes = f.read()
-
         path = f'{user_id}/{uuid.uuid4().hex}_shorts.mp4'
-        supabase.storage.from_('creations').upload(
-            path, video_bytes, {'content-type': 'video/mp4'}
-        )
+        with open(output_mp4, 'rb') as f:
+            supabase.storage.from_('creations').upload(
+                path, f, {'content-type': 'video/mp4'}
+            )
         video_url = supabase.storage.from_('creations').get_public_url(path)
 
         _update('done', {'video_url': video_url, 'progress': len(scenes) + 2})
@@ -507,6 +908,26 @@ def run_shorts_pipeline(
             shutil.rmtree(tmp_dir, ignore_errors=True)
         except Exception:
             pass
+        # 24시간 이상 된 고아 tmp 디렉토리 정리
+        _cleanup_stale_tmp_dirs()
+        # 최종 GC (워커 프로세스 메모리 반환)
+        try:
+            import gc as _gc
+            _gc.collect()
+        except Exception:
+            pass
+
+
+def _cleanup_stale_tmp_dirs(max_age_hours: int = 24) -> None:
+    """24시간 이상 된 maesil_shorts_* tmp 디렉토리 정리."""
+    try:
+        pattern = os.path.join(tempfile.gettempdir(), 'maesil_shorts_*')
+        cutoff = time.time() - max_age_hours * 3600
+        for d in _glob.glob(pattern):
+            if os.path.isdir(d) and os.path.getmtime(d) < cutoff:
+                shutil.rmtree(d, ignore_errors=True)
+    except Exception:
+        pass
 
 
 def start_shorts_pipeline(
@@ -519,6 +940,7 @@ def start_shorts_pipeline(
     tts_speed: float,
     supabase,
     app=None,
+    bgm_volume: float = 0.20,
 ) -> None:
     def _run():
         if app:
@@ -527,12 +949,14 @@ def start_shorts_pipeline(
                     creation_id=creation_id, user_id=user_id, scenes=scenes,
                     style=style, brand_color=brand_color, voice_key=voice_key,
                     tts_speed=tts_speed, supabase=supabase,
+                    bgm_volume=bgm_volume,
                 )
         else:
             run_shorts_pipeline(
                 creation_id=creation_id, user_id=user_id, scenes=scenes,
                 style=style, brand_color=brand_color, voice_key=voice_key,
                 tts_speed=tts_speed, supabase=supabase,
+                bgm_volume=bgm_volume,
             )
 
     t = threading.Thread(target=_run, daemon=True)

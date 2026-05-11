@@ -9,7 +9,8 @@ services:
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf" -o static/fonts/NanumGothic.ttf) &&
       ([ -f static/fonts/NanumGothicBold.ttf ] ||
        curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"    -o static/fonts/NanumGothicBold.ttf) ;
-      pip install -r requirements.txt
+      pip install -r requirements.txt ;
+      python scripts/generate_bgm.py
     startCommand: gunicorn app:app --workers 2 --timeout 300
     envVars:
       - key: FLASK_ENV
@@ -40,3 +41,37 @@ services:
         sync: false
       - key: APP_URL
         value: https://maesil-studio.onrender.com
+      - key: REDIS_URL
+        sync: false
+
+  # 쇼츠 영상 생성 전용 워커 — FFmpeg/PIL CPU 작업을 웹 서버와 분리
+  - type: worker
+    name: maesil-shorts-worker
+    env: python
+    buildCommand: >-
+      apt-get install -y ffmpeg fonts-nanum fonts-noto-cjk 2>/dev/null ;
+      mkdir -p static/fonts &&
+      ([ -f static/fonts/NanumGothic.ttf ] ||
+       curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf" -o static/fonts/NanumGothic.ttf) &&
+      ([ -f static/fonts/NanumGothicBold.ttf ] ||
+       curl -sL "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf"    -o static/fonts/NanumGothicBold.ttf) ;
+      pip install -r requirements.txt ;
+      python scripts/generate_bgm.py
+    startCommand: celery -A celery_app worker --loglevel=info --concurrency=3 --prefetch-multiplier=1
+    envVars:
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: FAL_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false

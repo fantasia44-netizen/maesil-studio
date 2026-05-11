@@ -195,6 +195,8 @@ def shorts_generate():
     voice_key   = (data.get('voice')       or 'female_natural').strip()
     tts_speed   = float(data.get('tts_speed') or 1.1)
     brand_id    = (data.get('brand_id')    or '').strip()
+    bgm_volume  = float(data.get('bgm_volume') if data.get('bgm_volume') is not None else 0.20)
+    bgm_volume  = max(0.0, min(1.0, bgm_volume))
 
     if not scenes:
         return jsonify(ok=False, message='씬 데이터가 없습니다. 먼저 대본을 생성하세요.')
@@ -231,8 +233,12 @@ def shorts_generate():
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')
 
-    from services.shorts_service import start_shorts_pipeline
-    start_shorts_pipeline(
+    from tasks.shorts_task import generate_shorts_video
+    supabase_url = current_app.config.get('SUPABASE_URL', '')
+    supabase_key = (current_app.config.get('SUPABASE_SERVICE_KEY')
+                    or current_app.config.get('SUPABASE_KEY', ''))
+
+    generate_shorts_video.delay(
         creation_id=creation_id,
         user_id=current_user.id,
         scenes=scenes,
@@ -240,8 +246,9 @@ def shorts_generate():
         brand_color=brand_color,
         voice_key=voice_key,
         tts_speed=tts_speed,
-        supabase=supabase,
-        app=current_app._get_current_object(),
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+        bgm_volume=bgm_volume,
     )
 
     return jsonify(ok=True, creation_id=creation_id, cost=cost)
@@ -268,6 +275,29 @@ def shorts_status(creation_id: str):
         status=row['status'],
         output_data=row.get('output_data') or {},
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# BGM 현황 조회
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/bgm_status', methods=['GET'])
+@login_required
+def shorts_bgm_status():
+    """등록된 BGM 파일 현황 반환 (분위기별 카운트)."""
+    from services.shorts_service import BGM_MOODS, _list_bgm_files, _BGM_ROOT
+    import os
+    status = {}
+    for mood_key, meta in BGM_MOODS.items():
+        files = _list_bgm_files(mood_key)
+        status[mood_key] = {
+            'label': meta['label'],
+            'count': len(files),
+            'files': [os.path.basename(f) for f in files],
+        }
+    total = sum(v['count'] for v in status.values())
+    return jsonify(ok=True, moods=status, total=total,
+                   bgm_root=os.path.normpath(_BGM_ROOT))
 
 
 # ─────────────────────────────────────────────────────────────

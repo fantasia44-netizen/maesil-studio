@@ -58,12 +58,12 @@
   <div class="card-body">
     <div class="row g-3">
       {% set items = [
-        ('create.blog',        'bi-file-text',              '#fdedf1','#e8355a','블로그 포스트','80P'),
-        ('create.instagram',   'bi-instagram',              '#fce8f3','#d63384','인스타그램','30P'),
-        ('create.detail_page', 'bi-layout-text-sidebar',   '#e8eeff','#4b5cde','상세페이지 카피','150P'),
-        ('create.thumbnail',   'bi-card-heading',           '#fff8e8','#e6920a','썸네일 문구','40P'),
-        ('create.ad_copy',     'bi-megaphone',              '#fce8e8','#dc3545','광고 카피','60P'),
-        ('create.brand_kit',   'bi-palette',                '#f0e8ff','#6f42c1','브랜드 키트','1,500P'),
+        ('create.blog',                'bi-file-text',              '#fdedf1','#e8355a','블로그 포스트',    '80P'),
+        ('create.instagram',           'bi-instagram',              '#fce8f3','#d63384','인스타그램',       '30P'),
+        ('create.shorts',              'bi-play-circle-fill',       '#fff0f5','#c71f5a','쇼츠/릴스 영상',  '300P'),
+        ('create.detail_page_builder', 'bi-layout-text-sidebar',   '#e8eeff','#4b5cde','상세페이지',       '150P'),
+        ('create.promo',               'bi-megaphone',              '#fff1e0','#e6920a','홍보물',           '500P~'),
+        ('create.logo',                'bi-pentagon',               '#f0e8ff','#6f42c1','브랜드 로고',      '무료'),
       ] %}
       {% for endpoint, icon, bg, color, label, cost in items %}
       <div class="col-6 col-md-4 col-xl-2">

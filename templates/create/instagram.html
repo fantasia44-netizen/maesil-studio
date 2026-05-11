@@ -410,15 +410,15 @@
 </div>
 
 <!-- ══════ Step 5 ══════ -->
-<div id="step5" class="d-none" style="max-width:780px">
+<div id="step5" class="d-none" style="max-width:1100px">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <button class="btn btn-sm btn-outline-secondary" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>이미지 수정</button>
     <button class="btn btn-sm btn-outline-secondary" onclick="copyCaption()"><i class="bi bi-clipboard me-1"></i>캡션 복사</button>
   </div>
 
   <div class="row g-3">
-    <!-- 이미지 -->
-    <div class="col-md-5">
+    <!-- 이미지 (오른쪽에 크게 표시) -->
+    <div class="col-md-7 order-md-2">
       <div class="card h-100">
         <div class="card-header py-2 d-flex align-items-center justify-content-between">
           <span class="small fw-semibold">생성된 이미지</span>
@@ -440,7 +440,7 @@
               </a>
               <button id="bannerEditBtn" class="btn btn-sm btn-outline-warning d-none"
                       onclick="toggleBannerEditor()">
-                <i class="bi bi-arrows-move me-1"></i>텍스트 위치·크기 수정
+                <i class="bi bi-type me-1"></i>텍스트 위치·내용 수정
               </button>
               <button id="bubbleEditBtn" class="btn btn-sm btn-outline-warning d-none"
                       onclick="toggleBubbleEditor()">
@@ -454,33 +454,97 @@
                 <i class="bi bi-arrow-repeat me-1"></i>이미지 재생성
               </button>
             </div>
-            <!-- 배너 위치/크기 편집 패널 -->
+            <!-- 텍스트 위치·내용 편집 패널 (드래그) -->
             <div id="bannerEditorPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#fffbea;border:1px solid #fde68a">
-              <div class="small fw-semibold mb-2">텍스트 위치</div>
-              <div class="d-flex flex-wrap gap-1 mb-2">
-                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="top-left"     onclick="selectGravity('top-left',this)">↖ 상단좌</button>
-                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="top-center"   onclick="selectGravity('top-center',this)">↑ 상단중</button>
-                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="center-left"  onclick="selectGravity('center-left',this)">← 중앙좌</button>
-                <button class="pos-btn btn btn-sm btn-outline-secondary active" data-g="bottom-left"    onclick="selectGravity('bottom-left',this)">↙ 하단좌</button>
-                <button class="pos-btn btn btn-sm btn-outline-secondary" data-g="bottom-center" onclick="selectGravity('bottom-center',this)">↓ 하단중</button>
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small fw-semibold"><i class="bi bi-type me-1"></i>텍스트 위치·내용 수정</span>
+                <button class="btn btn-link p-0 text-muted" onclick="toggleBannerEditor()" style="font-size:.8rem">✕ 닫기</button>
               </div>
+              <!-- 텍스트 입력 -->
+              <div class="row g-1 mb-2">
+                <div class="col-12">
+                  <input id="overlayTitle" class="form-control form-control-sm" placeholder="제목 텍스트 (15자 이내)"
+                         oninput="document.getElementById('overlayHandlePreview').textContent=this.value||'텍스트'">
+                </div>
+                <div class="col-12">
+                  <textarea id="overlayBody" class="form-control form-control-sm" rows="2"
+                            style="resize:none;font-size:.82rem;line-height:1.6"
+                            placeholder="본문 텍스트 (3~4문장)"></textarea>
+                </div>
+              </div>
+              <div class="text-muted mb-2" style="font-size:.72rem">📌 핸들을 드래그해서 텍스트 위치를 조정하세요.</div>
+              <!-- 드래그 캔버스 -->
+              <div id="overlayCanvas" class="position-relative mx-auto mb-2"
+                   style="width:280px;height:280px;border:2px solid #d63384;border-radius:8px;overflow:hidden;cursor:default;touch-action:none">
+                <img id="overlayCanvasImg" src="" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none">
+                <div id="overlayHandle"
+                     class="position-absolute d-flex align-items-center gap-1 px-2 py-1"
+                     style="left:6%;top:45%;background:rgba(0,0,0,.65);border:2px solid #fff;border-radius:8px;cursor:grab;user-select:none;max-width:85%;font-size:.7rem;font-weight:600;color:#fff;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap;overflow:hidden;touch-action:none">
+                  <i class="bi bi-type" style="flex-shrink:0"></i>
+                  <span id="overlayHandlePreview" style="overflow:hidden;text-overflow:ellipsis;max-width:120px">텍스트</span>
+                </div>
+              </div>
+              <!-- 크기 -->
               <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="small text-muted">크기</span>
-                <button class="scale-btn btn btn-sm btn-outline-secondary" data-s="0.75" onclick="selectScale(0.75,this)">S</button>
-                <button class="scale-btn btn btn-sm btn-outline-secondary active" data-s="1.0"  onclick="selectScale(1.0,this)">M</button>
-                <button class="scale-btn btn btn-sm btn-outline-secondary" data-s="1.35" onclick="selectScale(1.35,this)">L</button>
+                <button class="ots-btn btn btn-sm btn-outline-secondary" onclick="selectOverlayScale(0.75,this)">S</button>
+                <button class="ots-btn btn btn-sm btn-outline-secondary active" onclick="selectOverlayScale(1.0,this)">M</button>
+                <button class="ots-btn btn btn-sm btn-outline-secondary" onclick="selectOverlayScale(1.35,this)">L</button>
               </div>
-              <button class="btn btn-sm w-100 fw-semibold" style="background:#d63384;color:#fff;border-radius:8px" onclick="recompositeSingle()">
-                <span class="spinner-border spinner-border-sm d-none me-1" id="recompSpin"></span>
-                <i class="bi bi-magic me-1"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
+              <!-- 글자색 -->
+              <div class="mb-2">
+                <div class="small text-muted mb-1">글자 색</div>
+                <div class="d-flex gap-1 flex-wrap">
+                  <button class="otc-btn btn btn-sm" style="background:#fff;color:#111;border:2px solid #d63384"
+                          onclick="selectOverlayTextColor('white',this)">흰색</button>
+                  <button class="otc-btn btn btn-sm" style="background:#111;color:#fff;border:2px solid transparent"
+                          onclick="selectOverlayTextColor('black',this)">검정</button>
+                  <button class="otc-btn btn btn-sm" style="background:#ffe61e;color:#111;border:2px solid transparent"
+                          onclick="selectOverlayTextColor('yellow',this)">노랑</button>
+                  <label class="btn btn-sm d-flex align-items-center gap-1"
+                         style="border:2px dashed #ccc;cursor:pointer;padding:3px 8px">
+                    <span class="small">직접</span>
+                    <input type="color" id="overlayCustomColor" value="#ffffff"
+                           oninput="selectOverlayTextColor(this.value, null)"
+                           style="width:22px;height:22px;border:none;padding:0;cursor:pointer">
+                  </label>
+                </div>
+              </div>
+              <!-- 배경 어둡기 -->
+              <div class="mb-3">
+                <div class="small text-muted mb-1">배경 어둡기</div>
+                <div class="d-flex gap-1">
+                  <button class="otov-btn btn btn-sm btn-outline-secondary" onclick="selectOverlayStrength('none',this)">없음</button>
+                  <button class="otov-btn btn btn-sm btn-outline-secondary" onclick="selectOverlayStrength('light',this)">약하게</button>
+                  <button class="otov-btn btn btn-sm btn-outline-secondary active" onclick="selectOverlayStrength('medium',this)">보통</button>
+                  <button class="otov-btn btn btn-sm btn-outline-secondary" onclick="selectOverlayStrength('dark',this)">강하게</button>
+                </div>
+              </div>
+              <button class="btn btn-sm w-100 fw-semibold" style="background:#d63384;color:#fff;border-radius:8px"
+                      onclick="recompositeTextOverlay()">
+                <span class="spinner-border spinner-border-sm d-none me-1" id="overlayRecompSpin"></span>
+                <i class="bi bi-magic me-1" id="overlayRecompIcon"></i>재합성하기 <small class="opacity-75">(포인트 없음)</small>
               </button>
             </div>
             <!-- 말풍선 에디터는 공용 영역으로 이동 (아래 carouselView 이후) -->
-            <!-- 이미지 직접 삽입 패널 -->
-            <div id="singleInsertPanel" class="d-none mt-2 p-3 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
-              <div class="small fw-semibold mb-2">파일 업로드</div>
-              <input type="file" class="form-control form-control-sm mb-2" accept="image/*" onchange="insertSingleImg(this)">
-              <div id="singleProductThumbs" class="d-flex flex-wrap gap-1 mt-1"></div>
+            <!-- 이미지 삽입 패널 -->
+            <div id="singleInsertPanel" class="d-none mt-2 p-2 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
+              <div class="d-flex gap-1 mb-2">
+                <button class="btn btn-sm fw-semibold py-1 px-2" id="sInsTabFile"
+                        style="font-size:.74rem;background:#d63384;color:#fff;border-radius:6px;border:none"
+                        onclick="switchSingleInsertTab('file')">📁 파일 업로드</button>
+                <button class="btn btn-sm btn-outline-secondary py-1 px-2" id="sInsTabLib"
+                        style="font-size:.74rem;border-radius:6px"
+                        onclick="switchSingleInsertTab('library')">🖼️ 이전 생성 이미지</button>
+              </div>
+              <div id="sInsFileSection">
+                <input type="file" class="form-control form-control-sm mb-1" accept="image/*" onchange="insertSingleImg(this)">
+                <div id="singleProductThumbs" class="d-flex flex-wrap gap-1 mt-1"></div>
+              </div>
+              <div id="sInsLibSection" class="d-none">
+                <div id="sInsLibThumbs" class="d-flex flex-wrap gap-1"
+                     style="max-height:160px;overflow-y:auto;min-height:48px"></div>
+              </div>
             </div>
           </div>
 
@@ -529,9 +593,22 @@
             </div>
             <!-- 캐러셀 이미지 삽입 패널 -->
             <div id="carouselInsertPanel" class="d-none mt-2 p-2 rounded text-start" style="background:#f0fdf4;border:1px solid #bbf7d0">
-              <div class="small fw-semibold mb-1">현재 컷 이미지 삽입</div>
-              <input type="file" class="form-control form-control-sm mb-1" accept="image/*" onchange="insertCarouselImg(this)">
-              <div id="carouselProductThumbs" class="d-flex flex-wrap gap-1"></div>
+              <div class="d-flex gap-1 mb-2">
+                <button class="btn btn-sm fw-semibold py-1 px-2" id="cInsTabFile"
+                        style="font-size:.74rem;background:#d63384;color:#fff;border-radius:6px;border:none"
+                        onclick="switchCarouselInsertTab('file')">📁 파일 업로드</button>
+                <button class="btn btn-sm btn-outline-secondary py-1 px-2" id="cInsTabLib"
+                        style="font-size:.74rem;border-radius:6px"
+                        onclick="switchCarouselInsertTab('library')">🖼️ 이전 생성 이미지</button>
+              </div>
+              <div id="cInsFileSection">
+                <input type="file" class="form-control form-control-sm mb-1" accept="image/*" onchange="insertCarouselImg(this)">
+                <div id="carouselProductThumbs" class="d-flex flex-wrap gap-1"></div>
+              </div>
+              <div id="cInsLibSection" class="d-none">
+                <div id="cInsLibThumbs" class="d-flex flex-wrap gap-1"
+                     style="max-height:160px;overflow-y:auto;min-height:48px"></div>
+              </div>
             </div>
           </div>
 
@@ -590,8 +667,8 @@
     </div>
     </div>
 
-    <!-- 캡션 + 해시태그 -->
-    <div class="col-md-7">
+    <!-- 캡션 + 해시태그 (왼쪽) -->
+    <div class="col-md-5 order-md-1">
       <div class="card mb-2">
         <div class="card-header py-2 d-flex align-items-center justify-content-between">
           <ul class="nav nav-tabs card-header-tabs">
@@ -667,15 +744,19 @@ let productImageUrl    = '';
 let selectedBrandColor = '{{ (default_brand.primary_color if default_brand and default_brand.primary_color else "#e8355a") }}';
 let panelPlans         = [];
 let generatedImages    = [];
+let baseFluxImages     = [];   // 각 패널의 FLUX 원본 URL (말풍선 재합성 기준점)
 let panelManualImages  = [];   // 각 패널의 수동 업로드 이미지 URL (null = AI 생성)
 let carouselIdx        = 0;
 let regenModalIdx      = -1;   // 수정생성 팝업 대상 패널 인덱스
 let regenPreviewUrl    = null; // 팝업에서 생성된 임시 이미지 URL
+let regenPreviewBaseUrl= null; // 팝업 이미지의 FLUX 원본 URL
 // selectedSubStyle removed — 세부화풍 섹션 삭제됨
 let currentCaptionTab  = 'short'; // Step 5 현재 캡션 탭
 let bannerBaseUrl      = null; // FLUX 원본 URL (재합성용)
-let selectedGravity    = 'bottom-left';
-let selectedTextScale  = 1.0;
+let selectedGravity      = 'bottom-left';
+let selectedTextScale    = 1.0;
+let selectedTextColor    = 'white';
+let selectedOverlay      = 'medium';
 
 // ── 감성 스타일 수식어 (블로그와 동일) ───────────────────────
 const INSTA_STYLE_MODIFIERS = {
@@ -914,6 +995,7 @@ async function generateProductSlide() {
     if (!data.ok) throw new Error(data.message);
 
     generatedImages.push(data.image_url);
+    baseFluxImages.push(data.image_url);  // 제품슬라이드는 합성본이 곧 베이스
     panelManualImages.push(null);
     document.getElementById('singleImageView').classList.add('d-none');
     document.getElementById('carouselView').classList.remove('d-none');
@@ -1194,6 +1276,7 @@ function _updateImgSections() {
     if (!planMatchesQty) {
       panelPlans = [];
       generatedImages = [];
+      baseFluxImages = [];
       panelManualImages = [];
       document.getElementById('panelCards').innerHTML = '';
       document.getElementById('storyPlanBtn').classList.remove('d-none');
@@ -1243,6 +1326,7 @@ function selectStyle(styleId, el) {
   if (styleChanged && panelPlans.length > 0) {
     panelPlans = [];
     generatedImages = [];
+    baseFluxImages = [];
     panelManualImages = [];
     document.getElementById('panelCards').innerHTML = '';
     document.getElementById('genAllSection').classList.add('d-none');
@@ -1326,14 +1410,16 @@ async function generateImage() {
   const finalPrompt = illustMod ? `${prompt}, ${illustMod}` : prompt;
 
   const body = {
-    style:       selectedStyle,
-    flux_prompt: finalPrompt,
-    size:        selectedRatio,
-    brand_color: selectedBrandColor || '#e8355a',
-    title:       document.getElementById('imgTitle')?.value.trim()    || '',
-    body_text:   document.getElementById('imgBody')?.value.trim()     || '',
-    dialogue1:   document.getElementById('dialogue1')?.value.trim()   || '',
-    dialogue2:   document.getElementById('dialogue2')?.value.trim()   || '',
+    style:            selectedStyle,
+    flux_prompt:      finalPrompt,
+    size:             selectedRatio,
+    brand_color:      selectedBrandColor || '#e8355a',
+    title:            document.getElementById('imgTitle')?.value.trim()    || '',
+    body_text:        document.getElementById('imgBody')?.value.trim()     || '',
+    dialogue1:        document.getElementById('dialogue1')?.value.trim()   || '',
+    dialogue2:        document.getElementById('dialogue2')?.value.trim()   || '',
+    text_color:       selectedTextColor,
+    overlay_strength: selectedOverlay,
   };
 
   try {
@@ -1348,6 +1434,7 @@ async function generateImage() {
     bannerBaseUrl     = data.base_image_url || null;
     generatedImageUrl = data.image_url;
     generatedImages   = [data.image_url];
+    baseFluxImages    = [data.base_image_url || data.image_url];
     _showStep5Single(false, data.image_url);
     if (data.translated_prompt) {
       document.getElementById('fluxTranslatedText').textContent = data.translated_prompt;
@@ -1381,8 +1468,8 @@ function _showStep5Single(loading, imageUrl) {
     const actEl = document.getElementById('step5ImgActions');
     actEl.style.display = 'flex';
     actEl.style.flexDirection = 'column';
-    // 스타일별 편집 버튼 표시
-    document.getElementById('bannerEditBtn').classList.toggle('d-none', selectedStyle !== 'realistic_banner');
+    // 스타일별 편집 버튼 표시 — 웹툰 외 모든 스타일에서 텍스트 편집 가능
+    document.getElementById('bannerEditBtn').classList.toggle('d-none', selectedStyle === 'webtoon');
     document.getElementById('bubbleEditBtn').classList.toggle('d-none', selectedStyle !== 'webtoon');
     // 웹툰이면 에디터 캔버스 이미지도 업데이트
     if (selectedStyle === 'webtoon') _initBubbleEditor(imageUrl);
@@ -1402,6 +1489,7 @@ async function generateStoryPlan() {
   document.getElementById('step4Error').classList.add('d-none');
   panelPlans        = [];
   generatedImages   = new Array(selectedQuantity).fill(null);
+  baseFluxImages    = new Array(selectedQuantity).fill(null);
   panelManualImages = new Array(selectedQuantity).fill(null);
 
   try {
@@ -1531,6 +1619,7 @@ async function generateAllImages() {
   progress.classList.remove('d-none');
 
   generatedImages = new Array(panelPlans.length).fill(null);
+  baseFluxImages  = new Array(panelPlans.length).fill(null);
 
   for (let i = 0; i < panelPlans.length; i++) {
     const p = panelPlans[i];
@@ -1548,6 +1637,7 @@ async function generateAllImages() {
     // 수동 업로드된 패널은 생성 건너뜀
     if (panelManualImages[i]) {
       generatedImages[i] = panelManualImages[i];
+      baseFluxImages[i]  = panelManualImages[i];
       if (statusEl) {
         statusEl.style.background='#e0f2fe'; statusEl.style.color='#0369a1';
         statusEl.textContent='✓ 수동';
@@ -1579,12 +1669,14 @@ async function generateAllImages() {
       if (!data.ok) throw new Error(data.message);
 
       generatedImages[i] = data.image_url;
+      baseFluxImages[i]  = data.base_image_url || data.image_url;
       if (statusEl) {
         statusEl.style.background='#dcfce7'; statusEl.style.color='#166534';
         statusEl.textContent='✓ 완료';
       }
     } catch (err) {
       generatedImages[i] = null;
+      baseFluxImages[i]  = null;
       if (statusEl) {
         statusEl.style.background='#fee2e2'; statusEl.style.color='#991b1b';
         statusEl.textContent='실패';
@@ -1664,10 +1756,12 @@ function _buildThumbStrip() {
       const dst = i;
       if (src === dst || src < 0) return;
       // 배열 순서 변경
-      const imgMoved    = generatedImages.splice(src, 1)[0];
-      const manualMoved = panelManualImages.splice(src, 1)[0];
-      const planMoved   = panelPlans.splice(src, 1)[0];
+      const imgMoved     = generatedImages.splice(src, 1)[0];
+      const baseImgMoved = baseFluxImages.splice(src, 1)[0];
+      const manualMoved  = panelManualImages.splice(src, 1)[0];
+      const planMoved    = panelPlans.splice(src, 1)[0];
       generatedImages.splice(dst, 0, imgMoved);
+      baseFluxImages.splice(dst, 0, baseImgMoved);
       panelManualImages.splice(dst, 0, manualMoved);
       panelPlans.splice(dst, 0, planMoved);
       // 현재 포커스 인덱스 보정
@@ -1832,7 +1926,8 @@ async function regenModalGenerate() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
-    regenPreviewUrl = data.image_url;
+    regenPreviewUrl     = data.image_url;
+    regenPreviewBaseUrl = data.base_image_url || data.image_url;
     document.getElementById('regenPreviewImg').src = regenPreviewUrl;
     document.getElementById('regenPreviewArea').classList.remove('d-none');
     document.getElementById('regenFooterGenerate').classList.add('d-none');
@@ -1853,6 +1948,7 @@ async function regenModalGenerate() {
 function regenModalReplace() {
   if (!regenPreviewUrl || regenModalIdx < 0) return;
   generatedImages[regenModalIdx] = regenPreviewUrl;
+  baseFluxImages[regenModalIdx]  = regenPreviewBaseUrl || regenPreviewUrl;
   _buildThumbStrip();
   carouselShowImage(regenModalIdx);
   bootstrap.Modal.getOrCreateInstance(document.getElementById('regenModal')).hide();
@@ -1985,7 +2081,7 @@ async function recompositeWebtoon() {
 
   const inCarousel = !document.getElementById('carouselView').classList.contains('d-none');
   const baseUrl = inCarousel
-    ? generatedImages[carouselIdx]
+    ? (baseFluxImages[carouselIdx] || generatedImages[carouselIdx])
     : (bannerBaseUrl || generatedImageUrl);
 
   try {
@@ -2020,50 +2116,240 @@ async function recompositeWebtoon() {
   }
 }
 
-// ── 배너 위치·크기 컨트롤 ────────────────────────────────────
+// ── 텍스트 오버레이 드래그 에디터 ───────────────────────────
+let _textOverlayPos      = { x: 0.06, y: 0.45 };
+let _textOverlayScale    = 1.0;
+let _textOverlayColor    = 'white';
+let _textOverlayStrength = 'medium';
+let _draggingOverlay     = false;
+let _overlayDragRef      = { mx: 0, my: 0, lx: 0, ly: 0 };
+
 function toggleBannerEditor() {
-  document.getElementById('bannerEditorPanel').classList.toggle('d-none');
+  const panel    = document.getElementById('bannerEditorPanel');
+  const isHidden = panel.classList.contains('d-none');
+  panel.classList.toggle('d-none');
+  if (isHidden) {
+    const imgUrl = bannerBaseUrl || generatedImageUrl;
+    if (imgUrl) _initOverlayEditor(imgUrl);
+    setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 120);
+  }
 }
-function selectGravity(g, el) {
-  selectedGravity = g;
-  document.querySelectorAll('.pos-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
+
+function _overlayCanvasDims() {
+  const RATIOS = { '1:1': [1,1], '4:5': [4,5], '9:16': [9,16] };
+  const [rw, rh] = RATIOS[selectedRatio] || [1,1];
+  const maxW = 280, maxH = 300;
+  let w = maxW, h = w * rh / rw;
+  if (h > maxH) { h = maxH; w = h * rw / rh; }
+  return [Math.round(w), Math.round(h)];
 }
-function selectScale(s, el) {
-  selectedTextScale = s;
-  document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
+
+function _initOverlayEditor(imageUrl) {
+  const canvas = document.getElementById('overlayCanvas');
+  const [cw, ch] = _overlayCanvasDims();
+  canvas.style.width  = cw + 'px';
+  canvas.style.height = ch + 'px';
+  document.getElementById('overlayCanvasImg').src = imageUrl;
+  // 텍스트 입력란 — Step 4 값 가져오기
+  const t = document.getElementById('imgTitle')?.value || '';
+  const b = document.getElementById('imgBody')?.value  || '';
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayBody  = document.getElementById('overlayBody');
+  if (overlayTitle && !overlayTitle.value) overlayTitle.value = t;
+  if (overlayBody  && !overlayBody.value)  overlayBody.value  = b;
+  document.getElementById('overlayHandlePreview').textContent =
+    (overlayTitle?.value || t || '텍스트').slice(0, 18);
+  setTimeout(() => _applyOverlayPos(), 50);
 }
-async function recompositeSingle() {
-  if (!bannerBaseUrl) { alert('먼저 이미지를 생성하세요.'); return; }
-  const spin = document.getElementById('recompSpin');
+
+function _applyOverlayPos() {
+  const handle = document.getElementById('overlayHandle');
+  const canvas = document.getElementById('overlayCanvas');
+  if (!handle || !canvas) return;
+  const cw = canvas.offsetWidth  || 280;
+  const ch = canvas.offsetHeight || 280;
+  const hw = handle.offsetWidth  || 120;
+  const hh = handle.offsetHeight || 28;
+  const lx = Math.min(_textOverlayPos.x * cw, cw - hw - 4);
+  const ly = Math.min(_textOverlayPos.y * ch, ch - hh - 4);
+  handle.style.left = lx + 'px';
+  handle.style.top  = ly + 'px';
+}
+
+function selectOverlayScale(s, el) {
+  _textOverlayScale = s;
+  document.querySelectorAll('.ots-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+function selectOverlayTextColor(tc, el) {
+  _textOverlayColor = tc;
+  document.querySelectorAll('.otc-btn').forEach(b => b.style.border = '2px solid transparent');
+  if (el) el.style.border = '2px solid #d63384';
+  if (tc.startsWith('#')) {
+    const cc = document.getElementById('overlayCustomColor');
+    if (cc) cc.value = tc;
+  }
+}
+function selectOverlayStrength(ov, el) {
+  _textOverlayStrength = ov;
+  document.querySelectorAll('.otov-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+// 드래그 이벤트 설정 (DOMContentLoaded 이후)
+(function _setupOverlayDrag() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const handle = document.getElementById('overlayHandle');
+    if (!handle) return;
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      _draggingOverlay = true;
+      const canvas = document.getElementById('overlayCanvas');
+      const cr = canvas.getBoundingClientRect();
+      const hr = handle.getBoundingClientRect();
+      _overlayDragRef = { mx: e.clientX, my: e.clientY,
+                          lx: hr.left - cr.left, ly: hr.top - cr.top };
+      handle.style.cursor = 'grabbing';
+    });
+    handle.addEventListener('pointermove', e => {
+      if (!_draggingOverlay) return;
+      const canvas = document.getElementById('overlayCanvas');
+      const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+      const hw = handle.offsetWidth, hh = handle.offsetHeight;
+      const dx = e.clientX - _overlayDragRef.mx;
+      const dy = e.clientY - _overlayDragRef.my;
+      const nx = Math.max(0, Math.min(_overlayDragRef.lx + dx, cw - hw - 2));
+      const ny = Math.max(0, Math.min(_overlayDragRef.ly + dy, ch - hh - 2));
+      handle.style.left = nx + 'px';
+      handle.style.top  = ny + 'px';
+      _textOverlayPos.x = nx / cw;
+      _textOverlayPos.y = ny / ch;
+    });
+    handle.addEventListener('pointerup', () => {
+      _draggingOverlay = false;
+      handle.style.cursor = 'grab';
+    });
+  });
+})();
+
+async function recompositeTextOverlay() {
+  const baseUrl = bannerBaseUrl || generatedImageUrl;
+  if (!baseUrl) { alert('먼저 이미지를 생성하세요.'); return; }
+  const spin = document.getElementById('overlayRecompSpin');
+  const icon = document.getElementById('overlayRecompIcon');
   spin.classList.remove('d-none');
-  const isWebtoon = selectedStyle === 'webtoon';
-  const endpoint  = isWebtoon ? '/create/instagram/recomposite-webtoon' : '/create/instagram/recomposite-banner';
-  const body = isWebtoon ? {
-    base_image_url: bannerBaseUrl,
-    dialogue1: document.getElementById('dialogue1')?.value.trim() || '',
-    dialogue2: document.getElementById('dialogue2')?.value.trim() || '',
-    size: selectedRatio,
-    bubble_layout: selectedGravity,
-  } : {
-    base_image_url: bannerBaseUrl,
-    title:       document.getElementById('imgTitle')?.value.trim()    || '',
-    subtitle:    document.getElementById('imgSubtitle')?.value.trim() || '',
-    brand_color: selectedBrandColor || '#e8355a',
-    size:        selectedRatio,
-    text_gravity: selectedGravity,
-    text_scale:   selectedTextScale,
-  };
+  icon.classList.add('d-none');
+  const title    = document.getElementById('overlayTitle')?.value.trim() || '';
+  const body_txt = document.getElementById('overlayBody')?.value.trim()  || '';
   try {
-    const res  = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify(body) });
+    const res  = await fetch('/create/instagram/recomposite-banner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        base_image_url:  baseUrl,
+        title,
+        body_text:       body_txt,
+        brand_color:     selectedBrandColor || '#e8355a',
+        size:            selectedRatio,
+        text_scale:      _textOverlayScale,
+        text_color:      _textOverlayColor,
+        overlay_strength: _textOverlayStrength,
+        text_x_ratio:    _textOverlayPos.x,
+        text_y_ratio:    _textOverlayPos.y,
+      }),
+    });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
     generatedImageUrl = data.image_url;
-    document.getElementById('finalImage').src = data.image_url;
-    document.getElementById('downloadBtn').href = data.image_url;
-  } catch(e) { alert('재합성 실패: ' + e.message); }
-  finally { spin.classList.add('d-none'); }
+    document.getElementById('finalImage').src   = data.image_url;
+    document.getElementById('downloadBtn').href  = data.image_url;
+    // 캔버스 이미지도 업데이트
+    document.getElementById('overlayCanvasImg').src = data.image_url;
+  } catch (e) { alert('재합성 실패: ' + e.message); }
+  finally {
+    spin.classList.add('d-none');
+    icon.classList.remove('d-none');
+  }
+}
+
+// ── 이미지 라이브러리 (이전 생성 이미지 불러오기) ────────────
+let _imgLibCache = null;
+
+async function _loadImageLibrary(thumbsId, onSelect) {
+  const container = document.getElementById(thumbsId);
+  if (!container) return;
+  container.innerHTML = '<div class="text-muted small w-100 text-center py-2"><span class="spinner-border spinner-border-sm me-1" style="width:.9rem;height:.9rem"></span>불러오는 중...</div>';
+  try {
+    if (!_imgLibCache) {
+      const res  = await fetch('/create/instagram/image-library', { headers: {'X-CSRFToken': CSRF} });
+      const data = await res.json();
+      _imgLibCache = data.images || [];
+    }
+    if (!_imgLibCache.length) {
+      container.innerHTML = '<div class="text-muted small w-100 text-center py-2">이전에 생성된 이미지가 없습니다.</div>';
+      return;
+    }
+    container.innerHTML = '';
+    _imgLibCache.forEach(item => {
+      const img = document.createElement('img');
+      img.src   = item.url;
+      img.title = item.created_at || '';
+      img.style.cssText = 'width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:pointer;border:2px solid transparent;flex-shrink:0';
+      img.onmouseover = () => img.style.borderColor = '#d63384';
+      img.onmouseout  = () => img.style.borderColor = 'transparent';
+      img.onclick     = () => onSelect(item.url);
+      container.appendChild(img);
+    });
+  } catch (e) {
+    container.innerHTML = '<div class="text-muted small py-2">이미지 목록 로드 실패</div>';
+  }
+}
+
+function switchSingleInsertTab(tab) {
+  const fileEl = document.getElementById('sInsFileSection');
+  const libEl  = document.getElementById('sInsLibSection');
+  const fileBtn= document.getElementById('sInsTabFile');
+  const libBtn = document.getElementById('sInsTabLib');
+  if (tab === 'file') {
+    fileEl.classList.remove('d-none'); libEl.classList.add('d-none');
+    fileBtn.style.cssText = 'font-size:.74rem;border-radius:6px;border:none;background:#d63384;color:#fff';
+    libBtn.style.cssText  = 'font-size:.74rem;border-radius:6px';
+    libBtn.classList.add('btn-outline-secondary'); libBtn.classList.remove('btn-primary');
+  } else {
+    fileEl.classList.add('d-none'); libEl.classList.remove('d-none');
+    libBtn.style.cssText  = 'font-size:.74rem;border-radius:6px;border:none;background:#d63384;color:#fff';
+    fileBtn.style.cssText = 'font-size:.74rem;border-radius:6px';
+    fileBtn.classList.add('btn-outline-secondary'); fileBtn.classList.remove('btn-primary');
+    _loadImageLibrary('sInsLibThumbs', url => {
+      generatedImageUrl = url;
+      document.getElementById('finalImage').src   = url;
+      document.getElementById('downloadBtn').href = url;
+      document.getElementById('singleInsertPanel').classList.add('d-none');
+    });
+  }
+}
+
+function switchCarouselInsertTab(tab) {
+  const fileEl = document.getElementById('cInsFileSection');
+  const libEl  = document.getElementById('cInsLibSection');
+  const fileBtn= document.getElementById('cInsTabFile');
+  const libBtn = document.getElementById('cInsTabLib');
+  if (tab === 'file') {
+    fileEl.classList.remove('d-none'); libEl.classList.add('d-none');
+    fileBtn.style.cssText = 'font-size:.74rem;border-radius:6px;border:none;background:#d63384;color:#fff';
+    libBtn.style.cssText  = 'font-size:.74rem;border-radius:6px';
+  } else {
+    fileEl.classList.add('d-none'); libEl.classList.remove('d-none');
+    libBtn.style.cssText  = 'font-size:.74rem;border-radius:6px;border:none;background:#d63384;color:#fff';
+    fileBtn.style.cssText = 'font-size:.74rem;border-radius:6px';
+    _loadImageLibrary('cInsLibThumbs', url => {
+      generatedImages[carouselIdx] = url;
+      carouselShowImage(carouselIdx);
+      _buildThumbStrip();
+      document.getElementById('carouselInsertPanel').classList.add('d-none');
+    });
+  }
 }
 
 // ── 단일 이미지 삽입 ─────────────────────────────────────────

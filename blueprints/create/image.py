@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from blueprints.create import create_bp
 from models import POINT_COSTS
 from services.tz_utils import now_kst
+from services.rate_limiter import check_ai_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,9 @@ ENGINE_COST_MAP = {
 @create_bp.route('/image/generate', methods=['POST'])
 @login_required
 def image_generate():
+    err = check_ai_rate_limit('image_generate', max_per_hour=100)
+    if err:
+        return jsonify(ok=False, message=err), 429
     supabase = current_app.supabase
     data = request.json or {}
 

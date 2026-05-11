@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block title %}생성 작업 정리 — 어드민{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admin.dashboard') }}" class="text-muted text-decoration-none">어드민</a> / 생성 작업 정리{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-4">
+  <span class="badge bg-danger">ADMIN</span>
+  <h5 class="fw-bold mb-0">멈춘 생성 작업 정리</h5>
+</div>
+
+<!-- 필터 -->
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+      <label class="fw-semibold mb-0">기준:</label>
+      <div class="input-group" style="max-width:220px">
+        <input type="number" name="minutes" value="{{ stale_minutes }}" min="5" max="1440"
+               class="form-control form-control-sm">
+        <span class="input-group-text small">분 이상 generating</span>
+      </div>
+      <button type="submit" class="btn btn-sm btn-outline-secondary">조회</button>
+      <span class="text-muted small ms-2">기준 시각: {{ cutoff[:19] }} UTC</span>
+    </form>
+  </div>
+</div>
+
+<!-- stale 목록 -->
+<div class="card mb-4">
+  <div class="card-header py-3 d-flex justify-content-between align-items-center">
+    <span class="fw-bold">멈춘 레코드 <span class="badge bg-danger ms-1">{{ stale | length }}</span>개</span>
+    {% if stale %}
+    <button class="btn btn-sm btn-danger" onclick="runCleanup(null)">
+      <i class="bi bi-trash me-1"></i>전체 실패 처리 + 환불
+    </button>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if not stale %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-check-circle fs-1 d-block mb-2" style="opacity:.3"></i>
+      <p class="mb-0">멈춘 레코드 없음 — 모두 정상입니다</p>
+    </div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
+            <th>생성 유형</th>
+            <th>생성 시각</th>
+            <th>포인트</th>
+            <th>유저 ID</th>
+            <th>step</th>
+            <th class="pe-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in stale %}
+          <tr>
+            <td class="ps-3">
+              <input type="checkbox" class="row-chk" value="{{ row.id }}">
+            </td>
+            <td>
+              <span class="badge bg-warning text-dark">{{ row.creation_type }}</span>
+            </td>
+            <td class="small text-muted">{{ row.created_at[:19] }}</td>
+            <td>{{ row.points_used | number }}P</td>
+            <td class="small text-muted" style="max-width:140px;overflow:hidden;text-overflow:ellipsis">
+              {{ row.user_id[:20] if row.user_id else '-' }}
+            </td>
+            <td class="small">{{ (row.output_data or {}).get('step', '') }}</td>
+            <td class="pe-3 text-end">
+              <button class="btn btn-xs btn-outline-danger py-0 px-2"
+                      style="font-size:.75rem"
+                      onclick="runCleanup(['{{ row.id }}'])">
+                실패처리
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="p-3 border-top d-flex gap-2">
+      <button class="btn btn-sm btn-outline-danger" onclick="runCleanupSelected()">
+        <i class="bi bi-check2-square me-1"></i>선택 항목 실패 처리 + 환불
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 결과 -->
+<div id="resultBox" class="alert d-none mb-4"></div>
+
+<script>
+const STALE_MINUTES = {{ stale_minutes }};
+
+function toggleAll(chk) {
+  document.querySelectorAll('.row-chk').forEach(c => c.checked = chk.checked);
+}
+
+function runCleanupSelected() {
+  const ids = Array.from(document.querySelectorAll('.row-chk:checked')).map(c => c.value);
+  if (!ids.length) { alert('선택된 항목이 없습니다.'); return; }
+  if (!confirm(`선택한 ${ids.length}개 항목을 실패 처리하고 포인트를 환불합니까?`)) return;
+  runCleanup(ids);
+}
+
+function runCleanup(ids) {
+  if (ids === null) {
+    if (!confirm(`${STALE_MINUTES}분 이상 generating 상태인 모든 레코드를 실패 처리하고 포인트를 환불합니까?`)) return;
+  }
+  const resultBox = document.getElementById('resultBox');
+  resultBox.className = 'alert alert-info';
+  resultBox.textContent = '처리 중...';
+
+  const body = { minutes: STALE_MINUTES };
+  if (ids) body.ids = ids;
+
+  fetch('/admin/cleanup/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      resultBox.className = 'alert alert-success';
+      resultBox.textContent = `✅ ${data.message}`;
+      setTimeout(() => location.reload(), 1800);
+    } else {
+      resultBox.className = 'alert alert-danger';
+      resultBox.textContent = `❌ 오류: ${data.message}`;
+    }
+  })
+  .catch(e => {
+    resultBox.className = 'alert alert-danger';
+    resultBox.textContent = `네트워크 오류: ${e}`;
+  });
+}
+</script>
+{% endblock %}
