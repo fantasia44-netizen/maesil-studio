@@ -47,15 +47,16 @@ def _translate_prompt(text: str) -> str:
             model='claude-haiku-4-5-20251001',
         )
         result = translated.strip().strip('"\'')
-        # 번역 결과에 한글이 남아있으면 경고 후 영어 부분만 추출 시도
+        # 번역 결과에 한글이 남아있으면 CJK 문자 제거 후 영어 부분만 사용
         if _has_korean(result):
-            logger.warning(f'[translate] 번역 결과에 한글 잔존, 재시도: {result[:60]}')
-            result = re.sub(r'[가-힣ㄱ-ㆎᄀ-ᇿ\s]+', ' ', result).strip()
+            logger.warning(f'[translate] 번역 결과에 한글 잔존, 스트립: {result[:60]}')
+            result = re.sub(r'[가-힣ㄱ-ㆎᄀ-ᇿ一-鿿぀-ヿ㐀-䶿]+', ' ', result)
+            result = re.sub(r'\s+', ' ', result).strip()
         logger.info(f'[translate] KO→EN: "{text[:40]}" → "{result[:60]}"')
-        return result or text
+        return result  # 빈 문자열 반환 가능 → _generate_flux에서 처리
     except Exception as e:
-        logger.warning(f'[translate] 번역 실패, 원본 사용: {e}')
-        return text
+        logger.warning(f'[translate] 번역 실패: {e}')
+        return ''  # 빈 문자열 반환 — 한글을 그대로 fal에 보내지 않음
 
 # ── 엔진별 포인트 비용 ───────────────────────────────────
 IMAGE_COSTS = {
@@ -164,7 +165,19 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
     """(image_url, prompt_used) 반환. 한글이면 자동 번역."""
     original = prompt
     if _has_korean(prompt):
-        prompt = _translate_prompt(prompt)
+        translated = _translate_prompt(prompt)
+        if translated and not _has_korean(translated):
+            # 정상 번역
+            prompt = translated
+        elif translated:
+            # 번역 결과에 한글이 남아있음 — CJK 강제 제거
+            cleaned = re.sub(r'[가-힣ㄱ-ㆎᄀ-ᇿ一-鿿぀-ヿ㐀-䶿]+', ' ', translated)
+            prompt = re.sub(r'\s+', ' ', cleaned).strip() or 'lifestyle scene'
+        else:
+            # 번역 완전 실패(빈 문자열) — 원본 한글에서 CJK 제거 후 안전 기본값 사용
+            cleaned = re.sub(r'[가-힣ㄱ-ㆎᄀ-ᇿ一-鿿぀-ヿ㐀-䶿]+', ' ', prompt)
+            prompt = re.sub(r'\s+', ' ', cleaned).strip() or 'lifestyle scene, natural lighting'
+        logger.debug(f'[flux] 번역 후 프롬프트: "{prompt[:80]}"')
 
     # CJK 문자 억제 (Flux가 중국어/일본어 글자를 생성하는 현상 차단)
     prompt = prompt.rstrip() + _NO_CJK
