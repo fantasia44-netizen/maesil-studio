@@ -30,10 +30,10 @@
           </button>
           {% endif %}
           {% if has_video_url %}
-          <a href="{{ od.video_url }}" target="_blank" download="maesil_shorts.mp4"
-             class="btn btn-sm btn-outline-primary">
+          <button class="btn btn-sm btn-outline-primary"
+                  onclick="downloadFile('{{ od.video_url }}', 'maesil_shorts.mp4')">
             <i class="bi bi-download me-1"></i>MP4 다운로드
-          </a>
+          </button>
           {% endif %}
         </div>
       </div>
@@ -90,13 +90,13 @@
           {% if has_video_url %}
           <div class="text-center mb-4">
             <video src="{{ od.video_url }}" controls playsinline
-                   style="max-width:300px;width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15)"
+                   style="max-width:340px;width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15)"
                    class="mb-3"></video>
             <div class="mt-2 d-flex gap-2 justify-content-center flex-wrap">
-              <a href="{{ od.video_url }}" target="_blank" download="maesil_shorts.mp4"
-                 class="btn btn-sm btn-primary">
+              <button class="btn btn-sm btn-primary"
+                      onclick="downloadFile('{{ od.video_url }}', 'maesil_shorts.mp4')">
                 <i class="bi bi-download me-1"></i>MP4 다운로드
-              </a>
+              </button>
               <a href="{{ url_for('create.shorts') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-plus-circle me-1"></i>새 영상 만들기
               </a>
@@ -107,13 +107,15 @@
           <!-- ② 이미지 (단일) -->
           {% if has_image_url %}
           <div class="text-center mb-4">
-            <img src="{{ od.image_url }}" class="img-fluid rounded shadow-sm" alt="생성 이미지"
-                 style="max-height:600px;object-fit:contain">
-            <div class="mt-2">
-              <a href="{{ od.image_url }}" target="_blank" download
-                 class="btn btn-sm btn-outline-secondary">
+            <img src="{{ od.image_url }}" class="img-fluid rounded shadow-sm"
+                 alt="생성 이미지"
+                 style="max-height:620px;object-fit:contain;cursor:zoom-in"
+                 onclick="openImg('{{ od.image_url }}', '생성 이미지')">
+            <div class="mt-3">
+              <button class="btn btn-sm btn-primary"
+                      onclick="downloadFile('{{ od.image_url }}', 'maesil_image.jpg')">
                 <i class="bi bi-download me-1"></i>이미지 저장
-              </a>
+              </button>
             </div>
           </div>
           {% endif %}
@@ -121,29 +123,38 @@
           <!-- ② 이미지 배열 (블로그 본문 삽입 이미지 등) -->
           {% if has_images %}
           <div class="mb-4">
-            <div class="d-flex flex-wrap gap-2">
+            <div class="row row-cols-2 row-cols-md-3 g-2">
               {% for img_item in od.images %}
               {%- set img_src  = img_item.url  if img_item is mapping else img_item -%}
               {%- set img_role = img_item.role if img_item is mapping else '' -%}
               {% if img_src %}
-              <div class="position-relative">
-                <img src="{{ img_src }}" alt="{{ img_role or '이미지' }}"
-                     style="height:160px;width:auto;object-fit:cover;border-radius:8px;border:1px solid #eee;cursor:pointer"
-                     onclick="openImg('{{ img_src }}')">
-                {% if img_role %}
-                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);
-                            color:#fff;font-size:.68rem;padding:.2rem .4rem;border-radius:0 0 8px 8px;
-                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-                  {{ img_role }}
+              <div class="col">
+                <div class="position-relative rounded overflow-hidden"
+                     style="cursor:zoom-in;aspect-ratio:1;background:#f5f5f5"
+                     onclick="openImg('{{ img_src }}', '{{ img_role }}')">
+                  <img src="{{ img_src }}" alt="{{ img_role or '이미지' }}"
+                       style="width:100%;height:100%;object-fit:cover">
+                  {% if img_role %}
+                  <div style="position:absolute;bottom:0;left:0;right:0;
+                              background:linear-gradient(transparent,rgba(0,0,0,.65));
+                              color:#fff;font-size:.72rem;padding:.35rem .5rem;
+                              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                    {{ img_role }}
+                  </div>
+                  {% endif %}
+                  <div class="position-absolute top-0 end-0 m-1 opacity-0 hover-show"
+                       style="background:rgba(0,0,0,.5);border-radius:50%;width:28px;height:28px;
+                              display:flex;align-items:center;justify-content:center">
+                    <i class="bi bi-zoom-in text-white" style="font-size:.8rem"></i>
+                  </div>
                 </div>
-                {% endif %}
               </div>
               {% endif %}
               {% endfor %}
             </div>
             <div class="mt-2 text-muted" style="font-size:.78rem">
               <i class="bi bi-images me-1"></i>이미지 {{ od.images | length }}장
-              · 클릭하면 원본 크기로 열림
+              · 클릭하면 크게 보기 + 다운로드
             </div>
           </div>
           {% endif %}
@@ -197,18 +208,20 @@
 
 <!-- 이미지 라이트박스 -->
 <div id="imgModal" class="modal fade" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2 border-0">
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content" style="background:#111">
+      <div class="modal-header py-2 border-0" style="background:#111">
+        <span id="modalRole" class="text-white fw-semibold small ms-1"></span>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body text-center pb-3">
-        <img id="modalImg" src="" class="img-fluid rounded" alt="이미지">
-        <div class="mt-2">
-          <a id="modalDownload" href="#" download target="_blank"
-             class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-download me-1"></i>저장
-          </a>
+      <div class="modal-body text-center pb-4 px-3" style="background:#111">
+        <img id="modalImg" src="" class="img-fluid rounded" alt="이미지"
+             style="max-height:80vh;object-fit:contain">
+        <div class="mt-3 d-flex gap-2 justify-content-center">
+          <button id="modalDownload" class="btn btn-primary btn-sm">
+            <i class="bi bi-download me-1"></i>다운로드
+          </button>
+          <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">닫기</button>
         </div>
       </div>
     </div>
@@ -227,9 +240,32 @@ function copyResult() {
   });
 }
 
-function openImg(url) {
+// ── 크로스오리진 Blob 다운로드 ─────────────────────────────────
+async function downloadFile(url, filename) {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('fetch ' + res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'maesil_file';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) {
+    // CORS 실패 시 새 탭으로 열기 (사용자가 직접 저장)
+    window.open(url, '_blank');
+  }
+}
+
+// ── 이미지 라이트박스 ──────────────────────────────────────────
+function openImg(url, role) {
   document.getElementById('modalImg').src = url;
-  document.getElementById('modalDownload').href = url;
+  document.getElementById('modalRole').textContent = role || '';
+  const ext = url.includes('.mp4') ? '.mp4' : '.jpg';
+  const safeName = (role || 'maesil_image').replace(/[^\w가-힣]/g, '_') + ext;
+  document.getElementById('modalDownload').onclick = () => downloadFile(url, safeName);
   new bootstrap.Modal(document.getElementById('imgModal')).show();
 }
 

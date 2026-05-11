@@ -387,13 +387,14 @@
         <p class="text-muted small mb-4">아래에서 미리보기 후 다운로드하세요</p>
 
         <video id="resultVideo" controls playsinline
-               style="max-width:280px;width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15)"
+               style="max-width:320px;width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15)"
                class="mb-4"></video>
 
         <div class="d-flex gap-2 justify-content-center flex-wrap">
-          <a id="downloadBtn" href="#" download="shorts.mp4" class="btn btn-primary">
+          <button id="downloadBtn" class="btn btn-primary"
+                  onclick="downloadVideoFile()">
             <i class="bi bi-download me-1"></i>MP4 다운로드
-          </a>
+          </button>
           <button class="btn btn-outline-secondary" onclick="goStep(1); resetAll()">
             <i class="bi bi-plus-circle me-1"></i>새 영상 만들기
           </button>
@@ -982,7 +983,9 @@ function collectScenes() {
 // 폴링
 // ══════════════════════════════════════════════════════
 function startPolling(sceneCount, isKling) {
-  const totalSteps = sceneCount + 2;
+  // Kling: 씬당 4단계(제출/대기/다운/조립) + 나머지 3 = n*4+3
+  // 일반: 씬 + FFmpeg + 업로드 + 완료 = n+2
+  const totalSteps = isKling ? sceneCount * 4 + 3 : sceneCount + 2;
 
   pollTimer = setInterval(async () => {
     try {
@@ -1012,13 +1015,36 @@ function startPolling(sceneCount, isKling) {
   }, 4000);
 }
 
+let _currentVideoUrl = '';
+
 function showResult(videoUrl) {
+  _currentVideoUrl = videoUrl;
   document.getElementById('generateProgress').classList.add('d-none');
   document.getElementById('generateResult').classList.remove('d-none');
   const video = document.getElementById('resultVideo');
   video.src = videoUrl; video.load();
-  const dl = document.getElementById('downloadBtn');
-  dl.href = videoUrl; dl.download = 'maesil_shorts.mp4';
+}
+
+// ── 크로스오리진 Blob 다운로드 ─────────────────────────────────
+async function downloadFile(url, filename) {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('fetch ' + res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'maesil_file';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) {
+    window.open(url, '_blank');
+  }
+}
+
+function downloadVideoFile() {
+  if (_currentVideoUrl) downloadFile(_currentVideoUrl, 'maesil_shorts.mp4');
 }
 
 function showError(msg) {
