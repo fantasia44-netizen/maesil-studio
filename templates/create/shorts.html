@@ -140,14 +140,7 @@
             </div>
           </div>
         </div>
-        <div id="klingModelRow" class="mt-2 d-none">
-          <label class="form-label mb-1 small fw-semibold">Kling 모델</label>
-          <select id="klingModelSelect" class="form-select form-select-sm">
-            <option value="kling-v1-6">kling-v1-6 (권장 — 빠르고 안정적)</option>
-            <option value="kling-v2">kling-v2 (최신 고품질, 느림)</option>
-            <option value="kling-v1">kling-v1 (기본)</option>
-          </select>
-        </div>
+        <input type="hidden" id="klingModelSelect" value="kling-v1">
       </div>
 
       <input type="hidden" id="selectedEngine" value="flux">
@@ -550,7 +543,6 @@ function selectEngine(engine, el) {
   el.classList.add('selected');
   document.getElementById('selectedEngine').value = engine;
   const isKling = engine === 'kling';
-  document.getElementById('klingModelRow').classList.toggle('d-none', !isKling);
   const cost = parseInt(el.dataset.cost || (isKling ? 1500 : 300));
   document.getElementById('step6Cost').textContent = cost.toLocaleString() + 'P';
   checkStep3Ready();

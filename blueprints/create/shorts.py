@@ -332,7 +332,7 @@ def shorts_generate():
     bgm_volume        = float(data.get('bgm_volume') if data.get('bgm_volume') is not None else 0.20)
     bgm_volume        = max(0.0, min(1.0, bgm_volume))
     use_kling         = bool(data.get('use_kling', False))
-    kling_model       = (data.get('kling_model')       or 'kling-v1-6').strip()
+    kling_model       = 'kling-v1'  # v1 고정 (비용 절감)
     product_image_url = (data.get('product_image_url') or '').strip() or None
     # 미리보기에서 승인된 기준 이미지 — 있으면 FLUX 재생성 생략
     ref_image_url     = (data.get('ref_image_url')     or '').strip() or None
