@@ -249,12 +249,18 @@ def shorts_preview_image():
     사용자가 이미지를 확인하고 [이 이미지로 진행] / [재생성] / [내 이미지 사용]을 선택.
     승인된 image_url을 /shorts/generate 에 ref_image_url로 전달하면 재생성 불필요.
     """
-    data       = request.get_json(force=True) or {}
-    flux_prompt = (data.get('flux_prompt') or '').strip()
-    style       = (data.get('style')       or 'realistic_banner').strip()
+    data        = request.get_json(force=True) or {}
+    flux_prompt = (data.get('flux_prompt')  or '').strip()
+    scene_desc  = (data.get('scene_desc')   or '').strip()
+    narration   = (data.get('narration')    or '').strip()
+    style       = (data.get('style')        or 'realistic_banner').strip()
+
+    # flux_prompt 없으면 scene_desc → narration 순으로 fallback
+    if not flux_prompt:
+        flux_prompt = scene_desc or narration or ''
 
     if not flux_prompt:
-        return jsonify(ok=False, message='flux_prompt가 없습니다.')
+        return jsonify(ok=False, message='씬 프롬프트 정보가 없습니다. 스토리보드를 다시 생성해주세요.')
 
     from services.kling_service import ensure_english_prompt
     from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
@@ -266,13 +272,14 @@ def shorts_preview_image():
         full_prompt = (
             flux_prompt +
             (f', {style_mod}' if style_mod else '') +
+            ', 9:16 vertical frame, cinematic lighting' +
             _NO_CJK + _NO_ANATOMY
         )
         img_url, _ = _generate_flux(full_prompt, 'flux_preview', '1080x1920')
         return jsonify(ok=True, image_url=img_url, prompt_used=flux_prompt)
     except Exception as e:
         logger.error('[shorts/preview-image] %s', e)
-        return jsonify(ok=False, message=f'이미지 생성 실패: {e}')
+        return jsonify(ok=False, message=f'이미지 생성 실패: {str(e)[:200]}')
 
 
 # ─────────────────────────────────────────────────────────────

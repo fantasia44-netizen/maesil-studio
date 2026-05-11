@@ -721,6 +721,8 @@ async function loadPreviewImage() {
 
   const scene1 = scriptScenes[0] || {};
   const fluxPrompt = scene1.flux_prompt || '';
+  const sceneDesc  = scene1.scene_desc  || scene1.overlay_title || '';
+  const narration  = scene1.narration   || '';
 
   try {
     const res  = await fetch('/create/shorts/preview-image', {
@@ -728,6 +730,8 @@ async function loadPreviewImage() {
       headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
       body: JSON.stringify({
         flux_prompt: fluxPrompt,
+        scene_desc:  sceneDesc,
+        narration:   narration,
         style:       selectedStyle || 'realistic_banner',
       })
     });
