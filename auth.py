@@ -328,6 +328,14 @@ def register():
             except Exception:
                 pass
 
+            # ── 웰컴 포인트 지급 (신규 가입자 한정) ──
+            try:
+                from services.point_service import add_points
+                add_points(user_id, 5000, 'welcome',
+                           ref_id=user_id, note='신규 가입 웰컴 포인트')
+            except Exception as _pe:
+                logger.warning(f'[AUTH] 웰컴 포인트 지급 실패 (무시): {_pe}')
+
         # ── 약관 동의 이력 ──
         try:
             user_agent = request.headers.get('User-Agent', '')[:500]
