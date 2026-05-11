@@ -48,7 +48,9 @@ def banner():
         ).order('created_at', desc=True).limit(50).execute()
         products = r.data or []
 
-    from services.banner_service import BANNER_SIZES, BANNER_LAYOUTS, BANNER_BG_TYPES
+    from services.banner_service import (BANNER_SIZES, BANNER_LAYOUTS, BANNER_BG_TYPES,
+                                         TEXT_BANNER_BG_TYPES, TEXT_BANNER_LAYOUTS,
+                                         PRODUCT_BANNER_BG_PRESETS)
     return render_template(
         'create/banner.html',
         brands=brands,
@@ -57,7 +59,12 @@ def banner():
         banner_sizes=BANNER_SIZES,
         banner_layouts=BANNER_LAYOUTS,
         banner_bg_types=BANNER_BG_TYPES,
+        text_banner_bg_types=TEXT_BANNER_BG_TYPES,
+        text_banner_layouts=TEXT_BANNER_LAYOUTS,
+        product_banner_bg_presets=PRODUCT_BANNER_BG_PRESETS,
         cost=POINT_COSTS.get('banner', 80),
+        product_cost=POINT_COSTS.get('banner_product', 80),
+        text_cost=POINT_COSTS.get('banner_text', 20),
     )
 
 
@@ -245,6 +252,217 @@ def banner_generate():
         layout=layout,
         W=W,
         H=H,
+        product_url=product_url,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+    )
+    return jsonify(ok=True, creation_id=creation_id, cost=cost)
+
+
+# ─────────────────────────────────────────────────────────────
+# 텍스트 배너 즉시 생성 (PIL만, 20P, 동기)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/banner/text-generate', methods=['POST'])
+@login_required
+def banner_text_generate():
+    """텍스트 배너 즉시 생성 → 포인트 차감 후 image_url 반환 (20P, 동기)."""
+    import base64 as _b64
+    supabase = current_app.supabase
+    data     = request.get_json(force=True) or {}
+
+    headline    = (data.get('headline')         or '').strip()
+    subline     = (data.get('subline')          or '').strip()
+    cta         = (data.get('cta')              or '').strip()
+    bg_type     = (data.get('bg_type')          or 'solid').strip()
+    bg_color1   = (data.get('bg_color1')        or '#3b82f6').strip()
+    bg_color2   = (data.get('bg_color2')        or '#1d4ed8').strip()
+    layout      = (data.get('layout')           or 'center').strip()
+    text_color  = (data.get('text_color')       or '#ffffff').strip()
+    cta_color   = (data.get('cta_color')        or bg_color1).strip()
+    size_key    = (data.get('size_key')         or 'sns_square').strip()
+    custom_w    = data.get('custom_w')
+    custom_h    = data.get('custom_h')
+    brand_id    = (data.get('brand_id')         or '').strip()
+    product_id  = (data.get('product_id')       or '').strip()
+    use_product = bool(data.get('use_product_img', True))
+
+    if not headline:
+        return jsonify(ok=False, message='제목 문구가 필요합니다.')
+
+    from services.banner_service import BANNER_SIZES, generate_text_banner
+
+    size_meta = BANNER_SIZES.get(size_key, BANNER_SIZES['sns_square'])
+    if size_key == 'custom' and custom_w and custom_h:
+        W = max(200, min(2400, int(custom_w)))
+        H = max(200, min(2400, int(custom_h)))
+    elif size_meta['w']:
+        W, H = size_meta['w'], size_meta['h']
+    else:
+        W, H = 1080, 1080
+
+    cost = POINT_COSTS.get('banner_text', 20)
+    from services.point_service import get_balance, use_points, InsufficientPoints
+    if get_balance(current_user.id) < cost:
+        return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P)')
+
+    product_url: str | None = None
+    if use_product and product_id:
+        product = _get_product(supabase, product_id)
+        product_url = _first_product_image(product)
+
+    # 1) PIL 생성 (빠름 — 실패해도 포인트 차감 없음)
+    try:
+        b64_uri = generate_text_banner(
+            bg_type=bg_type, bg_color1=bg_color1, bg_color2=bg_color2,
+            layout=layout, headline=headline, subline=subline, cta=cta,
+            text_color=text_color, cta_color=cta_color,
+            W=W, H=H, product_url=product_url,
+        )
+    except Exception as e:
+        logger.error('[banner/text-generate] PIL 실패: %s', e)
+        return jsonify(ok=False, message=f'배너 생성 실패: {e}')
+
+    # 2) Supabase Storage 업로드
+    creation_id = str(uuid.uuid4())
+    try:
+        _, b64data = b64_uri.split(',', 1)
+        img_bytes  = _b64.b64decode(b64data)
+        path       = f'{current_user.id}/{creation_id}_text_banner.jpg'
+        supabase.storage.from_('creations').upload(
+            path, img_bytes, {'content-type': 'image/jpeg'}
+        )
+        image_url = supabase.storage.from_('creations').get_public_url(path)
+    except Exception as e:
+        logger.error('[banner/text-generate] 업로드 실패: %s', e)
+        return jsonify(ok=False, message=f'업로드 실패: {e}')
+
+    # 3) 포인트 차감 (생성·업로드 성공 후)
+    try:
+        _row = {
+            'id': creation_id, 'user_id': current_user.id,
+            'brand_id': brand_id or None,
+            'creation_type': 'banner_text',
+            'input_data': {'size_key': size_key, 'W': W, 'H': H,
+                           'bg_type': bg_type, 'layout': layout,
+                           'headline': headline, 'subline': subline, 'cta': cta},
+            'output_data': {'image_url': image_url, 'W': W, 'H': H},
+            'points_used': cost, 'status': 'done',
+            'model_used': 'pil_only',
+            'created_at': now_kst().isoformat(),
+        }
+        if getattr(current_user, 'operator_id', None):
+            _row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(_row).execute()
+    except Exception as e:
+        logger.warning('[banner/text-generate] creation insert 실패: %s', e)
+
+    try:
+        use_points(current_user.id, 'banner_text', creation_id)
+    except InsufficientPoints:
+        return jsonify(ok=False, message='포인트가 부족합니다.')
+    except Exception as e:
+        logger.warning('[banner/text-generate] 포인트 차감 실패: %s', e)
+
+    return jsonify(ok=True, image_url=image_url, creation_id=creation_id, W=W, H=H, size_key=size_key)
+
+
+# ─────────────────────────────────────────────────────────────
+# 상품 배너 생성 (Bria 배경교체 + PIL, 80P, 비동기)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/banner/product-generate', methods=['POST'])
+@login_required
+def banner_product_generate():
+    """상품 이미지 배경 교체 배너 생성 (80P, Celery 비동기)."""
+    supabase = current_app.supabase
+    data     = request.get_json(force=True) or {}
+
+    brand_id        = (data.get('brand_id')         or '').strip()
+    product_id      = (data.get('product_id')       or '').strip()
+    headline        = (data.get('headline')         or '').strip()
+    subline         = (data.get('subline')          or '').strip()
+    cta             = (data.get('cta')              or '').strip()
+    bg_preset       = (data.get('bg_preset')        or 'studio_white').strip()
+    bg_prompt_custom= (data.get('bg_prompt_custom') or '').strip()
+    brand_color     = (data.get('brand_color')      or '#e8355a').strip()
+    layout          = (data.get('layout')           or 'overlay').strip()
+    size_key        = (data.get('size_key')         or 'sns_square').strip()
+    custom_w        = data.get('custom_w')
+    custom_h        = data.get('custom_h')
+
+    if not headline:
+        return jsonify(ok=False, message='제목 문구가 필요합니다.')
+
+    from services.banner_service import BANNER_SIZES
+
+    size_meta = BANNER_SIZES.get(size_key, BANNER_SIZES['sns_square'])
+    if size_key == 'custom' and custom_w and custom_h:
+        W = max(200, min(2400, int(custom_w)))
+        H = max(200, min(2400, int(custom_h)))
+    elif size_meta['w']:
+        W, H = size_meta['w'], size_meta['h']
+    else:
+        W, H = 1080, 1080
+
+    # 상품 이미지 필수
+    product = _get_product(supabase, product_id)
+    product_url = _first_product_image(product)
+    if not product_url:
+        return jsonify(ok=False, message='상품 이미지가 없습니다. 상품 관리에서 이미지를 먼저 등록해주세요.')
+
+    cost = POINT_COSTS.get('banner_product', 80)
+    from services.point_service import get_balance, use_points, InsufficientPoints
+    balance = get_balance(current_user.id)
+    if balance < cost:
+        return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
+
+    creation_id = str(uuid.uuid4())
+    try:
+        _row = {
+            'id': creation_id,
+            'user_id': current_user.id,
+            'brand_id': brand_id or None,
+            'creation_type': 'banner_product',
+            'input_data': {
+                'size_key': size_key, 'W': W, 'H': H,
+                'layout': layout, 'bg_preset': bg_preset,
+                'headline': headline, 'subline': subline, 'cta': cta,
+            },
+            'output_data': {'progress': 0, 'step': '준비 중'},
+            'points_used': cost,
+            'status': 'generating',
+            'model_used': 'bria+pil',
+            'created_at': now_kst().isoformat(),
+        }
+        if getattr(current_user, 'operator_id', None):
+            _row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(_row).execute()
+    except Exception as e:
+        logger.warning('[banner/product-generate] creation insert: %s', e)
+
+    try:
+        use_points(current_user.id, 'banner_product', creation_id)
+    except InsufficientPoints:
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        return jsonify(ok=False, message='포인트가 부족합니다.')
+
+    from tasks.banner_task import generate_product_banner
+    supabase_url = current_app.config.get('SUPABASE_URL', '')
+    supabase_key = (current_app.config.get('SUPABASE_SERVICE_KEY')
+                    or current_app.config.get('SUPABASE_KEY', ''))
+
+    generate_product_banner.delay(
+        creation_id=creation_id,
+        user_id=current_user.id,
+        headline=headline,
+        subline=subline,
+        cta=cta,
+        bg_preset=bg_preset,
+        bg_prompt_custom=bg_prompt_custom,
+        brand_color=brand_color,
+        layout=layout,
+        W=W, H=H,
         product_url=product_url,
         supabase_url=supabase_url,
         supabase_key=supabase_key,

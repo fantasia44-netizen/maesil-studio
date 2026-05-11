@@ -64,7 +64,7 @@ POINT_COSTS = {
     'image_generation': 30,  # 스튜디오 이미지 생성 (FLUX Schnell, 장당)
     # 쇼츠/릴스 영상 (대본+이미지+TTS+조립 통합)
     'shorts_video':     300,  # FLUX 5장 + TTS + FFmpeg 조립 all-in-one
-    'shorts_video_kling': 800, # Kling image2video 5씬 + TTS + FFmpeg 조립
+    'shorts_video_kling': 1500, # Kling image2video 3씬 라스트프레임 체이닝 + TTS + FFmpeg
     # 홍보 자료 (제안서·카탈로그·리플릿·전단지)
     'business_proposal':   150,  # 거래처 제안서
     'sponsorship_proposal':150,  # 협찬 제안서
@@ -80,6 +80,8 @@ POINT_COSTS = {
     'detail_page_image':   250,  # 스토리 섹션 이미지 (PIL 합성, 실제 비용은 섹션별 override)
     # 배너 이미지
     'banner':               80,  # FLUX Schnell 배경 + PIL 합성 (장당)
+    'banner_product':       80,  # 상품 사진 Bria 배경 교체 + PIL 합성
+    'banner_text':          20,  # PIL만으로 즉시 생성 (텍스트 배너)
 }
 
 # ──────────────────────────────────────────

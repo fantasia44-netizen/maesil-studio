@@ -123,10 +123,11 @@ def shorts_script():
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
-    brand_id   = (data.get('brand_id')   or '').strip()
-    product_id = (data.get('product_id') or '').strip()
-    angle      = data.get('angle') or {}
-    style      = (data.get('style') or 'realistic_banner').strip()
+    brand_id     = (data.get('brand_id')   or '').strip()
+    product_id   = (data.get('product_id') or '').strip()
+    angle        = data.get('angle') or {}
+    style        = (data.get('style') or 'realistic_banner').strip()
+    reveal_mode  = bool(data.get('reveal_mode', False))
 
     brand   = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
     if not brand:
@@ -139,17 +140,24 @@ def shorts_script():
     brand_ctx = build_brand_context(brand, product)
     creation_id = str(uuid.uuid4())
 
+    # 제품 이미지 URL 추출 (리빌 모드에서 파이프라인에 전달용)
+    product_image_url = None
+    if reveal_mode and product:
+        imgs = product.get('images') or []
+        if isinstance(imgs, list) and imgs:
+            product_image_url = imgs[0] if isinstance(imgs[0], str) else None
+
     try:
         _row = {
             'id': creation_id,
             'user_id': current_user.id,
             'brand_id': brand['id'],
             'creation_type': 'shorts_script',
-            'input_data': {'angle': angle, 'style': style},
+            'input_data': {'angle': angle, 'style': style, 'reveal_mode': reveal_mode},
             'output_data': {},
             'points_used': 0,
             'status': 'generating',
-            'model_used': 'claude-haiku-4-5-20251001',
+            'model_used': 'claude-sonnet-4-6',
             'created_at': now_kst().isoformat(),
         }
         if getattr(current_user, 'operator_id', None):
@@ -159,23 +167,149 @@ def shorts_script():
         logger.warning('[shorts/script] creation insert: %s', e)
 
     try:
-        scenes = generate_shorts_script(brand_ctx, angle, style)
-        # 포인트 차감 없음 — 영상 생성(shorts/generate)에서 300P 통합 차감
+        scenes = generate_shorts_script(brand_ctx, angle, style, reveal_mode=reveal_mode)
 
         supabase.table('creations').update({
-            'output_data': {'scenes': scenes},
+            'output_data': {'scenes': scenes, 'product_image_url': product_image_url},
             'status': 'done',
         }).eq('id', creation_id).execute()
 
-        return jsonify(ok=True, scenes=scenes, creation_id=creation_id)
+        return jsonify(
+            ok=True,
+            scenes=scenes,
+            creation_id=creation_id,
+            reveal_mode=reveal_mode,
+            product_image_url=product_image_url,
+        )
 
-    except InsufficientPoints:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message='포인트가 부족합니다.')
     except Exception as e:
         logger.error('[shorts/script] %s', e)
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message=f'대본 생성 실패: {e}')
+
+
+# ─────────────────────────────────────────────────────────────
+# 스토리보드 미리보기 (한글 3씬 방향 요약 — 이미지 생성 없음)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/storyboard', methods=['POST'])
+@login_required
+def shorts_storyboard():
+    """3씬 스토리보드 방향 생성 (이미지/비디오 생성 없음, 빠름).
+
+    사용자가 한글로 방향을 확인하고 승인한 뒤 이미지 생성 단계로 넘어감.
+    Returns: scenes = [{role_ko, narration, overlay_title, scene_desc, flux_prompt}]
+    """
+    supabase = current_app.supabase
+    data     = request.get_json(force=True) or {}
+
+    brand_id    = (data.get('brand_id')    or '').strip()
+    product_id  = (data.get('product_id')  or '').strip()
+    angle       = data.get('angle') or {}
+    style       = (data.get('style')       or 'realistic_banner').strip()
+    reveal_mode = bool(data.get('reveal_mode', False))
+
+    brand   = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+    product = _get_product(supabase, product_id)
+
+    product_image_url = None
+    if reveal_mode and product:
+        imgs = product.get('images') or []
+        if isinstance(imgs, list) and imgs:
+            product_image_url = imgs[0] if isinstance(imgs[0], str) else None
+
+    from services.claude_service import build_brand_context
+    from services.shorts_service import generate_shorts_script
+
+    brand_ctx = build_brand_context(brand, product)
+    try:
+        scenes = generate_shorts_script(brand_ctx, angle, style, reveal_mode=reveal_mode)
+        return jsonify(
+            ok=True,
+            scenes=scenes,
+            reveal_mode=reveal_mode,
+            product_image_url=product_image_url,
+        )
+    except Exception as e:
+        logger.error('[shorts/storyboard] %s', e)
+        return jsonify(ok=False, message=f'스토리보드 생성 실패: {e}')
+
+
+# ─────────────────────────────────────────────────────────────
+# FLUX 기준 이미지 미리보기 (Kling 영상 시작 전 이미지 확인용)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/preview-image', methods=['POST'])
+@login_required
+def shorts_preview_image():
+    """씬1 flux_prompt → FLUX 이미지 생성 → URL 반환.
+
+    사용자가 이미지를 확인하고 [이 이미지로 진행] / [재생성] / [내 이미지 사용]을 선택.
+    승인된 image_url을 /shorts/generate 에 ref_image_url로 전달하면 재생성 불필요.
+    """
+    data       = request.get_json(force=True) or {}
+    flux_prompt = (data.get('flux_prompt') or '').strip()
+    style       = (data.get('style')       or 'realistic_banner').strip()
+
+    if not flux_prompt:
+        return jsonify(ok=False, message='flux_prompt가 없습니다.')
+
+    from services.kling_service import ensure_english_prompt
+    from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
+    from services.imagen_service import _generate_flux
+
+    try:
+        flux_prompt = ensure_english_prompt(flux_prompt)
+        style_mod   = SHORTS_STYLE_PRESETS.get(style, '')
+        full_prompt = (
+            flux_prompt +
+            (f', {style_mod}' if style_mod else '') +
+            _NO_CJK + _NO_ANATOMY
+        )
+        img_url, _ = _generate_flux(full_prompt, 'flux_preview', '1080x1920')
+        return jsonify(ok=True, image_url=img_url, prompt_used=flux_prompt)
+    except Exception as e:
+        logger.error('[shorts/preview-image] %s', e)
+        return jsonify(ok=False, message=f'이미지 생성 실패: {e}')
+
+
+# ─────────────────────────────────────────────────────────────
+# 사용자 직접 업로드 이미지 → Supabase Storage → 공개 URL
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/upload-ref-image', methods=['POST'])
+@login_required
+def shorts_upload_ref_image():
+    """사용자가 업로드한 이미지를 Supabase Storage에 저장 후 공개 URL 반환."""
+    import uuid as _uuid
+    supabase = current_app.supabase
+
+    file = request.files.get('image')
+    if not file:
+        return jsonify(ok=False, message='이미지가 없습니다.')
+
+    ext = 'jpg'
+    if file.filename and '.' in file.filename:
+        ext = file.filename.rsplit('.', 1)[-1].lower()
+    if ext not in ('jpg', 'jpeg', 'png', 'webp'):
+        ext = 'jpg'
+
+    img_data  = file.read()
+    file_path = f'tmp/user_uploads/{current_user.id}_{_uuid.uuid4().hex[:10]}.{ext}'
+    mime      = file.mimetype or f'image/{ext}'
+
+    try:
+        supabase.storage.from_('maesil-files').upload(
+            file_path, img_data,
+            file_options={'content-type': mime, 'upsert': 'true'},
+        )
+        pub_url = supabase.storage.from_('maesil-files').get_public_url(file_path)
+        return jsonify(ok=True, image_url=pub_url)
+    except Exception as e:
+        logger.error('[shorts/upload-ref-image] %s', e)
+        return jsonify(ok=False, message=f'업로드 실패: {e}')
 
 
 # ─────────────────────────────────────────────────────────────
@@ -189,25 +323,33 @@ def shorts_generate():
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
-    scenes      = data.get('scenes') or []
-    style       = (data.get('style')       or 'realistic_banner').strip()
-    brand_color = (data.get('brand_color') or '#e8355a').strip()
-    voice_key   = (data.get('voice')       or 'female_natural').strip()
-    tts_speed   = float(data.get('tts_speed') or 1.1)
-    brand_id    = (data.get('brand_id')    or '').strip()
-    bgm_volume  = float(data.get('bgm_volume') if data.get('bgm_volume') is not None else 0.20)
-    bgm_volume  = max(0.0, min(1.0, bgm_volume))
-    use_kling   = bool(data.get('use_kling', False))
-    kling_model = (data.get('kling_model') or 'kling-v1-6').strip()
+    scenes            = data.get('scenes') or []
+    style             = (data.get('style')             or 'realistic_banner').strip()
+    brand_color       = (data.get('brand_color')       or '#e8355a').strip()
+    voice_key         = (data.get('voice')             or 'female_natural').strip()
+    tts_speed         = float(data.get('tts_speed') or 1.1)
+    brand_id          = (data.get('brand_id')          or '').strip()
+    bgm_volume        = float(data.get('bgm_volume') if data.get('bgm_volume') is not None else 0.20)
+    bgm_volume        = max(0.0, min(1.0, bgm_volume))
+    use_kling         = bool(data.get('use_kling', False))
+    kling_model       = (data.get('kling_model')       or 'kling-v1-6').strip()
+    product_image_url = (data.get('product_image_url') or '').strip() or None
+    # 미리보기에서 승인된 기준 이미지 — 있으면 FLUX 재생성 생략
+    ref_image_url     = (data.get('ref_image_url')     or '').strip() or None
 
     if not scenes:
         return jsonify(ok=False, message='씬 데이터가 없습니다. 먼저 대본을 생성하세요.')
 
-    # Kling 모드 → API 키 사전 확인
+    # Kling 모드 → 실제 API 연결 사전 확인 (포인트 차감 전)
     if use_kling:
         from services.config_service import get_config as _gc
-        if not _gc('kling_access_key') or not _gc('kling_secret_key'):
-            return jsonify(ok=False, message='Kling API 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
+        from services.kling_service import verify_connection
+        _ak = _gc('kling_access_key')
+        _sk = _gc('kling_secret_key')
+        _bu = _gc('kling_base_url') or 'https://api.klingai.com'
+        ok, msg = verify_connection(_ak, _sk, _bu)
+        if not ok:
+            return jsonify(ok=False, message=f'Kling API 연결 실패: {msg}')
 
     creation_type = 'shorts_video_kling' if use_kling else 'shorts_video'
     cost = POINT_COSTS.get(creation_type, 300)
@@ -263,6 +405,8 @@ def shorts_generate():
             supabase_key=supabase_key,
             bgm_volume=bgm_volume,
             kling_model=kling_model,
+            product_image_url=product_image_url,
+            ref_image_url=ref_image_url,       # 미리보기 승인 이미지
         )
     else:
         from tasks.shorts_task import generate_shorts_video

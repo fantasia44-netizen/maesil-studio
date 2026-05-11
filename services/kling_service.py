@@ -27,6 +27,12 @@ KLING_MOTION_BY_ROLE: dict[str, str] = {
     'solution': 'smooth confident forward push, product reveal focus, clean bright lighting',
     'benefit':  'upward rising camera motion, radiant glow expanding, energetic uplifting',
     'cta':      'elegant slow orbital rotation, sparkling highlights, inviting forward momentum',
+    # 제품 리빌 전용 — 실제 제품 이미지가 입력될 때 사용
+    'product_reveal': (
+        'cinematic product reveal, dramatic glamour lighting sweep, '
+        'slow elegant camera orbit, studio highlight glow, premium commercial feel, '
+        'product stays sharp and centered, bokeh background'
+    ),
 }
 
 _DEFAULT_MOTION = 'cinematic slow camera motion, smooth movement, professional commercial style'
@@ -69,6 +75,89 @@ def _headers(access_key: str, secret_key: str) -> dict:
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
     }
+
+
+# ════════════════════════════════════════════════════════════
+# 연결 사전 확인 (포인트 차감 전 호출)
+# ════════════════════════════════════════════════════════════
+
+def verify_connection(
+    access_key: str,
+    secret_key: str,
+    base_url: str = _BASE_URL,
+    timeout: int = 8,
+) -> tuple[bool, str]:
+    """Kling API 연결 확인 — 실제 HTTP 요청으로 JWT 인증 검증.
+
+    영상 생성 시작 전 호출해 포인트 차감 전에 연결 상태 확인.
+    크레딧 소모 없음 (목록 GET 조회만).
+
+    Returns:
+        (ok: bool, message: str)
+    """
+    if not access_key or not secret_key:
+        return False, 'Kling API 키가 설정되지 않았습니다. 관리자 설정에서 입력하세요.'
+    try:
+        url = f'{base_url.rstrip("/")}/v1/videos/image2video'
+        resp = requests.get(
+            url,
+            headers=_headers(access_key, secret_key),
+            timeout=timeout,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('code', -1) == 0:
+                return True, 'Kling API 연결 성공'
+            return False, f'API 응답 오류 (code={data.get("code")}): {data.get("message", "")}'
+        elif resp.status_code == 401:
+            return False, 'Kling 인증 실패 — Access Key / Secret Key를 확인하세요.'
+        elif resp.status_code == 403:
+            return False, 'Kling 권한 없음 — 개발자 API 플랜을 확인하세요.'
+        else:
+            return False, f'Kling API 응답 오류 (HTTP {resp.status_code})'
+    except requests.Timeout:
+        return False, 'Kling API 응답 시간 초과 (8초) — 네트워크를 확인하세요.'
+    except Exception as e:
+        return False, f'Kling API 연결 실패: {e}'
+
+
+# ════════════════════════════════════════════════════════════
+# 한글 → 영어 프롬프트 번역 (Kling은 영어 프롬프트만 정상 인식)
+# ════════════════════════════════════════════════════════════
+
+import re as _re
+_KO_PATTERN = _re.compile(r'[가-힣ㄱ-ㅎㅏ-ㅣ]')
+
+
+def ensure_english_prompt(prompt: str) -> str:
+    """한글이 포함된 프롬프트를 영어로 번역 후 반환.
+
+    이미 영어면 그대로 반환 (Claude 호출 없음).
+    Kling은 영어 프롬프트만 정상 처리하므로 파이프라인 진입 전 반드시 호출.
+    """
+    if not prompt or not _KO_PATTERN.search(prompt):
+        return prompt  # 한글 없음 → 번역 불필요
+
+    logger.info('[kling] 한글 프롬프트 감지 → 영어 번역 중')
+    try:
+        from services.claude_service import generate_text
+        system = (
+            'You are a professional translator specializing in AI image/video generation prompts. '
+            'Translate the given Korean text into English suitable for image generation. '
+            'Output ONLY the translated English text. No explanations, no quotes.'
+        )
+        result = generate_text(
+            system,
+            f'Translate this to English for AI video generation:\n{prompt}',
+            max_tokens=300,
+            model='claude-haiku-4-5-20251001',
+        )
+        translated = result.strip()
+        logger.info('[kling] 번역 완료: %s → %s', prompt[:40], translated[:40])
+        return translated
+    except Exception as e:
+        logger.warning('[kling] 번역 실패 (원문 사용): %s', e)
+        return prompt  # 번역 실패 시 원문 그대로 (최선)
 
 
 # ════════════════════════════════════════════════════════════

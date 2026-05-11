@@ -77,8 +77,8 @@ def generate_shorts_video(
     bind=True,
     name='tasks.shorts_task.generate_kling_shorts_video',
     max_retries=0,
-    soft_time_limit=1200,   # 20분 (Kling 폴링 시간 고려)
-    time_limit=1320,        # 22분 hard kill
+    soft_time_limit=1500,   # 25분 (3씬 순차 체이닝 × 씬당 최대 5분 + 여유)
+    time_limit=1620,        # 27분 hard kill
 )
 def generate_kling_shorts_video(
     self,
@@ -93,8 +93,10 @@ def generate_kling_shorts_video(
     supabase_key: str,
     bgm_volume: float = 0.20,
     kling_model: str = 'kling-v1-6',
+    product_image_url: str | None = None,
+    ref_image_url: str | None = None,
 ):
-    """Celery 워커 — Kling image2video 기반 쇼츠 영상 생성."""
+    """Celery 워커 — Kling image2video 기반 쇼츠 영상 생성 (라스트프레임 체이닝)."""
     import os, sys
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _root not in sys.path:
@@ -117,6 +119,8 @@ def generate_kling_shorts_video(
             supabase=supabase,
             bgm_volume=bgm_volume,
             kling_model=kling_model,
+            product_image_url=product_image_url,
+            ref_image_url=ref_image_url,
         )
     except Exception as exc:
         logger.error('[kling_task] 태스크 실패 (%s): %s', creation_id, exc)

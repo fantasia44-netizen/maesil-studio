@@ -4,6 +4,48 @@
 
 {% block content %}
 
+<!-- 배너 타입 선택 -->
+<div class="row g-3 mb-4" style="max-width:780px">
+  <div class="col-12 col-md-4">
+    <div class="banner-type-card card h-100 border-2 active-type" data-type="ai"
+         style="cursor:pointer;transition:.15s;border-color:#0d6efd!important;background:#f0f7ff"
+         onclick="setMode('ai')">
+      <div class="card-body p-3 text-center">
+        <div style="font-size:1.6rem">🤖</div>
+        <div class="fw-bold small mt-1">AI 이미지 배너</div>
+        <div class="text-muted" style="font-size:.72rem">FLUX 배경 자동 생성</div>
+        <div class="badge bg-primary mt-2" style="font-size:.68rem">{{ cost }}P</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="banner-type-card card h-100 border-2" data-type="product"
+         style="cursor:pointer;transition:.15s;border-color:#dee2e6"
+         onclick="setMode('product')">
+      <div class="card-body p-3 text-center">
+        <div style="font-size:1.6rem">📦</div>
+        <div class="fw-bold small mt-1">상품 배너</div>
+        <div class="text-muted" style="font-size:.72rem">제품 사진 + 배경 교체</div>
+        <div class="badge bg-success mt-2" style="font-size:.68rem">{{ product_cost }}P</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="banner-type-card card h-100 border-2" data-type="text"
+         style="cursor:pointer;transition:.15s;border-color:#dee2e6"
+         onclick="setMode('text')">
+      <div class="card-body p-3 text-center">
+        <div style="font-size:1.6rem">✏️</div>
+        <div class="fw-bold small mt-1">텍스트 배너</div>
+        <div class="text-muted" style="font-size:.72rem">색상 배경 + 텍스트</div>
+        <div class="badge bg-secondary mt-2" style="font-size:.68rem">{{ text_cost }}P</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="aiFlow">
+
 <!-- 스텝 인디케이터 -->
 <div class="d-flex align-items-center mb-4" style="max-width:680px">
   {% for n, label in [(1,'의도 입력'),(2,'AI 확인·조정'),(3,'배너 생성')] %}
@@ -292,6 +334,359 @@
   </div>
 </div>
 
+</div><!-- /aiFlow -->
+
+<!-- ══════ 상품 배너 모드 ══════ -->
+<div id="productFlow" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-box-seam me-2" style="color:#198754"></i>상품 배너 — 제품 사진 배경 교체</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 브랜드·상품 (상품 이미지 필수) -->
+      <div class="row g-2 mb-3">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small mb-1">브랜드</label>
+          <select id="pbBrandSelect" class="form-select form-select-sm" onchange="onPbBrandChange(this.value)">
+            {% for b in brands %}
+            <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small mb-1">상품 <span class="text-danger">*</span> <span class="text-muted fw-normal">(이미지 필수)</span></label>
+          <select id="pbProductSelect" class="form-select form-select-sm" onchange="onPbProductChange(this.value)">
+            <option value="">— 상품 선택 —</option>
+            {% for p in products %}
+            <option value="{{ p.id }}" data-img="{{ (p.images or [''])[0] if p.images else '' }}">
+              {{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- 상품 이미지 미리보기 -->
+      <div id="pbProductPreview" class="mb-4 d-none">
+        <div class="d-flex align-items-center gap-3 p-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
+          <img id="pbProductThumb" src="" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6">
+          <div>
+            <div class="fw-semibold small">이 이미지의 배경을 교체합니다</div>
+            <div class="text-muted" style="font-size:.72rem">제품·로고·텍스트는 그대로 유지됩니다</div>
+          </div>
+        </div>
+      </div>
+      <div id="pbNoImageWarning" class="alert alert-warning py-2 px-3 small mb-4 d-none">
+        <i class="bi bi-exclamation-triangle me-1"></i>선택한 상품에 이미지가 없습니다. 상품 관리에서 이미지를 먼저 등록해주세요.
+      </div>
+
+      <!-- 배경 프리셋 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">🎨 새 배경 스타일</label>
+        <div class="row g-2" id="pbBgPresets">
+          {% for pk, (plabel, pprompt) in product_banner_bg_presets.items() %}
+          <div class="col-6 col-md-4">
+            <div class="pb-preset-card border rounded p-2 text-center {% if loop.first %}active-preset{% endif %}"
+                 data-preset="{{ pk }}" style="cursor:pointer;font-size:.78rem;
+                 {% if loop.first %}border-color:#198754!important;background:#f0fdf4{% endif %}"
+                 onclick="selectPbPreset('{{ pk }}', this)">
+              <div class="fw-semibold">{{ plabel }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="pbBgPreset" value="{{ product_banner_bg_presets.keys()|list|first }}">
+        <div id="pbCustomPromptRow" class="mt-2 d-none">
+          <input id="pbCustomPrompt" class="form-control form-control-sm"
+                 placeholder="원하는 배경 설명 (예: 벚꽃 배경, 봄 느낌, 야외 공원)">
+        </div>
+      </div>
+
+      <!-- 사이즈 + 레이아웃 -->
+      <div class="row g-2 mb-4">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small mb-1">📐 크기</label>
+          <select id="pbSizeSelect" class="form-select form-select-sm" onchange="onPbSizeChange(this.value)">
+            {% for sk, sm in banner_sizes.items() %}
+            {% if sk != 'custom' %}
+            <option value="{{ sk }}" data-w="{{ sm.w }}" data-h="{{ sm.h }}">{{ sm.label.split('(')[0].strip() }} ({{ sm.w }}×{{ sm.h }})</option>
+            {% endif %}
+            {% endfor %}
+            <option value="custom">직접 입력</option>
+          </select>
+          <div id="pbCustomSize" class="d-none mt-1 d-flex gap-1 align-items-center">
+            <input type="number" id="pbCustomW" class="form-control form-control-sm" style="width:72px" placeholder="너비" min="200" max="2400" value="1080">
+            <span class="text-muted small">×</span>
+            <input type="number" id="pbCustomH" class="form-control form-control-sm" style="width:72px" placeholder="높이" min="200" max="2400" value="1080">
+            <span class="text-muted small">px</span>
+          </div>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small mb-1">🖼 레이아웃</label>
+          <select id="pbLayoutSelect" class="form-select form-select-sm">
+            {% for lk, lm in banner_layouts.items() %}
+            <option value="{{ lk }}">{{ lm.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- 브랜드 컬러 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">🎨 브랜드 컬러</label>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          {% for c in ['#e8355a','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#111111','#ffffff'] %}
+          <div class="pb-color-dot rounded-circle border"
+               style="width:26px;height:26px;background:{{ c }};cursor:pointer;flex-shrink:0"
+               onclick="selectPbColor('{{ c }}', this)" title="{{ c }}"></div>
+          {% endfor %}
+          <input type="color" id="pbCustomColor" value="#e8355a"
+                 oninput="selectPbColor(this.value, null)"
+                 class="form-control form-control-color" style="width:36px;height:26px;padding:0;border:none;cursor:pointer">
+        </div>
+        <input type="hidden" id="pbSelectedColor" value="#e8355a">
+      </div>
+
+      <!-- 문구 -->
+      <div class="mb-4">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <label class="form-label fw-semibold mb-0 small">📝 배너 문구</label>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem" onclick="pbGenCopy()">
+            <span class="spinner-border spinner-border-sm d-none me-1" id="pbCopySpin"></span>
+            <i class="bi bi-stars me-1 text-warning" id="pbCopyIcon"></i>AI 자동 생성
+          </button>
+        </div>
+        <div class="d-flex flex-column gap-2">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:64px;font-size:.75rem">제목 <span class="text-danger">*</span></span>
+            <input id="pbHeadline" class="form-control" placeholder="핵심 메시지 (15자 이내)" maxlength="30">
+          </div>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:64px;font-size:.75rem">부제목</span>
+            <input id="pbSubline" class="form-control" placeholder="혜택 또는 특징 (25자 이내)" maxlength="50">
+          </div>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:64px;font-size:.75rem">버튼</span>
+            <input id="pbCta" class="form-control" placeholder="지금 구매 / 확인하기 (8자 이내)" maxlength="20">
+          </div>
+        </div>
+      </div>
+
+      <!-- 생성 버튼 -->
+      <div class="d-flex justify-content-end">
+        <button class="btn btn-success px-5 fw-semibold" onclick="productBannerGenerate()" id="pbGenerateBtn">
+          <i class="bi bi-images me-1"></i>배너 생성
+          <span class="badge bg-white text-dark ms-2" style="font-size:.7rem">{{ product_cost }}P</span>
+        </button>
+      </div>
+      <div id="pbError" class="d-none text-danger small mt-2 text-end"></div>
+
+      <!-- 생성 결과 (폴링) -->
+      <div id="pbProgress" class="d-none mt-4 text-center py-4">
+        <div class="spinner-border text-success mb-2" style="width:2.5rem;height:2.5rem"></div>
+        <div class="fw-semibold mb-1" id="pbProgressStep">AI 배경 교체 중...</div>
+        <div class="text-muted small mb-2">약 20~40초 소요됩니다</div>
+        <div class="progress mx-auto" style="max-width:260px;height:5px">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+               id="pbProgressBar" style="width:10%"></div>
+        </div>
+      </div>
+      <div id="pbResult" class="d-none mt-4 text-center">
+        <hr class="mb-4">
+        <div class="mb-2"><i class="bi bi-check-circle-fill text-success" style="font-size:2rem"></i></div>
+        <p class="fw-semibold mb-3">배너 생성 완료!</p>
+        <img id="pbResultImg" src="" alt="생성된 배너"
+             style="max-width:100%;max-height:400px;border-radius:10px;
+                    box-shadow:0 4px 20px rgba(0,0,0,.15);cursor:zoom-in"
+             onclick="openPbFullSize()" class="d-block mx-auto mb-3">
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <a id="pbDownloadBtn" href="#" download="product_banner.jpg" class="btn btn-primary">
+            <i class="bi bi-download me-1"></i>JPG 다운로드
+          </a>
+          <button class="btn btn-outline-secondary" onclick="productBannerGenerate()">
+            <i class="bi bi-arrow-clockwise me-1"></i>다시 생성
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════ 텍스트 배너 모드 ══════ -->
+<div id="textFlow" class="d-none" style="max-width:680px">
+  <div class="card">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-type me-2" style="color:#0d6efd"></i>텍스트 배너 만들기</h6>
+    </div>
+    <div class="card-body p-4">
+
+      <!-- 브랜드·상품 -->
+      <div class="row g-2 mb-4">
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small mb-1">브랜드</label>
+          <select id="tbBrandSelect" class="form-select form-select-sm" onchange="onTbBrandChange(this.value)">
+            {% for b in brands %}
+            <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label fw-semibold small mb-1">상품 <span class="text-muted fw-normal">(선택)</span></label>
+          <select id="tbProductSelect" class="form-select form-select-sm" onchange="onTbProductChange(this.value)">
+            <option value="">— 상품 미지정 —</option>
+            {% for p in products %}
+            <option value="{{ p.id }}" data-img="{{ (p.images or [''])[0] if p.images else '' }}">
+              {{ p.name }}{% if p.category %} · {{ p.category }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- 크기 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1">📐 크기</label>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <select id="tbSizeSelect" class="form-select form-select-sm" style="max-width:260px" onchange="onTbSizeChange(this.value)">
+            {% for sk, sm in banner_sizes.items() %}
+            {% if sk != 'custom' %}
+            <option value="{{ sk }}" data-w="{{ sm.w }}" data-h="{{ sm.h }}">{{ sm.label.split('(')[0].strip() }} ({{ sm.w }}×{{ sm.h }})</option>
+            {% endif %}
+            {% endfor %}
+            <option value="custom">직접 입력</option>
+          </select>
+          <div id="tbCustomSize" class="d-none d-flex gap-1 align-items-center">
+            <input type="number" id="tbCustomW" class="form-control form-control-sm" style="width:72px" placeholder="너비" min="200" max="2400" value="1080">
+            <span class="text-muted small">×</span>
+            <input type="number" id="tbCustomH" class="form-control form-control-sm" style="width:72px" placeholder="높이" min="200" max="2400" value="1080">
+            <span class="text-muted small">px</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 배경 스타일 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-2">🎨 배경 스타일</label>
+        <div class="d-flex flex-wrap gap-2">
+          {% for bk, blabel in text_banner_bg_types.items() %}
+          <button class="btn btn-sm tb-bg-btn {% if loop.first %}active-bg{% endif %}"
+                  data-bg="{{ bk }}" onclick="selectTbBg('{{ bk }}', this)"
+                  style="border:2px solid {% if loop.first %}#0d6efd{% else %}#dee2e6{% endif %};
+                         background:{% if loop.first %}#eff6ff{% else %}#fff{% endif %};
+                         border-radius:8px;font-size:.78rem">{{ blabel }}</button>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="tbBgType" value="solid">
+      </div>
+
+      <!-- 색상 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">색상</label>
+        <div class="d-flex gap-3 align-items-center flex-wrap">
+          <div>
+            <div class="text-muted mb-1" style="font-size:.72rem">배경 색1</div>
+            <input type="color" id="tbColor1" value="#3b82f6" class="form-control form-control-color" style="width:44px;height:36px;padding:2px;cursor:pointer">
+          </div>
+          <div id="tbColor2Wrap">
+            <div class="text-muted mb-1" style="font-size:.72rem">배경 색2</div>
+            <input type="color" id="tbColor2" value="#1d4ed8" class="form-control form-control-color" style="width:44px;height:36px;padding:2px;cursor:pointer">
+          </div>
+          <div>
+            <div class="text-muted mb-1" style="font-size:.72rem">텍스트 색</div>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm tb-txt-btn active-txt" data-tc="#ffffff" onclick="selectTbTextColor('#ffffff', this)"
+                      style="width:36px;height:36px;background:#fff;border:2px solid #333;border-radius:6px"></button>
+              <button class="btn btn-sm tb-txt-btn" data-tc="#111111" onclick="selectTbTextColor('#111111', this)"
+                      style="width:36px;height:36px;background:#111;border:2px solid #dee2e6;border-radius:6px"></button>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="tbTextColor" value="#ffffff">
+      </div>
+
+      <!-- 레이아웃 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">🖼 레이아웃</label>
+        <div class="d-flex gap-2">
+          {% for lk, llabel in text_banner_layouts.items() %}
+          <button class="btn btn-sm tb-layout-btn {% if loop.first %}active-layout{% endif %}"
+                  data-layout="{{ lk }}" onclick="selectTbLayout('{{ lk }}', this)"
+                  style="border:2px solid {% if loop.first %}#0d6efd{% else %}#dee2e6{% endif %};
+                         background:{% if loop.first %}#eff6ff{% else %}#fff{% endif %};
+                         border-radius:8px;font-size:.78rem">{{ llabel }}</button>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="tbLayout" value="center">
+      </div>
+
+      <!-- 문구 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small mb-2">📝 배너 문구</label>
+        <div class="d-flex flex-column gap-2">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:64px;font-size:.75rem">제목 <span class="text-danger">*</span></span>
+            <input id="tbHeadline" class="form-control" placeholder="핵심 메시지 (15자 이내)" maxlength="30">
+          </div>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:64px;font-size:.75rem">부제목</span>
+            <input id="tbSubline" class="form-control" placeholder="혜택 또는 특징 한 줄 (25자 이내)" maxlength="50">
+          </div>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text" style="width:64px;font-size:.75rem">버튼</span>
+            <input id="tbCta" class="form-control" placeholder="지금 구매 / 확인하기 (8자 이내)" maxlength="20">
+          </div>
+        </div>
+      </div>
+
+      <!-- 제품 이미지 -->
+      <div id="tbProductImgSection" class="mb-4 d-none">
+        <div class="d-flex align-items-center gap-3">
+          <img id="tbProductThumb" src="" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6">
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="tbUseProductImg" checked>
+            <label class="form-check-label small" for="tbUseProductImg">배너에 제품 이미지 포함</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 생성 버튼 -->
+      <div class="d-flex justify-content-end">
+        <button class="btn btn-primary px-5 fw-semibold" onclick="textBannerGenerate()" id="tbGenerateBtn">
+          <span class="spinner-border spinner-border-sm d-none me-1" id="tbSpin"></span>
+          <i class="bi bi-images me-1" id="tbGenIcon"></i>배너 생성
+          <span class="badge bg-white text-dark ms-2" style="font-size:.7rem">{{ text_cost }}P</span>
+        </button>
+      </div>
+
+      <!-- 생성 오류 -->
+      <div id="tbError" class="d-none text-danger small mt-2 text-end"></div>
+
+      <!-- 결과 -->
+      <div id="tbResult" class="d-none mt-4 text-center">
+        <hr class="mb-4">
+        <div class="mb-2"><i class="bi bi-check-circle-fill text-success" style="font-size:2rem"></i></div>
+        <p class="fw-semibold mb-3">배너 생성 완료!</p>
+        <img id="tbResultImg" src="" alt="생성된 배너"
+             style="max-width:100%;max-height:400px;border-radius:10px;
+                    box-shadow:0 4px 20px rgba(0,0,0,.15);cursor:zoom-in"
+             onclick="openTbFullSize()" class="d-block mx-auto mb-3">
+        <div class="text-muted small mb-3" id="tbResultDim"></div>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <a id="tbDownloadBtn" href="#" download="banner.jpg" class="btn btn-primary">
+            <i class="bi bi-download me-1"></i>JPG 다운로드
+          </a>
+          <button class="btn btn-outline-secondary" onclick="textBannerGenerate()">
+            <i class="bi bi-arrow-clockwise me-1"></i>다시 생성
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <style>
 .color-dot:hover { transform:scale(1.2); transition:.15s; }
 </style>
@@ -566,6 +961,336 @@ function resetAll() {
   goStep(1);
 }
 
+// ══════════════════════════════════════════════════════
+// 모드 전환
+// ══════════════════════════════════════════════════════
+function setMode(mode) {
+  // 카드 UI 업데이트
+  document.querySelectorAll('.banner-type-card').forEach(c => {
+    const isActive = c.dataset.type === mode;
+    c.style.borderColor = isActive
+      ? (mode === 'ai' ? '#0d6efd' : mode === 'product' ? '#198754' : '#6c757d')
+      : '#dee2e6';
+    c.style.background = isActive
+      ? (mode === 'ai' ? '#f0f7ff' : mode === 'product' ? '#f0fdf4' : '#f8f9fa')
+      : '#fff';
+  });
+  // 플로우 표시
+  document.getElementById('aiFlow').classList.toggle('d-none', mode !== 'ai');
+  document.getElementById('productFlow').classList.toggle('d-none', mode !== 'product');
+  document.getElementById('textFlow').classList.toggle('d-none', mode !== 'text');
+}
+
+// ══════════════════════════════════════════════════════
+// 상품 배너 UI 핸들러
+// ══════════════════════════════════════════════════════
+let pbCreationId = null;
+let pbPollTimer  = null;
+
+function selectPbPreset(preset, el) {
+  document.querySelectorAll('.pb-preset-card').forEach(c => {
+    c.style.borderColor = '#dee2e6'; c.style.background = '#fff';
+  });
+  el.style.borderColor = '#198754'; el.style.background = '#f0fdf4';
+  document.getElementById('pbBgPreset').value = preset;
+  document.getElementById('pbCustomPromptRow').classList.toggle('d-none', preset !== 'custom');
+}
+
+function selectPbColor(hex, el) {
+  document.querySelectorAll('.pb-color-dot').forEach(d => { d.style.outline=''; d.style.outlineOffset=''; });
+  if (el?.classList.contains('pb-color-dot')) { el.style.outline='2px solid #333'; el.style.outlineOffset='2px'; }
+  document.getElementById('pbSelectedColor').value = hex;
+  document.getElementById('pbCustomColor').value   = hex;
+}
+
+function onPbSizeChange(val) {
+  document.getElementById('pbCustomSize').classList.toggle('d-none', val !== 'custom');
+}
+
+async function onPbBrandChange(brandId) {
+  const sel = document.getElementById('pbProductSelect');
+  sel.innerHTML = '<option value="">로딩 중...</option>';
+  const res  = await fetch(`/create/banner/products?brand_id=${brandId}`);
+  const data = await res.json();
+  sel.innerHTML = '<option value="">— 상품 선택 —</option>' +
+    (data.products || []).map(p =>
+      `<option value="${p.id}" data-img="${(p.images||[''])[0]||''}">${p.name}${p.category?' · '+p.category:''}</option>`
+    ).join('');
+  onPbProductChange('');
+}
+
+function onPbProductChange(val) {
+  const sel    = document.getElementById('pbProductSelect');
+  const opt    = sel.options[sel.selectedIndex];
+  const imgUrl = opt?.dataset?.img || '';
+  document.getElementById('pbProductPreview').classList.toggle('d-none', !imgUrl);
+  document.getElementById('pbNoImageWarning').classList.toggle('d-none', !val || !!imgUrl);
+  if (imgUrl) document.getElementById('pbProductThumb').src = imgUrl;
+}
+
+async function pbGenCopy() {
+  const spin = document.getElementById('pbCopySpin');
+  const icon = document.getElementById('pbCopyIcon');
+  spin.classList.remove('d-none'); icon.classList.add('d-none');
+  try {
+    const res  = await fetch('/create/banner/copy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        brand_id:   document.getElementById('pbBrandSelect').value,
+        product_id: document.getElementById('pbProductSelect').value,
+        purpose:    '상품 배너',
+        size_key:   document.getElementById('pbSizeSelect').value,
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('pbHeadline').value = data.headline || '';
+      document.getElementById('pbSubline').value  = data.subline  || '';
+      document.getElementById('pbCta').value      = data.cta      || '';
+    }
+  } catch(e) { console.error('[pbGenCopy]', e); }
+  finally { spin.classList.add('d-none'); icon.classList.remove('d-none'); }
+}
+
+function openPbFullSize() {
+  const url = document.getElementById('pbResultImg').src;
+  if (!url) return;
+  document.getElementById('fullImg').src = url;
+  new bootstrap.Modal(document.getElementById('fullModal')).show();
+}
+
+async function productBannerGenerate() {
+  const headline = document.getElementById('pbHeadline').value.trim();
+  if (!headline) {
+    document.getElementById('pbError').textContent = '제목 문구를 입력하세요.';
+    document.getElementById('pbError').classList.remove('d-none');
+    return;
+  }
+  const productId = document.getElementById('pbProductSelect').value;
+  if (!productId) {
+    document.getElementById('pbError').textContent = '상품을 선택하세요.';
+    document.getElementById('pbError').classList.remove('d-none');
+    return;
+  }
+  document.getElementById('pbError').classList.add('d-none');
+  document.getElementById('pbResult').classList.add('d-none');
+  document.getElementById('pbProgress').classList.remove('d-none');
+  document.getElementById('pbGenerateBtn').disabled = true;
+
+  const sizeKey = document.getElementById('pbSizeSelect').value;
+  let cw, ch;
+  if (sizeKey === 'custom') {
+    cw = parseInt(document.getElementById('pbCustomW').value) || 1080;
+    ch = parseInt(document.getElementById('pbCustomH').value) || 1080;
+  } else {
+    const opt = document.getElementById('pbSizeSelect').selectedOptions[0];
+    cw = parseInt(opt.dataset.w) || 1080;
+    ch = parseInt(opt.dataset.h) || 1080;
+  }
+
+  try {
+    const res  = await fetch('/create/banner/product-generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body: JSON.stringify({
+        brand_id:        document.getElementById('pbBrandSelect').value,
+        product_id:      productId,
+        headline,
+        subline:         document.getElementById('pbSubline').value.trim(),
+        cta:             document.getElementById('pbCta').value.trim(),
+        bg_preset:       document.getElementById('pbBgPreset').value,
+        bg_prompt_custom:document.getElementById('pbCustomPrompt')?.value.trim() || '',
+        brand_color:     document.getElementById('pbSelectedColor').value,
+        layout:          document.getElementById('pbLayoutSelect').value,
+        size_key:        sizeKey,
+        custom_w: cw, custom_h: ch,
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    pbCreationId = data.creation_id;
+    startPbPolling(cw, ch, sizeKey);
+  } catch(e) {
+    document.getElementById('pbProgress').classList.add('d-none');
+    document.getElementById('pbError').textContent = '생성 실패: ' + e.message;
+    document.getElementById('pbError').classList.remove('d-none');
+    document.getElementById('pbGenerateBtn').disabled = false;
+  }
+}
+
+function startPbPolling(cw, ch, sizeKey) {
+  if (pbPollTimer) clearInterval(pbPollTimer);
+  pbPollTimer = setInterval(async () => {
+    try {
+      const res  = await fetch(`/create/banner/status/${pbCreationId}`);
+      const data = await res.json();
+      if (!data.ok) { clearInterval(pbPollTimer); return; }
+
+      const pct  = data.output_data?.progress ?? 10;
+      const step = data.output_data?.step     || '처리 중...';
+      document.getElementById('pbProgressBar').style.width  = Math.min(95, pct) + '%';
+      document.getElementById('pbProgressStep').textContent = step;
+
+      if (data.status === 'done') {
+        clearInterval(pbPollTimer);
+        document.getElementById('pbProgress').classList.add('d-none');
+        document.getElementById('pbProgressBar').style.width = '100%';
+        const url = data.output_data.image_url;
+        document.getElementById('pbResultImg').src = url;
+        document.getElementById('pbDownloadBtn').href = url;
+        document.getElementById('pbDownloadBtn').download = `maesil_product_banner_${sizeKey}.jpg`;
+        document.getElementById('pbResult').classList.remove('d-none');
+        document.getElementById('pbResult').scrollIntoView({behavior:'smooth',block:'nearest'});
+        document.getElementById('pbGenerateBtn').disabled = false;
+      } else if (data.status === 'failed') {
+        clearInterval(pbPollTimer);
+        document.getElementById('pbProgress').classList.add('d-none');
+        document.getElementById('pbError').textContent = data.output_data?.error || '생성 실패';
+        document.getElementById('pbError').classList.remove('d-none');
+        document.getElementById('pbGenerateBtn').disabled = false;
+      }
+    } catch(e) { console.error('[pb poll]', e); }
+  }, 3000);
+}
+
+// ══════════════════════════════════════════════════════
+// 텍스트 배너 UI 핸들러
+// ══════════════════════════════════════════════════════
+function selectTbBg(bgType, el) {
+  document.querySelectorAll('.tb-bg-btn').forEach(b => {
+    b.style.borderColor = '#dee2e6'; b.style.background = '#fff';
+  });
+  el.style.borderColor = '#0d6efd'; el.style.background = '#eff6ff';
+  document.getElementById('tbBgType').value = bgType;
+  // 색2는 그라디언트/도트/격자일 때만 표시
+  document.getElementById('tbColor2Wrap').style.display =
+    bgType === 'solid' ? 'none' : '';
+}
+
+function selectTbLayout(layout, el) {
+  document.querySelectorAll('.tb-layout-btn').forEach(b => {
+    b.style.borderColor = '#dee2e6'; b.style.background = '#fff';
+  });
+  el.style.borderColor = '#0d6efd'; el.style.background = '#eff6ff';
+  document.getElementById('tbLayout').value = layout;
+}
+
+function selectTbTextColor(hex, el) {
+  document.querySelectorAll('.tb-txt-btn').forEach(b => {
+    b.style.borderColor = '#dee2e6';
+  });
+  el.style.borderColor = '#0d6efd';
+  document.getElementById('tbTextColor').value = hex;
+}
+
+function onTbSizeChange(val) {
+  document.getElementById('tbCustomSize').classList.toggle('d-none', val !== 'custom');
+}
+
+async function onTbBrandChange(brandId) {
+  const sel = document.getElementById('tbProductSelect');
+  sel.innerHTML = '<option value="">로딩 중...</option>';
+  const res  = await fetch(`/create/banner/products?brand_id=${brandId}`);
+  const data = await res.json();
+  sel.innerHTML = '<option value="">— 상품 미지정 —</option>' +
+    (data.products || []).map(p =>
+      `<option value="${p.id}" data-img="${(p.images||[''])[0]||''}">${p.name}${p.category?' · '+p.category:''}</option>`
+    ).join('');
+  onTbProductChange('');
+}
+
+function onTbProductChange(val) {
+  const sel    = document.getElementById('tbProductSelect');
+  const opt    = sel.options[sel.selectedIndex];
+  const imgUrl = opt?.dataset?.img || '';
+  const sec    = document.getElementById('tbProductImgSection');
+  if (imgUrl) {
+    document.getElementById('tbProductThumb').src = imgUrl;
+    sec.classList.remove('d-none');
+  } else {
+    sec.classList.add('d-none');
+  }
+}
+
+function openTbFullSize() {
+  const url = document.getElementById('tbResultImg').src;
+  if (!url) return;
+  document.getElementById('fullImg').src = url;
+  new bootstrap.Modal(document.getElementById('fullModal')).show();
+}
+
+async function textBannerGenerate() {
+  const headline = document.getElementById('tbHeadline').value.trim();
+  if (!headline) {
+    document.getElementById('tbError').textContent = '제목 문구를 입력하세요.';
+    document.getElementById('tbError').classList.remove('d-none');
+    return;
+  }
+  document.getElementById('tbError').classList.add('d-none');
+  document.getElementById('tbResult').classList.add('d-none');
+
+  const btn  = document.getElementById('tbGenerateBtn');
+  const spin = document.getElementById('tbSpin');
+  const icon = document.getElementById('tbGenIcon');
+  btn.disabled = true;
+  spin.classList.remove('d-none');
+  icon.classList.add('d-none');
+
+  const sizeKey = document.getElementById('tbSizeSelect').value;
+  let cw, ch;
+  if (sizeKey === 'custom') {
+    cw = parseInt(document.getElementById('tbCustomW').value) || 1080;
+    ch = parseInt(document.getElementById('tbCustomH').value) || 1080;
+  } else {
+    const opt = document.getElementById('tbSizeSelect').selectedOptions[0];
+    cw = parseInt(opt.dataset.w) || 1080;
+    ch = parseInt(opt.dataset.h) || 1080;
+  }
+
+  try {
+    const res  = await fetch('/create/banner/text-generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify({
+        brand_id:        document.getElementById('tbBrandSelect').value,
+        product_id:      document.getElementById('tbProductSelect').value,
+        headline,
+        subline:         document.getElementById('tbSubline').value.trim(),
+        cta:             document.getElementById('tbCta').value.trim(),
+        bg_type:         document.getElementById('tbBgType').value,
+        bg_color1:       document.getElementById('tbColor1').value,
+        bg_color2:       document.getElementById('tbColor2').value,
+        layout:          document.getElementById('tbLayout').value,
+        text_color:      document.getElementById('tbTextColor').value,
+        cta_color:       document.getElementById('tbColor1').value,
+        size_key:        sizeKey,
+        custom_w:        cw,
+        custom_h:        ch,
+        use_product_img: document.getElementById('tbUseProductImg')?.checked ?? false,
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    // 결과 표시
+    document.getElementById('tbResultImg').src = data.image_url;
+    document.getElementById('tbDownloadBtn').href = data.image_url;
+    document.getElementById('tbDownloadBtn').download = `maesil_text_banner_${sizeKey}.jpg`;
+    document.getElementById('tbResultDim').textContent = `${data.W}×${data.H}px`;
+    document.getElementById('tbResult').classList.remove('d-none');
+    document.getElementById('tbResult').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+
+  } catch(e) {
+    document.getElementById('tbError').textContent = '생성 실패: ' + e.message;
+    document.getElementById('tbError').classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    spin.classList.add('d-none');
+    icon.classList.remove('d-none');
+  }
+}
+
 // ── 브랜드 변경 ─────────────────────────────────────────────
 async function onBrandChange(brandId) {
   const sel = document.getElementById('productSelect');
@@ -604,6 +1329,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('layoutSelect').addEventListener('change', e => updateLayoutDesc(e.target.value));
   // 상품 이미지 초기
   onProductChange('');
+  // 텍스트 배너 초기화
+  onTbProductChange('');
+  // 단색이 기본이므로 색2 숨김
+  document.getElementById('tbColor2Wrap').style.display = 'none';
+  // 상품 배너 초기화
+  onPbProductChange('');
+  const firstPbDot = document.querySelector('.pb-color-dot');
+  if (firstPbDot) selectPbColor(firstPbDot.title, firstPbDot);
 });
 </script>
 

@@ -282,29 +282,114 @@ def mix_bgm_into_video(
 # 1. 대본 생성
 # ════════════════════════════════════════════════════════
 
-def generate_shorts_script(brand_ctx: str, angle: dict, style: str = 'realistic_banner') -> list[dict]:
-    """Claude로 5씬 쇼츠 대본 생성.
+def generate_shorts_script(
+    brand_ctx: str,
+    angle: dict,
+    style: str = 'realistic_banner',
+    reveal_mode: bool = False,
+) -> list[dict]:
+    """Claude로 쇼츠 대본 생성.
 
-    Returns: [
-      {role, role_ko, narration, overlay_title, overlay_body, flux_prompt}, ...
-    ]
+    Args:
+        reveal_mode: True = 제품 리빌 모드 (3씬, PAS 구조)
+                     - 씬1·2: 공감·문제 (제품 미등장, 순수 상황 묘사)
+                     - 씬3: 제품 등장 (해결 리빌)
+                     False = 일반 5씬 모드
+
+    Returns: [{role, role_ko, narration, overlay_title, overlay_body, flux_prompt}, ...]
     """
     from services.claude_service import generate_text
 
-    angle_title = angle.get('title', '') if isinstance(angle, dict) else ''
-    angle_vibe  = angle.get('image_vibe', '') if isinstance(angle, dict) else ''
-    angle_hook  = angle.get('hook', '') if isinstance(angle, dict) else ''
+    angle_title    = angle.get('title',    '') if isinstance(angle, dict) else ''
+    angle_vibe     = angle.get('image_vibe','') if isinstance(angle, dict) else ''
+    angle_hook     = angle.get('hook',     '') if isinstance(angle, dict) else ''
+    angle_problem  = angle.get('problem',  '') if isinstance(angle, dict) else ''
+    angle_solution = angle.get('solution', '') if isinstance(angle, dict) else ''
+    angle_result   = angle.get('result',   '') if isinstance(angle, dict) else ''
+    style_guide    = SHORTS_STYLE_PRESETS.get(style, SHORTS_STYLE_PRESETS['realistic_banner'])
 
-    style_guide = SHORTS_STYLE_PRESETS.get(style, SHORTS_STYLE_PRESETS['realistic_banner'])
+    # ── 제품 리빌 모드 (3씬 PAS) ────────────────────────────────
+    if reveal_mode:
+        system = (
+            '당신은 퍼포먼스 마케터이자 숏폼 영상 전문 크리에이터입니다. '
+            '효과적인 광고는 제품 소개로 시작하지 않습니다. '
+            '먼저 타겟의 고통에 공감시키고, 궁금증이 극에 달했을 때 제품을 등장시킵니다. '
+            '이것이 이탈률을 낮추고 전환율을 높이는 핵심입니다. '
+            '순수 JSON만 출력하세요.'
+        )
+        prompt = f"""인스타 릴스/쇼츠용 3씬 광고 대본 (제품 리빌 구조 — PAS 공식).
 
+[브랜드·상품 정보 — 씬1·2에서는 제품명/브랜드명 절대 언급 금지]
+{brand_ctx}
+
+[소구포인트]
+- 타겟의 문제: {angle_problem}
+- 후킹 문구: {angle_hook}
+- 해결 방식: {angle_solution}
+- 변화/결과: {angle_result}
+- 분위기: {angle_vibe}
+
+[3씬 구조 — 철저한 PAS 공식]
+씬1 (Hook/Problem): 타겟이 겪는 구체적 문제·불편을 생생하게 묘사. 제품 미등장.
+  flux_prompt: 문제 상황을 겪는 사람의 일상 장면. 제품·브랜드 없음. 공감 가는 리얼 상황.
+
+씬2 (Agitate/Empathy): 그 불편이 얼마나 반복되는지 심화. 공감+궁금증 자극. 제품 미등장.
+  flux_prompt: 문제로 인한 감정(피로·포기·답답함)이 담긴 장면. 제품 없음.
+
+씬3 (Solution/Reveal): 제품이 처음으로 등장. "바로 이거였어요" 톤. 결과·변화 제시.
+  flux_prompt: 제품이 주인공. 글래머 조명, 프리미엄 배경, 제품의 특징이 돋보이는 구도.
+  ⚠️ 이 씬의 flux_prompt는 제품 이미지가 대체하므로 배경/분위기 묘사 위주로 작성.
+
+[이미지 스타일]
+{style_guide}
+
+[출력 — 순수 JSON 배열, 정확히 3개]
+[
+  {{
+    "role": "hook",
+    "narration": "공감 유발 나레이션 (구어체 한글, 15~30자, 제품명 언급 없이 문제 상황 묘사)",
+    "overlay_title": "시선 고정 텍스트 (10자 이내, 타겟의 감정·상황 직격)",
+    "overlay_body": "나레이션 핵심 요약 (20자 이내)",
+    "flux_prompt": "영문 전용, 문제 상황 장면 묘사, 60~80단어, 9:16 vertical, no product, no text, no CJK"
+  }},
+  {{
+    "role": "empathy",
+    "narration": "공감 심화 나레이션 (구어체, 15~30자, 제품명 없이 감정·반복성 강조)",
+    "overlay_title": "공감 키워드 (10자 이내)",
+    "overlay_body": "나레이션 요약 (20자 이내)",
+    "flux_prompt": "영문 전용, 감정/피로/답답함 장면, 60~80단어, 9:16 vertical, no product, no text, no CJK"
+  }},
+  {{
+    "role": "solution",
+    "narration": "제품 등장 나레이션 (구어체, 15~35자, '이거 하나로 해결' 톤, 결과 강조)",
+    "overlay_title": "임팩트 해결 문구 (10자 이내)",
+    "overlay_body": "CTA 포함 (예: '링크 클릭 / 지금 확인')",
+    "flux_prompt": "영문 전용, 프리미엄 제품 배경·분위기 묘사 (제품 이미지로 대체됨), glamour studio lighting, 60~80단어, 9:16 vertical, no text, no CJK"
+  }}
+]
+
+순수 JSON 배열만 출력. 씬1·2 나레이션과 flux_prompt에 제품명·브랜드명 절대 포함 금지."""
+
+        raw   = generate_text(system, prompt, max_tokens=900, model='claude-sonnet-4-6')
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
+        s, e  = clean.find('['), clean.rfind(']') + 1
+        if s >= 0 and e > s:
+            clean = clean[s:e]
+        scenes = json.loads(clean)
+
+        reveal_roles = [('hook', '훅'), ('empathy', '공감'), ('solution', '제품 리빌')]
+        for i, sc in enumerate(scenes[:3]):
+            sc['role']        = reveal_roles[i][0]
+            sc['role_ko']     = reveal_roles[i][1]
+            sc['reveal_mode'] = True
+            sc['is_product_scene'] = (i == 2)  # 마지막 씬 = 제품 등장
+        return scenes[:3]
+
+    # ── 일반 5씬 모드 ────────────────────────────────────────────
     scenes_desc = '\n'.join(
         f'- scene {i+1} "{r[1]}" ({r[0]}): {r[2]}'
         for i, r in enumerate(SCENE_ROLES)
     )
-
-    angle_problem  = angle.get('problem',  '') if isinstance(angle, dict) else ''
-    angle_solution = angle.get('solution', '') if isinstance(angle, dict) else ''
-    angle_result   = angle.get('result',   '') if isinstance(angle, dict) else ''
 
     system = (
         '당신은 숏폼 영상 전문 크리에이터입니다. '
@@ -823,9 +908,12 @@ def run_shorts_pipeline(
             step = f'씬 {i+1}/{len(scenes)} 생성 중'
             _update('generating', {'progress': i, 'step': step})
 
-            # 이미지 생성
-            style_mod = SHORTS_STYLE_PRESETS.get(style, '')
-            flux_p = scene.get('flux_prompt', '') + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
+            # 이미지 생성 (flux_prompt 한글 → 영어 번역 안전망)
+            style_mod  = SHORTS_STYLE_PRESETS.get(style, '')
+            raw_prompt = scene.get('flux_prompt', '')
+            from services.kling_service import ensure_english_prompt
+            raw_prompt = ensure_english_prompt(raw_prompt)
+            flux_p = raw_prompt + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
             img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
 
             # PIL 오버레이
@@ -1058,6 +1146,41 @@ def _overlay_text_on_video(
     return out_path
 
 
+def _extract_last_frame(video_path: str, output_png: str) -> str:
+    """FFmpeg으로 영상의 마지막 프레임 추출 → PNG 저장 후 경로 반환.
+
+    -sseof -0.5: 끝에서 0.5초 위치부터 탐색 → 마지막 프레임 캡처.
+    """
+    cmd = [
+        'ffmpeg', '-y',
+        '-sseof', '-0.5',
+        '-i', video_path,
+        '-vframes', '1',
+        '-q:v', '2',
+        output_png,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        raise RuntimeError(f'라스트프레임 추출 실패:\n{result.stderr[-500:]}')
+    return output_png
+
+
+def _upload_temp_frame(supabase, frame_path: str, creation_id: str, idx: int) -> str:
+    """라스트프레임 PNG → Supabase Storage 임시 업로드 → 공개 URL 반환.
+
+    경로: tmp/kling_frames/{creation_id}_{idx}.png
+    Kling API가 URL만 받으므로 공개 URL 필요.
+    최종 파이프라인 완료 후 자동 정리되지 않으므로 주기적 cleanup 필요.
+    """
+    storage_path = f'tmp/kling_frames/{creation_id}_{idx}.png'
+    with open(frame_path, 'rb') as f:
+        supabase.storage.from_('creations').upload(
+            storage_path, f,
+            {'content-type': 'image/png', 'x-upsert': 'true'},
+        )
+    return supabase.storage.from_('creations').get_public_url(storage_path)
+
+
 def run_kling_shorts_pipeline(
     creation_id: str,
     user_id: str,
@@ -1069,21 +1192,24 @@ def run_kling_shorts_pipeline(
     supabase,
     bgm_volume: float = 0.20,
     kling_model: str = 'kling-v1-6',
+    product_image_url: str | None = None,
+    ref_image_url: str | None = None,
 ) -> None:
-    """Kling image2video 기반 쇼츠 파이프라인.
+    """라스트프레임 체이닝 방식 Kling 쇼츠 파이프라인.
 
-    흐름:
-      FLUX 이미지 생성(5씬) → Kling image2video 제출(병렬) →
-      Kling 완료 폴링 → 영상 다운로드 → 텍스트 오버레이 + TTS →
-      FFmpeg 조립 → BGM 믹싱 → Supabase 업로드
+    흐름 (3씬 순차):
+      FLUX 기준 이미지 1회 생성 (씬1·2용 공감 장면)
+      → 씬1: 기준이미지 → Kling → 완료대기 → 라스트프레임 추출 → 임시업로드
+      → 씬2: 라스트프레임1 → Kling → 완료대기 → 라스트프레임 추출 (→ 미사용)
+      → 씬3: product_image_url(있으면) 또는 라스트프레임2 → Kling (제품 리빌)
+      → 각 클립 TTS + 텍스트오버레이 → concat → BGM → Supabase 업로드
+
+    product_image_url: 제품 실사 사진 URL — 마지막 씬의 입력 이미지로 사용.
+                       없으면 FLUX 라스트프레임 체이닝 그대로 유지.
     """
     import gc
-    import concurrent.futures
     from services.config_service import get_config
     from services.imagen_service import _generate_flux
-    from services.kling_service import (
-        submit_image2video, wait_for_task, download_video,
-    )
 
     tmp_dir = os.path.join(tempfile.gettempdir(), f'maesil_kling_{creation_id}')
     os.makedirs(tmp_dir, exist_ok=True)
@@ -1095,7 +1221,7 @@ def run_kling_shorts_pipeline(
         try:
             supabase.table('creations').update(row).eq('id', creation_id).execute()
         except Exception as e:
-            logger.error('[kling_pipeline] supabase update: %s', e)
+            logger.error('[kling_chain] supabase update: %s', e)
 
     try:
         tts_api_key  = get_config('google_tts_api_key')
@@ -1108,31 +1234,49 @@ def run_kling_shorts_pipeline(
         if not kling_access or not kling_secret:
             raise ValueError('kling_access_key / kling_secret_key 미설정')
 
-        pil_size = (1080, 1920)
-        n = len(scenes)
+        # Kling 모드: 최대 3씬 (순차처리 시간 제한)
+        use_scenes = scenes[:3]
+        n = len(use_scenes)
+        pil_size   = (1080, 1920)
+        style_mod  = SHORTS_STYLE_PRESETS.get(style, '')
+        total_steps = n * 4 + 3  # 씬당 4단계(제출/대기/다운/조립) + 나머지 3단계
 
-        # ── Step 1: FLUX 이미지 생성 ─────────────────────────────
-        _update('generating', {'progress': 0, 'step': f'이미지 생성 중 (1/{n})'})
-        style_mod = SHORTS_STYLE_PRESETS.get(style, '')
-        img_urls = []
-        for i, scene in enumerate(scenes):
-            _update('generating', {'progress': i, 'step': f'이미지 생성 중 ({i+1}/{n})'})
-            flux_p = (
-                scene.get('flux_prompt', '') +
-                (f', {style_mod}' if style_mod else '') +
-                _NO_CJK + _NO_ANATOMY
-            )
-            img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
-            img_urls.append(img_url)
-            gc.collect()
+        from services.kling_service import (
+            submit_image2video, wait_for_task, download_video, ensure_english_prompt,
+        )
 
-        # ── Step 2: Kling image2video 병렬 제출 ──────────────────
-        _update('generating', {'progress': n, 'step': 'Kling 영상 생성 제출 중'})
-        task_ids = []
-        for i, (scene, img_url) in enumerate(zip(scenes, img_urls)):
+        # ── Step 1: 기준 이미지 결정 ────────────────────────────────
+        if ref_image_url:
+            # 미리보기에서 사용자가 승인한 이미지 → FLUX 재생성 생략
+            ref_img_url = ref_image_url
+            _update('generating', {'progress': 0, 'step': '승인된 기준 이미지 사용 중'})
+            logger.info('[kling_chain] 미리보기 승인 이미지 사용: %s', ref_img_url[:80])
+        else:
+            # FLUX로 기준 이미지 생성
+            _update('generating', {'progress': 0, 'step': '기준 이미지 생성 중 (FLUX 1회)'})
+            raw_ref = use_scenes[0].get('flux_prompt', '')
+            raw_ref = ensure_english_prompt(raw_ref)
+            ref_prompt = raw_ref + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
+            ref_img_url, _ = _generate_flux(ref_prompt, 'flux_preview', '1080x1920')
+            logger.info('[kling_chain] FLUX 기준 이미지 생성 완료: %s', ref_img_url)
+        logger.info('[kling_chain] FLUX 기준 이미지 생성 완료: %s', ref_img_url)
+        gc.collect()
+
+        # ── Steps 2~4: 씬별 순차 처리 (라스트프레임 체이닝) ─────────
+        current_img_url = ref_img_url  # 첫 씬은 FLUX 이미지 사용
+        kling_clips     = []           # 씬별 다운로드된 .mp4 경로
+
+        for i, scene in enumerate(use_scenes):
             role = scene.get('role', 'hook')
+            step_base = 1 + i * 4
+
+            # ── 2a: Kling 제출 ──────────────────────────────────
+            _update('generating', {
+                'progress': step_base,
+                'step': f'씬{i+1}/{n} Kling 영상 생성 제출 중',
+            })
             task_id = submit_image2video(
-                image_url=img_url,
+                image_url=current_img_url,
                 scene_role=role,
                 access_key=kling_access,
                 secret_key=kling_secret,
@@ -1140,48 +1284,63 @@ def run_kling_shorts_pipeline(
                 duration=5,
                 base_url=kling_url,
             )
-            task_ids.append(task_id)
-            logger.info('[kling_pipeline] 제출 씬%d task_id=%s', i + 1, task_id)
-            time.sleep(1)  # API rate limit 방지
+            logger.info('[kling_chain] 씬%d 제출: task_id=%s role=%s', i + 1, task_id, role)
 
-        # ── Step 3: 병렬 폴링 (완료 대기) ───────────────────────
-        _update('generating', {
-            'progress': n + 1,
-            'step': f'Kling 영상 생성 중 (약 5~10분 소요)',
-        })
-
-        video_urls = [None] * n
-
-        def _poll_one(idx: int, task_id: str) -> tuple[int, str]:
-            url = wait_for_task(
-                task_id, kling_access, kling_secret,
-                base_url=kling_url, timeout=900, poll_interval=12,
-            )
-            return idx, url
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
-            futs = {ex.submit(_poll_one, i, tid): i for i, tid in enumerate(task_ids)}
-            done_count = 0
-            for fut in concurrent.futures.as_completed(futs):
-                idx, vurl = fut.result()
-                video_urls[idx] = vurl
-                done_count += 1
-                _update('generating', {
-                    'progress': n + 1 + done_count,
-                    'step': f'Kling 완료 {done_count}/{n}씬',
-                })
-
-        # ── Step 4: 다운로드 + TTS + 텍스트 오버레이 ─────────────
-        clip_data = []
-        for i, (scene, vurl) in enumerate(zip(scenes, video_urls)):
+            # ── 2b: 완료 대기 (순차) ────────────────────────────
             _update('generating', {
-                'progress': n + 1 + n + i,
-                'step': f'씬 조립 중 ({i+1}/{n})',
+                'progress': step_base + 1,
+                'step': f'씬{i+1}/{n} Kling 처리 중 (약 3~5분)',
             })
 
-            # Kling 영상 다운로드
+            def _on_progress(elapsed: float, _i=i, _n=n, _sb=step_base):
+                _update('generating', {
+                    'progress': _sb + 1,
+                    'step': f'씬{_i+1}/{_n} Kling 처리 중 ({int(elapsed)}초 경과)',
+                })
+
+            video_url = wait_for_task(
+                task_id, kling_access, kling_secret,
+                base_url=kling_url,
+                timeout=600,
+                poll_interval=12,
+                on_progress=_on_progress,
+            )
+            logger.info('[kling_chain] 씬%d 완료: %s', i + 1, video_url)
+
+            # ── 2c: 영상 다운로드 ───────────────────────────────
+            _update('generating', {
+                'progress': step_base + 2,
+                'step': f'씬{i+1}/{n} 다운로드 중',
+            })
             kling_mp4 = os.path.join(tmp_dir, f'kling_{i:02d}.mp4')
-            download_video(vurl, kling_mp4)
+            download_video(video_url, kling_mp4)
+            kling_clips.append(kling_mp4)
+
+            # ── 2d: 다음 씬 입력 이미지 결정 ───────────────────────
+            if i < n - 1:
+                next_is_last = (i == n - 2)
+                if next_is_last and product_image_url:
+                    # 마지막 씬(제품 리빌)은 실제 제품 이미지 사용
+                    current_img_url = product_image_url
+                    logger.info('[kling_chain] 씬%d 제품 이미지 → 씬%d (리빌): %s',
+                                i + 1, i + 2, product_image_url[:80])
+                else:
+                    # 라스트프레임 추출 → Supabase 임시업로드 → 다음 씬 입력
+                    last_frame_png = os.path.join(tmp_dir, f'last_frame_{i:02d}.png')
+                    _extract_last_frame(kling_mp4, last_frame_png)
+                    current_img_url = _upload_temp_frame(supabase, last_frame_png, creation_id, i)
+                    logger.info('[kling_chain] 씬%d 라스트프레임 → 씬%d 입력: %s',
+                                i + 1, i + 2, current_img_url[:80])
+
+            gc.collect()
+
+        # ── Step 3: 씬별 TTS + 텍스트 오버레이 조립 ──────────────
+        clip_data = []
+        for i, (scene, kling_mp4) in enumerate(zip(use_scenes, kling_clips)):
+            _update('generating', {
+                'progress': n * 4 + 1 + i,
+                'step': f'씬{i+1} 조립 중 (TTS + 텍스트)',
+            })
 
             # 텍스트 오버레이 PNG (투명 배경)
             text_png = os.path.join(tmp_dir, f'text_{i:02d}.png')
@@ -1194,8 +1353,8 @@ def run_kling_shorts_pipeline(
             )
 
             # TTS 음성
-            narration = _normalize_tts_text(scene.get('narration', ''))
-            mp3_bytes = tts_synthesize(narration, tts_api_key, voice_key, tts_speed)
+            narration  = _normalize_tts_text(scene.get('narration', ''))
+            mp3_bytes  = tts_synthesize(narration, tts_api_key, voice_key, tts_speed)
             audio_path = os.path.join(tmp_dir, f'tts_{i:02d}.mp3')
             with open(audio_path, 'wb') as f:
                 f.write(mp3_bytes)
@@ -1207,28 +1366,25 @@ def run_kling_shorts_pipeline(
             clip_data.append(clip_out)
             gc.collect()
 
-        # ── Step 5: FFmpeg concat ─────────────────────────────────
-        _update('generating', {'progress': n * 3 + 2, 'step': '영상 합치는 중'})
+        # ── Step 4: FFmpeg concat ──────────────────────────────────
+        _update('generating', {'progress': total_steps - 2, 'step': '영상 합치는 중'})
         concat_txt = os.path.join(tmp_dir, 'concat.txt')
         with open(concat_txt, 'w') as f:
             for cp in clip_data:
                 f.write(f"file '{cp}'\n")
         raw_mp4 = os.path.join(tmp_dir, 'kling_raw.mp4')
-        _ffmpeg(
-            '-y', '-f', 'concat', '-safe', '0', '-i', concat_txt,
-            '-c', 'copy', raw_mp4,
-        )
+        _ffmpeg('-y', '-f', 'concat', '-safe', '0', '-i', concat_txt, '-c', 'copy', raw_mp4)
 
-        # ── Step 6: BGM 믹싱 ─────────────────────────────────────
+        # ── Step 5: BGM 믹싱 ───────────────────────────────────────
         output_mp4 = os.path.join(tmp_dir, 'kling_final.mp4')
         if bgm_volume > 0:
             bgm_path = pick_bgm(style)
             if bgm_path:
-                _update('generating', {'progress': n * 3 + 3, 'step': 'BGM 믹싱 중'})
+                _update('generating', {'progress': total_steps - 1, 'step': 'BGM 믹싱 중'})
                 try:
                     mix_bgm_into_video(raw_mp4, bgm_path, output_mp4, bgm_volume)
                 except Exception as bgm_e:
-                    logger.warning('[kling_pipeline] BGM 실패 (무시): %s', bgm_e)
+                    logger.warning('[kling_chain] BGM 실패 (무시): %s', bgm_e)
                     import shutil as _sh
                     _sh.copy2(raw_mp4, output_mp4)
             else:
@@ -1238,20 +1394,26 @@ def run_kling_shorts_pipeline(
             import shutil as _sh
             _sh.copy2(raw_mp4, output_mp4)
 
-        # ── Step 7: Supabase Storage 업로드 ──────────────────────
-        _update('generating', {'progress': n * 3 + 4, 'step': '업로드 중'})
+        # ── Step 6: Supabase Storage 업로드 ───────────────────────
+        _update('generating', {'progress': total_steps, 'step': '업로드 중'})
         path = f'{user_id}/{uuid.uuid4().hex}_kling_shorts.mp4'
         with open(output_mp4, 'rb') as f:
             supabase.storage.from_('creations').upload(
                 path, f, {'content-type': 'video/mp4'}
             )
-        video_url = supabase.storage.from_('creations').get_public_url(path)
+        final_url = supabase.storage.from_('creations').get_public_url(path)
 
-        _update('done', {'video_url': video_url, 'progress': n * 3 + 5, 'engine': 'kling'})
-        logger.info('[kling_pipeline] 완료: %s → %s', creation_id, video_url)
+        _update('done', {
+            'video_url': final_url,
+            'progress':  total_steps,
+            'engine':    'kling',
+            'scenes_used': n,
+            'chaining':  True,
+        })
+        logger.info('[kling_chain] 완료: %s → %s (%d씬)', creation_id, final_url, n)
 
     except Exception as e:
-        logger.error('[kling_pipeline] 오류 (%s): %s', creation_id, e)
+        logger.error('[kling_chain] 오류 (%s): %s', creation_id, e)
         _update('failed', {'error': str(e)})
     finally:
         import shutil
