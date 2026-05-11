@@ -220,6 +220,48 @@
         </div>
       </div>
 
+      <!-- Kling 모션 영상 옵션 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small d-flex align-items-center gap-2">
+          <i class="bi bi-play-circle-fill" style="color:#7c3aed"></i>영상 엔진
+        </label>
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="engine-card border rounded p-3 text-center selected"
+                 data-engine="flux" data-cost="300" style="cursor:pointer;transition:.15s"
+                 onclick="selectEngine('flux', this)">
+              <div class="fw-bold small mb-1">🖼 슬라이드 영상</div>
+              <div class="text-muted" style="font-size:.72rem">FLUX 이미지 + TTS</div>
+              <div class="badge bg-light text-dark mt-1" style="font-size:.7rem">300P · 약 2분</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="engine-card border rounded p-3 text-center"
+                 data-engine="kling" data-cost="800" style="cursor:pointer;transition:.15s"
+                 onclick="selectEngine('kling', this)">
+              <div class="fw-bold small mb-1">🎬 Kling 모션 영상</div>
+              <div class="text-muted" style="font-size:.72rem">실제 움직이는 영상 + TTS</div>
+              <div class="badge bg-light text-dark mt-1" style="font-size:.7rem">800P · 약 10~15분</div>
+            </div>
+          </div>
+        </div>
+        <!-- Kling 모델 선택 (Kling 선택 시만 노출) -->
+        <div id="klingModelRow" class="mt-2 d-none">
+          <label class="form-label mb-1 small fw-semibold">Kling 모델</label>
+          <select id="klingModelSelect" class="form-select form-select-sm">
+            <option value="kling-v1-6">kling-v1-6 (권장 — 빠르고 안정적)</option>
+            <option value="kling-v2">kling-v2 (최신 고품질, 느림)</option>
+            <option value="kling-v1">kling-v1 (기본)</option>
+          </select>
+          <div class="mt-2 alert alert-warning py-2 px-3 small mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            Kling 모드는 씬당 약 2~3분 소요 · 총 10~15분. 생성 중 페이지를 닫아도 백그라운드에서 계속 진행됩니다.
+          </div>
+        </div>
+      </div>
+
+      <input type="hidden" id="selectedEngine" value="flux">
+
       <div class="d-flex justify-content-between mt-4">
         <button class="btn btn-outline-secondary btn-sm" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>이전</button>
         <button class="btn btn-primary" id="step4Next" onclick="startGenerate()" disabled>
@@ -337,6 +379,10 @@
 .angle-card { cursor:pointer; transition:all .2s; border:2px solid transparent; }
 .angle-card:hover { border-color:#d63384 !important; background:#fff0f8; }
 .angle-card.active { border-color:#d63384 !important; background:#fff0f8; }
+.engine-card { transition:all .15s; }
+.engine-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+.engine-card.selected[data-engine="flux"]  { border-color:#0d6efd !important; background:#f0f4ff; }
+.engine-card.selected[data-engine="kling"] { border-color:#7c3aed !important; background:#f5f0ff; }
 </style>
 
 <script>
@@ -563,6 +609,17 @@ function checkStep4Ready() {
   document.getElementById('step4Next').disabled = !(selectedStyle && selectedVoice);
 }
 
+// ── 영상 엔진 선택 ──────────────────────────────────────────
+function selectEngine(engine, el) {
+  document.querySelectorAll('.engine-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('selectedEngine').value = engine;
+  const isKling = engine === 'kling';
+  document.getElementById('klingModelRow').classList.toggle('d-none', !isKling);
+  const cost = isKling ? 800 : 300;
+  document.getElementById('step4Cost').textContent = cost + 'P';
+}
+
 // ── Step 5 영상 생성 ────────────────────────────────────────
 async function startGenerate() {
   goStep(5);
@@ -570,21 +627,31 @@ async function startGenerate() {
   document.getElementById('generateResult').classList.add('d-none');
   document.getElementById('generateError').classList.add('d-none');
 
-  const scenes = collectScenes();
+  const scenes    = collectScenes();
+  const useKling  = document.getElementById('selectedEngine').value === 'kling';
+  const klingModel= document.getElementById('klingModelSelect').value;
 
   const bgmOn  = document.getElementById('bgmToggle').checked;
   const bgmVol = bgmOn ? parseFloat(document.getElementById('bgmVolume').value) / 100 : 0;
+
+  if (useKling) {
+    document.getElementById('progressStep').textContent = '이미지 생성 후 Kling 영상 생성 중...';
+    document.querySelector('#generateProgress .text-muted.small.mb-3').textContent =
+      '약 10~15분 소요됩니다. 페이지를 닫아도 백그라운드에서 계속 진행됩니다.';
+  }
 
   const res  = await fetch('/create/shorts/generate', {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
     body: JSON.stringify({
       scenes,
-      style:       selectedStyle,
-      brand_color: selectedBrandColor,
-      voice:       selectedVoice,
-      tts_speed:   parseFloat(document.getElementById('ttsSpeed').value),
-      brand_id:    document.getElementById('brandSelect').value,
-      bgm_volume:  bgmVol,
+      style:        selectedStyle,
+      brand_color:  selectedBrandColor,
+      voice:        selectedVoice,
+      tts_speed:    parseFloat(document.getElementById('ttsSpeed').value),
+      brand_id:     document.getElementById('brandSelect').value,
+      bgm_volume:   bgmVol,
+      use_kling:    useKling,
+      kling_model:  klingModel,
     })
   });
   const data = await res.json();
@@ -595,10 +662,10 @@ async function startGenerate() {
   }
 
   currentCreationId = data.creation_id;
-  startPolling(scenes.length);
+  startPolling(scenes.length, useKling);
 }
 
-function startPolling(sceneCount) {
+function startPolling(sceneCount, isKling) {
   const totalSteps = sceneCount + 2;
   let lastStep = 0;
 

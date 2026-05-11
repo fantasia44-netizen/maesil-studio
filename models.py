@@ -63,7 +63,8 @@ POINT_COSTS = {
     'bg_remove_adv':   10,   # fal.ai BiRefNet 고급 배경 제거
     'image_generation': 30,  # 스튜디오 이미지 생성 (FLUX Schnell, 장당)
     # 쇼츠/릴스 영상 (대본+이미지+TTS+조립 통합)
-    'shorts_video':   300,   # FLUX 5장 + TTS + FFmpeg 조립 all-in-one
+    'shorts_video':     300,  # FLUX 5장 + TTS + FFmpeg 조립 all-in-one
+    'shorts_video_kling': 800, # Kling image2video 5씬 + TTS + FFmpeg 조립
     # 홍보 자료 (제안서·카탈로그·리플릿·전단지)
     'business_proposal':   150,  # 거래처 제안서
     'sponsorship_proposal':150,  # 협찬 제안서
@@ -178,8 +179,9 @@ CREATION_LABELS = {
     'logo':             '브랜드 로고',
     'banner':           '배너 이미지',
     # 영상
-    'shorts_script':   '쇼츠 대본',
-    'shorts_video':    '쇼츠/릴스 영상',
+    'shorts_script':        '쇼츠 대본',
+    'shorts_video':         '쇼츠/릴스 영상',
+    'shorts_video_kling':   '쇼츠/릴스 영상 (Kling 모션)',
     # 홍보 자료
     'business_proposal':    '거래처 제안서',
     'sponsorship_proposal': '협찬 제안서',

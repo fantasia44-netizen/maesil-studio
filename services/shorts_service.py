@@ -961,3 +961,304 @@ def start_shorts_pipeline(
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
+
+
+# ════════════════════════════════════════════════════════
+# 6. Kling image2video 파이프라인
+# ════════════════════════════════════════════════════════
+
+def _make_text_overlay_png(
+    overlay_title: str,
+    overlay_body: str,
+    brand_color: str,
+    dest_path: str,
+    pil_size: tuple = (1080, 1920),
+) -> str:
+    """투명 배경 위에 제목/자막 텍스트만 그린 PNG 저장 → dest_path 반환.
+
+    Kling 영상 위에 FFmpeg overlay 필터로 합성.
+    """
+    from services.instagram_service import _hex_rgb
+    W, H = pil_size
+    ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d  = ImageDraw.Draw(ov)
+    br, bg_, bb = _hex_rgb(brand_color)
+
+    # ── 상단 제목 그라디언트 배너 (0~22%) ──
+    if overlay_title:
+        top_h = int(H * 0.22)
+        for y in range(top_h):
+            ratio = 1 - (y / top_h)
+            a = int(200 * ratio)
+            d.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+        tf   = _font(bold=True, size=int(H * 0.060))
+        lines = _wrap_text(overlay_title, tf, int(W * 0.84))[:2]
+        ty   = int(H * 0.026)
+        for ln in lines:
+            bb_box = tf.getbbox(ln)
+            lw = bb_box[2] - bb_box[0]
+            tx = (W - lw) // 2
+            _draw_text_stroke(d, (tx, ty), ln, tf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 220), stroke_w=4)
+            ty += int((bb_box[3] - bb_box[1]) * 1.3)
+
+    # ── 하단 자막 배너 (78%~100%) ──
+    if overlay_body:
+        bot_start = int(H * 0.78)
+        for y in range(bot_start, H):
+            ratio = (y - bot_start) / (H - bot_start)
+            a = int(220 * ratio)
+            d.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+        # 브랜드 컬러 바 (맨 아래)
+        d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
+
+        card_top = int(H * 0.795)
+        d.rectangle([(0, card_top), (W, H - 52)], fill=(0, 0, 0, 100))
+        bf   = _font(bold=True, size=int(H * 0.040))
+        lines = _wrap_text(overlay_body, bf, int(W * 0.88))[:3]
+        ty   = card_top + int(H * 0.010)
+        pad  = int(W * 0.055)
+        for ln in lines:
+            _draw_text_stroke(d, (pad, ty), ln, bf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 200), stroke_w=3)
+            bb_box = bf.getbbox(ln)
+            ty += int((bb_box[3] - bb_box[1]) * 1.4)
+
+    ov.save(dest_path, 'PNG')
+    ov.close()
+    return dest_path
+
+
+def _overlay_text_on_video(
+    video_path: str,
+    text_png: str,
+    audio_path: str,
+    out_path: str,
+) -> str:
+    """Kling 영상 + 텍스트 오버레이 PNG + TTS 음성 → 최종 클립 MP4."""
+    _ffmpeg(
+        '-y',
+        '-i', video_path,
+        '-i', text_png,
+        '-i', audio_path,
+        '-filter_complex',
+        '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,'
+        'crop=1080:1920,setsar=1[base];'
+        '[base][1:v]overlay=0:0[vout]',
+        '-map', '[vout]',
+        '-map', '2:a',
+        '-c:v', 'libx264', '-preset', 'ultrafast',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-pix_fmt', 'yuv420p',
+        '-shortest',
+        out_path,
+    )
+    return out_path
+
+
+def run_kling_shorts_pipeline(
+    creation_id: str,
+    user_id: str,
+    scenes: list[dict],
+    style: str,
+    brand_color: str,
+    voice_key: str,
+    tts_speed: float,
+    supabase,
+    bgm_volume: float = 0.20,
+    kling_model: str = 'kling-v1-6',
+) -> None:
+    """Kling image2video 기반 쇼츠 파이프라인.
+
+    흐름:
+      FLUX 이미지 생성(5씬) → Kling image2video 제출(병렬) →
+      Kling 완료 폴링 → 영상 다운로드 → 텍스트 오버레이 + TTS →
+      FFmpeg 조립 → BGM 믹싱 → Supabase 업로드
+    """
+    import gc
+    import concurrent.futures
+    from services.config_service import get_config
+    from services.imagen_service import _generate_flux
+    from services.kling_service import (
+        submit_image2video, wait_for_task, download_video,
+    )
+
+    tmp_dir = os.path.join(tempfile.gettempdir(), f'maesil_kling_{creation_id}')
+    os.makedirs(tmp_dir, exist_ok=True)
+
+    def _update(status: str, extra: dict | None = None):
+        row = {'status': status}
+        if extra:
+            row['output_data'] = extra
+        try:
+            supabase.table('creations').update(row).eq('id', creation_id).execute()
+        except Exception as e:
+            logger.error('[kling_pipeline] supabase update: %s', e)
+
+    try:
+        tts_api_key  = get_config('google_tts_api_key')
+        kling_access = get_config('kling_access_key')
+        kling_secret = get_config('kling_secret_key')
+        kling_url    = get_config('kling_base_url') or 'https://api.klingai.com'
+
+        if not tts_api_key:
+            raise ValueError('google_tts_api_key 미설정')
+        if not kling_access or not kling_secret:
+            raise ValueError('kling_access_key / kling_secret_key 미설정')
+
+        pil_size = (1080, 1920)
+        n = len(scenes)
+
+        # ── Step 1: FLUX 이미지 생성 ─────────────────────────────
+        _update('generating', {'progress': 0, 'step': f'이미지 생성 중 (1/{n})'})
+        style_mod = SHORTS_STYLE_PRESETS.get(style, '')
+        img_urls = []
+        for i, scene in enumerate(scenes):
+            _update('generating', {'progress': i, 'step': f'이미지 생성 중 ({i+1}/{n})'})
+            flux_p = (
+                scene.get('flux_prompt', '') +
+                (f', {style_mod}' if style_mod else '') +
+                _NO_CJK + _NO_ANATOMY
+            )
+            img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
+            img_urls.append(img_url)
+            gc.collect()
+
+        # ── Step 2: Kling image2video 병렬 제출 ──────────────────
+        _update('generating', {'progress': n, 'step': 'Kling 영상 생성 제출 중'})
+        task_ids = []
+        for i, (scene, img_url) in enumerate(zip(scenes, img_urls)):
+            role = scene.get('role', 'hook')
+            task_id = submit_image2video(
+                image_url=img_url,
+                scene_role=role,
+                access_key=kling_access,
+                secret_key=kling_secret,
+                model=kling_model,
+                duration=5,
+                base_url=kling_url,
+            )
+            task_ids.append(task_id)
+            logger.info('[kling_pipeline] 제출 씬%d task_id=%s', i + 1, task_id)
+            time.sleep(1)  # API rate limit 방지
+
+        # ── Step 3: 병렬 폴링 (완료 대기) ───────────────────────
+        _update('generating', {
+            'progress': n + 1,
+            'step': f'Kling 영상 생성 중 (약 5~10분 소요)',
+        })
+
+        video_urls = [None] * n
+
+        def _poll_one(idx: int, task_id: str) -> tuple[int, str]:
+            url = wait_for_task(
+                task_id, kling_access, kling_secret,
+                base_url=kling_url, timeout=900, poll_interval=12,
+            )
+            return idx, url
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+            futs = {ex.submit(_poll_one, i, tid): i for i, tid in enumerate(task_ids)}
+            done_count = 0
+            for fut in concurrent.futures.as_completed(futs):
+                idx, vurl = fut.result()
+                video_urls[idx] = vurl
+                done_count += 1
+                _update('generating', {
+                    'progress': n + 1 + done_count,
+                    'step': f'Kling 완료 {done_count}/{n}씬',
+                })
+
+        # ── Step 4: 다운로드 + TTS + 텍스트 오버레이 ─────────────
+        clip_data = []
+        for i, (scene, vurl) in enumerate(zip(scenes, video_urls)):
+            _update('generating', {
+                'progress': n + 1 + n + i,
+                'step': f'씬 조립 중 ({i+1}/{n})',
+            })
+
+            # Kling 영상 다운로드
+            kling_mp4 = os.path.join(tmp_dir, f'kling_{i:02d}.mp4')
+            download_video(vurl, kling_mp4)
+
+            # 텍스트 오버레이 PNG (투명 배경)
+            text_png = os.path.join(tmp_dir, f'text_{i:02d}.png')
+            _make_text_overlay_png(
+                scene.get('overlay_title', ''),
+                scene.get('overlay_body', scene.get('narration', '')),
+                brand_color,
+                text_png,
+                pil_size,
+            )
+
+            # TTS 음성
+            narration = _normalize_tts_text(scene.get('narration', ''))
+            mp3_bytes = tts_synthesize(narration, tts_api_key, voice_key, tts_speed)
+            audio_path = os.path.join(tmp_dir, f'tts_{i:02d}.mp3')
+            with open(audio_path, 'wb') as f:
+                f.write(mp3_bytes)
+            del mp3_bytes
+
+            # FFmpeg: Kling 영상 + 텍스트 PNG + TTS → 최종 클립
+            clip_out = os.path.join(tmp_dir, f'clip_{i:02d}.mp4')
+            _overlay_text_on_video(kling_mp4, text_png, audio_path, clip_out)
+            clip_data.append(clip_out)
+            gc.collect()
+
+        # ── Step 5: FFmpeg concat ─────────────────────────────────
+        _update('generating', {'progress': n * 3 + 2, 'step': '영상 합치는 중'})
+        concat_txt = os.path.join(tmp_dir, 'concat.txt')
+        with open(concat_txt, 'w') as f:
+            for cp in clip_data:
+                f.write(f"file '{cp}'\n")
+        raw_mp4 = os.path.join(tmp_dir, 'kling_raw.mp4')
+        _ffmpeg(
+            '-y', '-f', 'concat', '-safe', '0', '-i', concat_txt,
+            '-c', 'copy', raw_mp4,
+        )
+
+        # ── Step 6: BGM 믹싱 ─────────────────────────────────────
+        output_mp4 = os.path.join(tmp_dir, 'kling_final.mp4')
+        if bgm_volume > 0:
+            bgm_path = pick_bgm(style)
+            if bgm_path:
+                _update('generating', {'progress': n * 3 + 3, 'step': 'BGM 믹싱 중'})
+                try:
+                    mix_bgm_into_video(raw_mp4, bgm_path, output_mp4, bgm_volume)
+                except Exception as bgm_e:
+                    logger.warning('[kling_pipeline] BGM 실패 (무시): %s', bgm_e)
+                    import shutil as _sh
+                    _sh.copy2(raw_mp4, output_mp4)
+            else:
+                import shutil as _sh
+                _sh.copy2(raw_mp4, output_mp4)
+        else:
+            import shutil as _sh
+            _sh.copy2(raw_mp4, output_mp4)
+
+        # ── Step 7: Supabase Storage 업로드 ──────────────────────
+        _update('generating', {'progress': n * 3 + 4, 'step': '업로드 중'})
+        path = f'{user_id}/{uuid.uuid4().hex}_kling_shorts.mp4'
+        with open(output_mp4, 'rb') as f:
+            supabase.storage.from_('creations').upload(
+                path, f, {'content-type': 'video/mp4'}
+            )
+        video_url = supabase.storage.from_('creations').get_public_url(path)
+
+        _update('done', {'video_url': video_url, 'progress': n * 3 + 5, 'engine': 'kling'})
+        logger.info('[kling_pipeline] 완료: %s → %s', creation_id, video_url)
+
+    except Exception as e:
+        logger.error('[kling_pipeline] 오류 (%s): %s', creation_id, e)
+        _update('failed', {'error': str(e)})
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        _cleanup_stale_tmp_dirs()
+        try:
+            import gc as _gc
+            _gc.collect()
+        except Exception:
+            pass

@@ -197,28 +197,40 @@ def shorts_generate():
     brand_id    = (data.get('brand_id')    or '').strip()
     bgm_volume  = float(data.get('bgm_volume') if data.get('bgm_volume') is not None else 0.20)
     bgm_volume  = max(0.0, min(1.0, bgm_volume))
+    use_kling   = bool(data.get('use_kling', False))
+    kling_model = (data.get('kling_model') or 'kling-v1-6').strip()
 
     if not scenes:
         return jsonify(ok=False, message='씬 데이터가 없습니다. 먼저 대본을 생성하세요.')
 
-    cost = POINT_COSTS.get('shorts_video', 300)
+    # Kling 모드 → API 키 사전 확인
+    if use_kling:
+        from services.config_service import get_config as _gc
+        if not _gc('kling_access_key') or not _gc('kling_secret_key'):
+            return jsonify(ok=False, message='Kling API 키가 설정되지 않았습니다. 관리자에게 문의하세요.')
+
+    creation_type = 'shorts_video_kling' if use_kling else 'shorts_video'
+    cost = POINT_COSTS.get(creation_type, 300)
+
     from services.point_service import get_balance, use_points, InsufficientPoints
     balance = get_balance(current_user.id)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
     creation_id = str(uuid.uuid4())
+    model_used  = f'kling-{kling_model}+tts+ffmpeg' if use_kling else 'flux+tts+ffmpeg'
     try:
         _row = {
             'id': creation_id,
             'user_id': current_user.id,
             'brand_id': brand_id or None,
-            'creation_type': 'shorts_video',
-            'input_data': {'style': style, 'voice': voice_key, 'scenes': scenes},
+            'creation_type': creation_type,
+            'input_data': {'style': style, 'voice': voice_key, 'scenes': scenes,
+                           'use_kling': use_kling, 'kling_model': kling_model},
             'output_data': {'progress': 0, 'step': '준비 중'},
             'points_used': cost,
             'status': 'generating',
-            'model_used': f'flux+tts+ffmpeg',
+            'model_used': model_used,
             'created_at': now_kst().isoformat(),
         }
         if getattr(current_user, 'operator_id', None):
@@ -228,30 +240,46 @@ def shorts_generate():
         logger.warning('[shorts/generate] creation insert: %s', e)
 
     try:
-        use_points(current_user.id, 'shorts_video', creation_id)
+        use_points(current_user.id, creation_type, creation_id)
     except InsufficientPoints:
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')
 
-    from tasks.shorts_task import generate_shorts_video
     supabase_url = current_app.config.get('SUPABASE_URL', '')
     supabase_key = (current_app.config.get('SUPABASE_SERVICE_KEY')
                     or current_app.config.get('SUPABASE_KEY', ''))
 
-    generate_shorts_video.delay(
-        creation_id=creation_id,
-        user_id=current_user.id,
-        scenes=scenes,
-        style=style,
-        brand_color=brand_color,
-        voice_key=voice_key,
-        tts_speed=tts_speed,
-        supabase_url=supabase_url,
-        supabase_key=supabase_key,
-        bgm_volume=bgm_volume,
-    )
+    if use_kling:
+        from tasks.shorts_task import generate_kling_shorts_video
+        generate_kling_shorts_video.delay(
+            creation_id=creation_id,
+            user_id=current_user.id,
+            scenes=scenes,
+            style=style,
+            brand_color=brand_color,
+            voice_key=voice_key,
+            tts_speed=tts_speed,
+            supabase_url=supabase_url,
+            supabase_key=supabase_key,
+            bgm_volume=bgm_volume,
+            kling_model=kling_model,
+        )
+    else:
+        from tasks.shorts_task import generate_shorts_video
+        generate_shorts_video.delay(
+            creation_id=creation_id,
+            user_id=current_user.id,
+            scenes=scenes,
+            style=style,
+            brand_color=brand_color,
+            voice_key=voice_key,
+            tts_speed=tts_speed,
+            supabase_url=supabase_url,
+            supabase_key=supabase_key,
+            bgm_volume=bgm_volume,
+        )
 
-    return jsonify(ok=True, creation_id=creation_id, cost=cost)
+    return jsonify(ok=True, creation_id=creation_id, cost=cost, engine='kling' if use_kling else 'flux')
 
 
 # ─────────────────────────────────────────────────────────────
