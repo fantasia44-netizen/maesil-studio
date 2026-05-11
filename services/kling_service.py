@@ -213,18 +213,23 @@ def submit_image2video(
         )
 
         if resp.status_code == 429:
-            # Retry-After 헤더 있으면 그 값, 없으면 지수 백오프 (15→30→60→120초)
+            # Retry-After 헤더 있으면 그 값, 없으면 지수 백오프 (30→60→120→240초)
             retry_after = int(resp.headers.get('Retry-After', 0))
-            wait = retry_after if retry_after > 0 else min(15 * (2 ** attempt), 120)
+            wait = retry_after if retry_after > 0 else min(30 * (2 ** attempt), 240)
+            try:
+                kling_msg = resp.json().get('message', '')
+            except Exception:
+                kling_msg = resp.text[:100]
+            logger.warning('[kling] 429 rate limit (attempt %d/%d) msg=%s — %d초 대기',
+                           attempt + 1, max_retries, kling_msg, wait)
             if attempt < max_retries:
-                logger.warning('[kling] 429 rate limit — %d초 후 재시도 (attempt %d/%d)',
-                               wait, attempt + 1, max_retries)
                 time.sleep(wait)
                 continue
             else:
                 raise RuntimeError(
-                    f'Kling API rate limit 초과 — {max_retries}회 재시도 실패. '
-                    '잠시 후 다시 시도해주세요. (429 Too Many Requests)'
+                    f'Kling API 요청 한도 초과 — {max_retries}회 재시도 모두 실패.\n'
+                    f'Kling 응답: {kling_msg}\n'
+                    '5~10분 후 다시 시도하거나 Kling 콘솔에서 플랜/한도를 확인해주세요.'
                 )
 
         resp.raise_for_status()
