@@ -179,7 +179,9 @@ CREATION_LABELS = {
     'detail_page_image':'상세페이지 이미지 세트',
     'card_news':        '인스타 카드뉴스',
     'logo':             '브랜드 로고',
-    'banner':           '배너 이미지',
+    'banner':           'AI 배너 이미지',
+    'banner_product':   '상품 배너 이미지',
+    'banner_text':      '텍스트 배너 이미지',
     # 영상
     'shorts_script':        '쇼츠 대본',
     'shorts_video':         '쇼츠/릴스 영상',

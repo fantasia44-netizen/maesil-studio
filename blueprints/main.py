@@ -125,7 +125,8 @@ def history():
         'press_release', 'thumbnail_image', 'detail_image', 'detail_page_image',
         'card_news', 'img_preview', 'img_ideogram', 'img_card_news', 'image_generation',
         'bg_replace', 'bg_remove_adv',
-        'logo', 'banner', 'shorts_script', 'shorts_video', 'shorts_video_kling',
+        'logo', 'banner', 'banner_product', 'banner_text',
+        'shorts_script', 'shorts_video', 'shorts_video_kling',
         'business_proposal', 'sponsorship_proposal', 'catalog', 'leaflet', 'flyer',
         'brand_package', 'product_launch',
     ]
