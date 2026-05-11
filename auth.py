@@ -352,11 +352,11 @@ def register():
             pass
 
         if account_type == 'biz' and biz_sub == 'invited':
-            flash(f'가입 완료! 팀에 합류했습니다. 로그인하세요.', 'success')
+            flash('가입 완료! 팀에 합류했습니다. 로그인하세요.', 'success')
         elif account_type == 'biz' and biz_sub == 'new':
-            flash('기업 계정이 생성되었습니다! 로그인 후 팀원을 초대하세요.', 'success')
+            flash('기업 계정이 생성되었습니다! 5,000P 웰컴 포인트가 지급되었습니다. 로그인 후 팀원을 초대하세요.', 'success')
         else:
-            flash('가입 완료! 로그인하세요.', 'success')
+            flash('가입 완료! 🎁 5,000P 웰컴 포인트가 지급되었습니다. 로그인 후 바로 사용해보세요.', 'success')
         return redirect(url_for('auth.login'))
 
     except Exception as e:
