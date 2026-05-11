@@ -328,6 +328,14 @@ def register():
             except Exception:
                 pass
 
+            # ── 웰컴 포인트 지급 (신규 가입자 한정) ──
+            try:
+                from services.point_service import add_points
+                add_points(user_id, 5000, 'welcome',
+                           ref_id=user_id, note='신규 가입 웰컴 포인트')
+            except Exception as _pe:
+                logger.warning(f'[AUTH] 웰컴 포인트 지급 실패 (무시): {_pe}')
+
         # ── 약관 동의 이력 ──
         try:
             user_agent = request.headers.get('User-Agent', '')[:500]
@@ -344,11 +352,11 @@ def register():
             pass
 
         if account_type == 'biz' and biz_sub == 'invited':
-            flash(f'가입 완료! 팀에 합류했습니다. 로그인하세요.', 'success')
+            flash('가입 완료! 팀에 합류했습니다. 로그인하세요.', 'success')
         elif account_type == 'biz' and biz_sub == 'new':
-            flash('기업 계정이 생성되었습니다! 로그인 후 팀원을 초대하세요.', 'success')
+            flash('기업 계정이 생성되었습니다! 5,000P 웰컴 포인트가 지급되었습니다. 로그인 후 팀원을 초대하세요.', 'success')
         else:
-            flash('가입 완료! 로그인하세요.', 'success')
+            flash('가입 완료! 🎁 5,000P 웰컴 포인트가 지급되었습니다. 로그인 후 바로 사용해보세요.', 'success')
         return redirect(url_for('auth.login'))
 
     except Exception as e:

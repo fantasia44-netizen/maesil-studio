@@ -73,6 +73,70 @@ def generate_shorts_video(
             logger.error('[shorts_task] 포인트 환불 오류: %s', ref_e)
 
 
+@celery.task(
+    bind=True,
+    name='tasks.shorts_task.generate_kling_shorts_video',
+    max_retries=0,
+    soft_time_limit=1500,   # 25분 (3씬 순차 체이닝 × 씬당 최대 5분 + 여유)
+    time_limit=1620,        # 27분 hard kill
+)
+def generate_kling_shorts_video(
+    self,
+    creation_id: str,
+    user_id: str,
+    scenes: list,
+    style: str,
+    brand_color: str,
+    voice_key: str,
+    tts_speed: float,
+    supabase_url: str,
+    supabase_key: str,
+    bgm_volume: float = 0.20,
+    kling_model: str = 'kling-v1-6',
+    product_image_url: str | None = None,
+    ref_image_url: str | None = None,
+):
+    """Celery 워커 — Kling image2video 기반 쇼츠 영상 생성 (라스트프레임 체이닝)."""
+    import os, sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+    from supabase import create_client
+    from services.shorts_service import run_kling_shorts_pipeline
+
+    supabase = create_client(supabase_url, supabase_key)
+
+    try:
+        run_kling_shorts_pipeline(
+            creation_id=creation_id,
+            user_id=user_id,
+            scenes=scenes,
+            style=style,
+            brand_color=brand_color,
+            voice_key=voice_key,
+            tts_speed=tts_speed,
+            supabase=supabase,
+            bgm_volume=bgm_volume,
+            kling_model=kling_model,
+            product_image_url=product_image_url,
+            ref_image_url=ref_image_url,
+        )
+    except Exception as exc:
+        logger.error('[kling_task] 태스크 실패 (%s): %s', creation_id, exc)
+        try:
+            supabase.table('creations').update({
+                'status': 'failed',
+                'output_data': {'error': f'Kling 태스크 오류: {str(exc)[:200]}'},
+            }).eq('id', creation_id).execute()
+        except Exception:
+            pass
+        try:
+            _refund_shorts_points(supabase, creation_id, user_id)
+        except Exception:
+            pass
+
+
 def _refund_shorts_points(supabase, creation_id: str, user_id: str) -> None:
     """shorts_video 실패 시 차감 포인트 환불.
 

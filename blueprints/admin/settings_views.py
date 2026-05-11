@@ -15,6 +15,11 @@ CONFIG_KEYS = [
     ('ideogram_api_key',      'Ideogram API Key',       'secret', '한글 텍스트 이미지 생성',       False),
     ('openai_api_key',        'OpenAI API Key',         'secret', 'DALL-E / GPT (선택)',            False),
     ('google_tts_api_key',    'Google TTS API Key',     'secret', '쇼츠/릴스 나레이션 음성 생성',   False),
+    # ── Kling AI (쇼츠 영상 생성) ──────────────────────────────
+    ('kling_access_key',      'Kling Access Key',       'secret', 'Kling AI 영상 생성 — 개발자 콘솔 AccessKey ID',   True),
+    ('kling_secret_key',      'Kling Secret Key',       'secret', 'Kling AI 영상 생성 — 개발자 콘솔 AccessKey Secret', True),
+    ('kling_base_url',        'Kling API Base URL',     'text',   '기본값: https://api.klingai.com (변경 불필요)',    False),
+    # ────────────────────────────────────────────────────────────
     ('maeyo_agency_url',      '매요 Agency URL',        'text',   '매요 AI CS봇 — maesil-agency 주소', False),
     ('maeyo_cs_token',        '매요 CS Token',          'secret', 'maesil-agency MAEYO_INTERNAL_TOKEN', True),
     ('portone_api_secret',    'PortOne API Secret',     'secret', '결제 API',                      False),
@@ -121,6 +126,9 @@ def test_key(key):
             return _test_ideogram(get_config('ideogram_api_key'))
         elif key == 'maeyo_cs_token':
             return _test_maeyo(get_config('maeyo_agency_url'), get_config('maeyo_cs_token'))
+        elif key in ('kling_access_key', 'kling_secret_key'):
+            return _test_kling(get_config('kling_access_key'), get_config('kling_secret_key'),
+                               get_config('kling_base_url'))
     except Exception as e:
         return jsonify(ok=False, message=f'오류: {e}')
 
@@ -217,5 +225,39 @@ def _test_ideogram(api_key: str):
             return jsonify(ok=True, message='키 유효 — 크레딧 부족')
         else:
             return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:100]}')
+    except Exception as e:
+        return jsonify(ok=False, message=f'연결 실패: {e}')
+
+
+def _test_kling(access_key: str, secret_key: str, base_url: str = ''):
+    """Kling API 연결 테스트 — JWT 생성 후 task 목록 조회 (크레딧 소모 없음)."""
+    if not access_key:
+        return jsonify(ok=False, message='Kling Access Key가 설정되지 않았습니다.')
+    if not secret_key:
+        return jsonify(ok=False, message='Kling Secret Key가 설정되지 않았습니다.')
+    try:
+        from services.kling_service import _gen_jwt
+        import requests as req_lib
+
+        base = (base_url or 'https://api.klingai.com').rstrip('/')
+        token = _gen_jwt(access_key, secret_key, expires_in=60)
+        headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        # GET /v1/videos/image2video — 빈 목록 조회 (생성 없음, 크레딧 소모 없음)
+        r = req_lib.get(f'{base}/v1/videos/image2video', headers=headers, timeout=10)
+
+        if r.status_code == 200:
+            data = r.json()
+            code = data.get('code', -1)
+            if code == 0:
+                return jsonify(ok=True, message='✅ Kling API 연결 성공 — 키 유효, 크레딧 정상')
+            else:
+                return jsonify(ok=False, message=f'API 오류 (code={code}): {data.get("message", "")}')
+        elif r.status_code == 401:
+            return jsonify(ok=False, message='인증 실패 — Access Key / Secret Key를 확인하세요.')
+        elif r.status_code == 403:
+            return jsonify(ok=False, message='권한 없음 — Kling 개발자 API 플랜을 확인하세요.')
+        else:
+            return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:150]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')

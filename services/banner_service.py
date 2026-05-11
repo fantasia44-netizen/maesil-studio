@@ -652,3 +652,287 @@ def analyze_banner_intent(brand: dict, product: dict | None, intent: str) -> dic
             'flux_prompt': '',
             'reasoning': '기본 설정으로 시작합니다.',
         }
+
+
+# ════════════════════════════════════════════════════════
+# 텍스트 배너 — AI 없이 PIL만으로 즉시 생성
+# ════════════════════════════════════════════════════════
+
+TEXT_BANNER_BG_TYPES: dict[str, str] = {
+    'solid':   '단색',
+    'grad_v':  '세로 그라디언트',
+    'grad_h':  '가로 그라디언트',
+    'dots':    '도트 패턴',
+    'grid':    '격자 패턴',
+}
+
+TEXT_BANNER_LAYOUTS: dict[str, str] = {
+    'center': '중앙 정렬',
+    'left':   '좌측 정렬 (제품 우측)',
+}
+
+
+def _make_text_bg(bg_type: str, w: int, h: int, color1: str, color2: str) -> Image.Image:
+    """텍스트 배너 배경 생성."""
+    r1, g1, b1 = _hex_rgb(color1)
+    r2, g2, b2 = _hex_rgb(color2)
+
+    if bg_type == 'solid':
+        return Image.new('RGB', (w, h), (r1, g1, b1))
+
+    img  = Image.new('RGB', (w, h), (r1, g1, b1))
+    draw = ImageDraw.Draw(img)
+
+    if bg_type == 'grad_v':
+        for y in range(h):
+            t = y / h
+            draw.line([(0, y), (w, y)], fill=(
+                int(r1 + (r2 - r1) * t),
+                int(g1 + (g2 - g1) * t),
+                int(b1 + (b2 - b1) * t),
+            ))
+
+    elif bg_type == 'grad_h':
+        for x in range(w):
+            t = x / w
+            draw.line([(x, 0), (x, h)], fill=(
+                int(r1 + (r2 - r1) * t),
+                int(g1 + (g2 - g1) * t),
+                int(b1 + (b2 - b1) * t),
+            ))
+
+    elif bg_type == 'dots':
+        dot_r   = max(3, min(w, h) // 55)
+        spacing = dot_r * 6
+        for row in range(-spacing, h + spacing, spacing):
+            off = (row // spacing % 2) * (spacing // 2)
+            for col in range(-spacing + off, w + spacing, spacing):
+                draw.ellipse(
+                    [(col - dot_r, row - dot_r), (col + dot_r, row + dot_r)],
+                    fill=(r2, g2, b2),
+                )
+
+    elif bg_type == 'grid':
+        step = max(20, min(w, h) // 22)
+        for x in range(0, w, step):
+            draw.line([(x, 0), (x, h)], fill=(r2, g2, b2), width=1)
+        for y in range(0, h, step):
+            draw.line([(0, y), (w, y)], fill=(r2, g2, b2), width=1)
+
+    return img
+
+
+def generate_text_banner(
+    bg_type: str,
+    bg_color1: str,
+    bg_color2: str,
+    layout: str,
+    headline: str,
+    subline: str,
+    cta: str,
+    text_color: str,
+    cta_color: str,
+    W: int,
+    H: int,
+    product_url: str | None = None,
+) -> str:
+    """텍스트 배너 즉시 생성 → JPEG base64 data URI 반환."""
+    bg      = _make_text_bg(bg_type, W, H, bg_color1, bg_color2)
+    canvas  = bg.convert('RGBA')
+    d       = ImageDraw.Draw(canvas)
+
+    # 텍스트 색상
+    tc = _hex_rgb(text_color) + (255,)
+    sc = tuple(max(0, int(c * 0.78)) for c in tc[:3]) + (200,)
+
+    font_scale = min(W, H)
+    hf = _font(bold=True,  size=max(36, min(82, int(font_scale * 0.066))))
+    sf = _font(bold=False, size=max(24, min(54, int(font_scale * 0.040))))
+    cf = _font(bold=True,  size=max(20, min(42, int(font_scale * 0.031))))
+
+    margin = int(W * 0.08)
+
+    # 제품 이미지 로드
+    product_img: Image.Image | None = None
+    if product_url:
+        try:
+            product_img = _load_img(product_url).convert('RGBA')
+        except Exception as e:
+            logger.warning('[text_banner] 제품이미지 로드 실패: %s', e)
+
+    # ── 레이아웃: 좌측 텍스트 + 우측 제품 이미지 ──
+    if layout == 'left' and product_img:
+        text_zone = int(W * 0.50)
+        right_zone = W - text_zone
+        ph = int(H * 0.76)
+        pi = _fit_img(product_img.copy(), int(right_zone * 0.82), ph)
+        canvas.alpha_composite(pi, dest=(
+            text_zone + (right_zone - pi.width) // 2,
+            (H - pi.height) // 2,
+        ))
+        text_max_w = int(text_zone * 0.84)
+        ty = int(H * 0.18)
+
+        for ln in _wrap(headline, hf, text_max_w)[:3]:
+            bb = hf.getbbox(ln)
+            lh = bb[3] - bb[1]
+            d.text((margin + 2, ty + 2), ln, font=hf, fill=(0, 0, 0, 70))
+            d.text((margin, ty), ln, font=hf, fill=tc)
+            ty += int(lh * 1.38)
+        ty += int(font_scale * 0.014)
+
+        for ln in (_wrap(subline, sf, text_max_w)[:2] if subline else []):
+            bb = sf.getbbox(ln)
+            lh = bb[3] - bb[1]
+            d.text((margin, ty), ln, font=sf, fill=sc)
+            ty += int(lh * 1.38)
+        if subline:
+            ty += int(font_scale * 0.014)
+
+        if cta:
+            _draw_cta_button(canvas, ImageDraw.Draw(canvas), cta,
+                             cx=margin + int(text_max_w * 0.30),
+                             cy=ty + int(font_scale * 0.038),
+                             brand_color=cta_color, font=cf)
+
+    # ── 레이아웃: 중앙 정렬 ──
+    else:
+        text_max_w = int(W * 0.84)
+
+        # 전체 높이 계산 (수직 중앙 맞춤)
+        prod_h = 0
+        if product_img:
+            prod_h = int(H * 0.28)
+
+        h_lines = _wrap(headline, hf, text_max_w)[:3]
+        h_lh    = max(1, hf.getbbox('가')[3] - hf.getbbox('가')[1])
+        s_lines = _wrap(subline, sf, text_max_w)[:2] if subline else []
+        s_lh    = max(1, sf.getbbox('가')[3] - sf.getbbox('가')[1]) if s_lines else 0
+
+        total_h  = prod_h + (int(H * 0.04) if prod_h else 0)
+        total_h += len(h_lines) * int(h_lh * 1.38) + int(font_scale * 0.014)
+        total_h += len(s_lines) * int(s_lh * 1.38) + (int(font_scale * 0.014) if s_lines else 0)
+        if cta:
+            total_h += int(font_scale * 0.085)
+
+        ty = max(margin, (H - total_h) // 2)
+
+        if product_img:
+            pi = _fit_img(product_img.copy(), int(W * 0.46), prod_h)
+            canvas.alpha_composite(pi, dest=((W - pi.width) // 2, ty))
+            ty += prod_h + int(H * 0.04)
+
+        for ln in h_lines:
+            bb = hf.getbbox(ln)
+            lw, lh = bb[2] - bb[0], bb[3] - bb[1]
+            x = (W - lw) // 2
+            d.text((x + 2, ty + 2), ln, font=hf, fill=(0, 0, 0, 70))
+            d.text((x, ty), ln, font=hf, fill=tc)
+            ty += int(lh * 1.38)
+        ty += int(font_scale * 0.014)
+
+        for ln in s_lines:
+            bb = sf.getbbox(ln)
+            lw, lh = bb[2] - bb[0], bb[3] - bb[1]
+            d.text(((W - lw) // 2, ty), ln, font=sf, fill=sc)
+            ty += int(lh * 1.38)
+        if s_lines:
+            ty += int(font_scale * 0.014)
+
+        if cta:
+            _draw_cta_button(canvas, ImageDraw.Draw(canvas), cta,
+                             cx=W // 2,
+                             cy=ty + int(font_scale * 0.038),
+                             brand_color=cta_color, font=cf)
+
+    buf = BytesIO()
+    canvas.convert('RGB').save(buf, 'JPEG', quality=92)
+    return 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+
+# ════════════════════════════════════════════════════════
+# 상품 배너 — Bria 배경 교체 + PIL 텍스트 합성
+# ════════════════════════════════════════════════════════
+
+PRODUCT_BANNER_BG_PRESETS: dict[str, tuple[str, str]] = {
+    'studio_white': ('스튜디오 화이트', 'clean white studio background, soft shadows, minimal professional product photography'),
+    'studio_dark':  ('스튜디오 다크',   'dark charcoal studio background, dramatic spotlight, premium product photography'),
+    'nature':       ('자연 청량',       'fresh outdoor nature, soft sunlight, green bokeh leaves, lifestyle photography'),
+    'cafe':         ('카페 감성',       'warm cozy cafe interior, wooden table, soft bokeh, warm light, lifestyle'),
+    'luxury':       ('럭셔리',          'luxury white marble surface, soft gold accents, premium elegant atmosphere'),
+    'gradient_bg':  ('컬러 그라디언트', 'smooth pastel gradient background, clean minimal, studio photography'),
+}
+
+
+def run_product_banner_pipeline(
+    creation_id: str,
+    user_id: str,
+    headline: str,
+    subline: str,
+    cta: str,
+    bg_preset: str,
+    bg_prompt_custom: str,
+    brand_color: str,
+    layout: str,
+    W: int,
+    H: int,
+    product_url: str,
+    supabase,
+) -> None:
+    """상품 이미지 배경 교체 → PIL 텍스트 합성 → 업로드."""
+    def _update(status: str, extra: dict | None = None):
+        row = {'status': status}
+        if extra:
+            row['output_data'] = extra
+        try:
+            supabase.table('creations').update(row).eq('id', creation_id).execute()
+        except Exception as e:
+            logger.error('[product_banner] supabase update error: %s', e)
+
+    try:
+        if not product_url:
+            raise ValueError('상품 이미지가 없습니다. 상품을 먼저 등록해주세요.')
+
+        # 1) 배경 프롬프트 결정
+        if bg_prompt_custom:
+            bg_prompt = bg_prompt_custom
+        else:
+            bg_prompt = PRODUCT_BANNER_BG_PRESETS.get(bg_preset, ('', ''))[1]
+        if not bg_prompt:
+            bg_prompt = 'clean white studio background, minimal, professional product photography'
+
+        # 2) Bria 배경 교체
+        _update('generating', {'step': 'AI 배경 교체 중...', 'progress': 15})
+        from services.imagen_service import replace_background
+        replaced_url = replace_background(product_url, bg_prompt)
+
+        # 3) PIL 텍스트 합성 (배경 교체된 이미지를 bg로 사용, 제품은 이미 포함)
+        _update('generating', {'step': '텍스트 합성 중...', 'progress': 70})
+        b64_uri = composite_banner(
+            bg_type='flux_ai',      # URL 이미지를 배경으로 로드
+            bg_url=replaced_url,
+            product_url=None,       # 제품은 배경에 이미 포함
+            headline=headline,
+            subline=subline,
+            cta=cta,
+            brand_color=brand_color,
+            layout=layout,
+            W=W,
+            H=H,
+        )
+
+        # 4) Supabase 업로드
+        _update('generating', {'step': '업로드 중...', 'progress': 85})
+        _, b64data = b64_uri.split(',', 1)
+        img_bytes = base64.b64decode(b64data)
+        path = f'{user_id}/{uuid.uuid4().hex}_product_banner.jpg'
+        supabase.storage.from_('creations').upload(
+            path, img_bytes, {'content-type': 'image/jpeg'}
+        )
+        image_url = supabase.storage.from_('creations').get_public_url(path)
+        _update('done', {'image_url': image_url, 'progress': 100})
+        logger.info('[product_banner] 완료: %s → %s', creation_id, image_url)
+
+    except Exception as e:
+        logger.error('[product_banner] 파이프라인 오류 (%s): %s', creation_id, e)
+        _update('failed', {'error': str(e)})
