@@ -570,6 +570,24 @@ def _font(bold: bool = False, size: int = 48) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def _draw_text_stroke(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple,
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: tuple = (255, 255, 255, 255),
+    stroke_fill: tuple = (0, 0, 0, 220),
+    stroke_w: int = 3,
+) -> None:
+    """텍스트 외곽선(stroke) 포함 그리기 헬퍼.
+
+    PIL ImageDraw.text의 stroke_width/stroke_fill 파라미터를 래핑.
+    """
+    x, y = xy
+    draw.text((x, y), text, font=font, fill=fill,
+              stroke_width=stroke_w, stroke_fill=stroke_fill)
+
+
 def _wrap_text(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
     lines, cur = [], ''
     for ch in text:
