@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import uuid as _uuid
 from flask import render_template, request, jsonify, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 
@@ -15,6 +16,7 @@ from models import (
     PRODUCT_CATEGORY_OPTIONS, get_blog_cost,
 )
 from services.regulatory import combine_avoid_words, append_disclaimer
+from services.tz_utils import now_kst
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +176,104 @@ def _related_creation_payload(supabase, ref_id: str) -> dict | None:
 
 
 # ─────────────────────────────────────────────────────────────
+# Draft 헬퍼
+# ─────────────────────────────────────────────────────────────
+
+def _get_blog_drafts(supabase, limit: int = 5) -> list[dict]:
+    """현재 사용자의 blog draft 목록 (최신순)."""
+    try:
+        uid = current_user.id
+        oid = getattr(current_user, 'operator_id', None)
+        q = (supabase.table('creations')
+             .select('id, step_reached, input_data, output_data, step_data, created_at, updated_at')
+             .eq('creation_type', 'blog')
+             .eq('status', 'draft'))
+        q = q.eq('operator_id', oid) if oid else q.eq('user_id', uid)
+        rows = q.order('updated_at', desc=True).limit(limit).execute().data or []
+        # 각 draft에 step 라벨 추가
+        _STEP_LABELS = {1: '기본설정', 2: '소구포인트 선택', 3: '글 초안 완료', 4: '이미지 작업 중', 5: '완성'}
+        for r in rows:
+            r['step_label'] = _STEP_LABELS.get(r.get('step_reached') or 1, '')
+            r['direction']  = ((r.get('input_data') or {}).get('direction') or '')[:50]
+            r['date']       = (r.get('updated_at') or r.get('created_at') or '')[:10]
+        return rows
+    except Exception as e:
+        logger.debug(f'[blog] get_drafts 실패: {e}')
+        return []
+
+
+# ─────────────────────────────────────────────────────────────
+# Draft 라우트
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/blog/save-draft', methods=['POST'])
+@login_required
+def blog_save_draft():
+    """스텝 완료 시 임시저장 (포인트 차감 없음)."""
+    supabase = current_app.supabase
+    data     = request.get_json(force=True) or {}
+    draft_id = (data.get('draft_id') or '').strip() or None
+    now_str  = now_kst().isoformat()
+
+    row = {
+        'user_id':       current_user.id,
+        'creation_type': 'blog',
+        'status':        'draft',
+        'step_reached':  int(data.get('step_reached') or 1),
+        'input_data':    data.get('input_data') or {},
+        'step_data':     data.get('step_data')  or {},
+        'output_data':   data.get('output_data') or {},
+        'points_used':   0,
+        'updated_at':    now_str,
+    }
+    if getattr(current_user, 'operator_id', None):
+        row['operator_id'] = current_user.operator_id
+
+    try:
+        if draft_id:
+            supabase.table('creations').update(row).eq(
+                'id', draft_id).eq('user_id', current_user.id).execute()
+        else:
+            row['id']         = str(_uuid.uuid4())
+            row['created_at'] = now_str
+            supabase.table('creations').insert(row).execute()
+            draft_id = row['id']
+        return jsonify(ok=True, draft_id=draft_id)
+    except Exception as e:
+        logger.warning(f'[blog] save_draft error: {e}')
+        return jsonify(ok=False, message=str(e))
+
+
+@create_bp.route('/blog/draft/<draft_id>', methods=['GET'])
+@login_required
+def blog_get_draft(draft_id):
+    """draft 또는 완료 작업 불러오기 (이어서/재작업 공통)."""
+    try:
+        r = current_app.supabase.table('creations').select('*').eq(
+            'id', draft_id).eq('user_id', current_user.id).limit(1).execute()
+        row = (r.data or [None])[0]
+        if not row:
+            return jsonify(ok=False, message='작업을 찾을 수 없습니다.')
+        if row.get('status') not in ('draft', 'done'):
+            return jsonify(ok=False, message='접근할 수 없는 작업입니다.')
+        return jsonify(ok=True, draft=row)
+    except Exception as e:
+        return jsonify(ok=False, message=str(e))
+
+
+@create_bp.route('/blog/draft/<draft_id>', methods=['DELETE'])
+@login_required
+def blog_delete_draft(draft_id):
+    """draft 삭제."""
+    try:
+        current_app.supabase.table('creations').delete().eq(
+            'id', draft_id).eq('user_id', current_user.id).eq('status', 'draft').execute()
+        return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(ok=False, message=str(e))
+
+
+# ─────────────────────────────────────────────────────────────
 # 라우트
 # ─────────────────────────────────────────────────────────────
 
@@ -189,6 +289,7 @@ def blog():
     products = _accessible_products(supabase, brand_id=default_brand['id'] if default_brand else None)
     recent = _recent_blog_creations(supabase, current_user.id,
                                     default_brand['id'] if default_brand else None)
+    drafts = _get_blog_drafts(supabase)
 
     # 제품별 이미지 목록 맵 (JS에서 이미지 피커에 사용)
     products_images_map = {}
@@ -204,6 +305,7 @@ def blog():
                            products=products,
                            products_images_map=products_images_map,
                            recent_blogs=recent,
+                           blog_drafts=drafts,
                            length_costs=BLOG_LENGTH_COSTS,
                            angle_options=BLOG_ANGLE_OPTIONS,
                            relation_modes=RELATION_MODE_OPTIONS)
