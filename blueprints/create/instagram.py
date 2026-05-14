@@ -240,6 +240,21 @@ def instagram_products():
     })
 
 
+@create_bp.route('/instagram/recent-done', methods=['GET'])
+@login_required
+def instagram_recent_done():
+    """브랜드별 완성 인스타 최근 5개 (재작업 배너용)."""
+    supabase = current_app.supabase
+    brand_id = request.args.get('brand_id', '').strip() or None
+    items = _recent_instagram_creations(supabase, current_user.id, brand_id, limit=5)
+    return jsonify(ok=True, items=[
+        {'id': r['id'],
+         'title': (r.get('title') or '제목 없음')[:80],
+         'created_at': (r.get('created_at') or '')[:10]}
+        for r in items
+    ])
+
+
 @create_bp.route('/instagram/ref-preview', methods=['GET'])
 @login_required
 def instagram_ref_preview():
