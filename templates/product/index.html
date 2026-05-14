@@ -8,9 +8,10 @@
     <h4 class="fw-bold mb-0">상품 관리</h4>
     <p class="text-muted small mb-0">상품 클릭 → 콘텐츠 일괄 생성</p>
   </div>
-  <a href="{{ url_for('product.new') }}" class="btn fw-semibold" style="background:#e8355a;color:#fff">
+  <button type="button" class="btn fw-semibold" style="background:#e8355a;color:#fff"
+          data-bs-toggle="modal" data-bs-target="#newProductModal">
     <i class="bi bi-plus-lg me-1"></i> 상품 등록
-  </a>
+  </button>
 </div>
 
 {% if products %}
@@ -60,16 +61,314 @@
 <div class="text-center py-5">
   <i class="bi bi-box-seam" style="font-size:3rem;color:#e8355a;opacity:.4"></i>
   <p class="text-muted mt-3">등록된 상품이 없습니다.</p>
-  <a href="{{ url_for('product.new') }}" class="btn fw-semibold" style="background:#e8355a;color:#fff">
+  <button type="button" class="btn fw-semibold" style="background:#e8355a;color:#fff"
+          data-bs-toggle="modal" data-bs-target="#newProductModal">
     첫 상품 등록하기
-  </a>
+  </button>
 </div>
 {% endif %}
+
+<!-- ══════ 상품 등록 모달 ══════ -->
+<div class="modal fade" id="newProductModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <!-- 헤더 -->
+      <div class="modal-header py-3 px-4">
+        <h6 class="modal-title fw-bold mb-0"><i class="bi bi-box-seam me-2" style="color:#e8355a"></i>새 상품 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- 탭 -->
+      <div class="border-bottom px-4 pt-2">
+        <ul class="nav nav-tabs border-0" id="regTabs">
+          <li class="nav-item">
+            <button id="textTabBtn" class="nav-link active fw-semibold small px-3"
+                    onclick="switchRegTab('text')">
+              ✏️ 직접 입력
+            </button>
+          </li>
+          <li class="nav-item">
+            <button id="imgTabBtn" class="nav-link fw-semibold small px-3"
+                    onclick="switchRegTab('img')">
+              🖼️ 이미지로 자동 입력
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="modal-body px-4 py-3">
+
+        <!-- ── 이미지 분석 탭 ── -->
+        <div id="imgTabSection" class="d-none">
+          <p class="text-muted small mb-3">상품 이미지를 업로드하면 AI가 상품 정보를 자동으로 채워드립니다.</p>
+
+          <!-- 업로드 영역 -->
+          <div id="imgDropZone"
+               class="border-2 border-dashed rounded-3 text-center p-4 mb-3"
+               style="border:2px dashed #dee2e6;cursor:pointer;transition:border-color .2s"
+               onclick="document.getElementById('imgFileInput').click()"
+               ondragover="event.preventDefault();this.style.borderColor='#e8355a'"
+               ondragleave="this.style.borderColor='#dee2e6'"
+               ondrop="handleImgDrop(event)">
+            <div id="imgDropPlaceholder">
+              <i class="bi bi-cloud-arrow-up" style="font-size:2rem;color:#aaa"></i>
+              <p class="mb-1 mt-2 fw-semibold small">이미지를 드래그하거나 클릭해서 업로드</p>
+              <p class="text-muted" style="font-size:.75rem">JPG, PNG, WEBP · 최대 5MB</p>
+            </div>
+            <div id="imgPreviewWrap" class="d-none">
+              <img id="imgPreview" src="" alt="preview"
+                   style="max-height:200px;max-width:100%;object-fit:contain;border-radius:8px">
+              <p id="imgFileName" class="text-muted small mt-2 mb-0"></p>
+            </div>
+          </div>
+          <input type="file" id="imgFileInput" accept="image/*" class="d-none"
+                 onchange="handleImgSelect(this)">
+
+          <!-- 분석 버튼 -->
+          <button id="analyzeBtn" class="btn fw-semibold w-100 d-none" style="background:#e8355a;color:#fff"
+                  onclick="analyzeProductImage()">
+            <i class="bi bi-magic me-1"></i>AI 분석하기
+          </button>
+          <div id="analyzeLoading" class="text-center py-3 d-none">
+            <div class="spinner-border spinner-border-sm me-2" style="color:#e8355a"></div>
+            <span class="small text-muted">이미지 분석 중... (약 5~10초)</span>
+          </div>
+          <div id="analyzeError" class="alert alert-danger small py-2 d-none"></div>
+          <div id="analyzeSuccess" class="alert alert-success small py-2 d-none">
+            <i class="bi bi-check-circle me-1"></i>분석 완료! 아래 정보를 확인하고 수정하세요.
+          </div>
+        </div>
+
+        <!-- ── 공통 상품 폼 ── -->
+        <div id="textTabSection">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">브랜드</label>
+            <select id="np_brand_id" class="form-select form-select-sm">
+              <option value="">브랜드 선택 (없으면 기본 브랜드 사용)</option>
+              {% for b in brands %}
+              <option value="{{ b.id }}" {{ 'selected' if b.is_default }}>
+                {{ b.name }}{% if b.is_default %} ★{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">상품명 <span class="text-danger">*</span></label>
+            <input type="text" id="np_name" class="form-control form-control-sm"
+                   placeholder="예: 국내산 사과 5kg 선물세트">
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold small">카테고리</label>
+              <input type="text" id="np_category" class="form-control form-control-sm"
+                     placeholder="예: 과일, 건강식품, 의류">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold small">가격 (원)</label>
+              <input type="number" id="np_price" class="form-control form-control-sm"
+                     placeholder="39900">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">
+              핵심 특징
+              <span class="text-muted fw-normal">(쉼표 또는 줄바꿈으로 구분)</span>
+            </label>
+            <textarea id="np_features" class="form-control form-control-sm" rows="4"
+                      placeholder="당도 높은 꿀사과&#10;산지 직송 24시간 내 출고&#10;선물용 박스 포함"></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">상품 설명 <span class="text-muted fw-normal">(선택)</span></label>
+            <textarea id="np_description" class="form-control form-control-sm" rows="3"
+                      placeholder="AI 생성 시 추가로 반영할 상품 설명"></textarea>
+          </div>
+
+          <div class="mb-1">
+            <label class="form-label fw-semibold small">상품 URL <span class="text-muted fw-normal">(스마트스토어/쿠팡 등, 선택)</span></label>
+            <input type="url" id="np_product_url" class="form-control form-control-sm"
+                   placeholder="https://smartstore.naver.com/...">
+          </div>
+        </div>
+
+      </div><!-- /.modal-body -->
+
+      <!-- 푸터 -->
+      <div class="modal-footer px-4 py-3">
+        <div id="saveError" class="text-danger small me-auto d-none"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm px-4"
+                data-bs-dismiss="modal">취소</button>
+        <button type="button" id="saveBtn" class="btn fw-semibold px-4"
+                style="background:#e8355a;color:#fff"
+                onclick="submitNewProduct()">
+          <i class="bi bi-check-lg me-1"></i>등록하기
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
 
 {% block extra_head %}
 <style>
 .hover-shadow { transition: box-shadow .15s; }
 .hover-shadow:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1); }
+#imgDropZone:hover { border-color: #e8355a !important; }
 </style>
 {% endblock %}
+
+{% block extra_script %}
+<script>
+const CSRF = '{{ csrf_token() }}';
+
+// ── 탭 전환 ─────────────────────────────────────────────
+function switchRegTab(tab) {
+  const isImg = tab === 'img';
+  document.getElementById('imgTabSection').classList.toggle('d-none', !isImg);
+  document.getElementById('textTabSection').classList.toggle('d-none', isImg);
+  document.getElementById('imgTabBtn').classList.toggle('active', isImg);
+  document.getElementById('textTabBtn').classList.toggle('active', !isImg);
+}
+
+// ── 이미지 파일 처리 ─────────────────────────────────────
+let _selectedFile = null;
+
+function handleImgSelect(input) {
+  if (input.files && input.files[0]) _loadImgFile(input.files[0]);
+}
+function handleImgDrop(e) {
+  e.preventDefault();
+  document.getElementById('imgDropZone').style.borderColor = '#dee2e6';
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) _loadImgFile(f);
+}
+function _loadImgFile(file) {
+  _selectedFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('imgPreview').src = ev.target.result;
+    document.getElementById('imgFileName').textContent = file.name;
+    document.getElementById('imgDropPlaceholder').classList.add('d-none');
+    document.getElementById('imgPreviewWrap').classList.remove('d-none');
+    document.getElementById('analyzeBtn').classList.remove('d-none');
+    document.getElementById('analyzeError').classList.add('d-none');
+    document.getElementById('analyzeSuccess').classList.add('d-none');
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── AI 이미지 분석 ────────────────────────────────────────
+async function analyzeProductImage() {
+  if (!_selectedFile) return;
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('analyzeLoading').classList.remove('d-none');
+  document.getElementById('analyzeError').classList.add('d-none');
+  document.getElementById('analyzeSuccess').classList.add('d-none');
+
+  try {
+    const fd = new FormData();
+    fd.append('image', _selectedFile);
+    const res  = await fetch('{{ url_for("product.analyze_image_for_product") }}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: fd,
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    // 폼 채우기
+    if (data.name)        document.getElementById('np_name').value        = data.name;
+    if (data.category)    document.getElementById('np_category').value    = data.category;
+    if (data.price)       document.getElementById('np_price').value       = data.price;
+    if (data.description) document.getElementById('np_description').value = data.description;
+    if (data.features && data.features.length) {
+      document.getElementById('np_features').value = data.features.join('\n');
+    }
+
+    document.getElementById('analyzeSuccess').classList.remove('d-none');
+    // 분석 완료 후 텍스트 탭으로 전환
+    setTimeout(() => switchRegTab('text'), 800);
+
+  } catch (e) {
+    document.getElementById('analyzeError').textContent = '분석 실패: ' + e.message;
+    document.getElementById('analyzeError').classList.remove('d-none');
+  } finally {
+    document.getElementById('analyzeBtn').disabled = false;
+    document.getElementById('analyzeLoading').classList.add('d-none');
+  }
+}
+
+// ── 저장 ─────────────────────────────────────────────────
+async function submitNewProduct() {
+  const name = document.getElementById('np_name').value.trim();
+  if (!name) {
+    document.getElementById('np_name').focus();
+    document.getElementById('np_name').classList.add('is-invalid');
+    // 이미지 탭이면 폼 탭으로 전환
+    switchRegTab('text');
+    return;
+  }
+  document.getElementById('np_name').classList.remove('is-invalid');
+
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
+  document.getElementById('saveError').classList.add('d-none');
+
+  try {
+    const body = {
+      brand_id:    document.getElementById('np_brand_id').value || null,
+      name,
+      category:    document.getElementById('np_category').value.trim(),
+      price:       document.getElementById('np_price').value || null,
+      features:    document.getElementById('np_features').value.trim(),
+      description: document.getElementById('np_description').value.trim(),
+      product_url: document.getElementById('np_product_url').value.trim(),
+    };
+    const res  = await fetch('{{ url_for("product.save_new") }}', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body:    JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+
+    // 성공 → 상품 상세로 이동
+    location.href = '{{ url_for("product.detail", product_id="__ID__") }}'.replace('__ID__', data.product_id);
+  } catch (e) {
+    document.getElementById('saveError').textContent = e.message;
+    document.getElementById('saveError').classList.remove('d-none');
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>등록하기';
+  }
+}
+
+// 모달 닫을 때 초기화
+document.getElementById('newProductModal').addEventListener('hidden.bs.modal', () => {
+  _selectedFile = null;
+  document.getElementById('np_name').value = '';
+  document.getElementById('np_category').value = '';
+  document.getElementById('np_price').value = '';
+  document.getElementById('np_features').value = '';
+  document.getElementById('np_description').value = '';
+  document.getElementById('np_product_url').value = '';
+  document.getElementById('np_name').classList.remove('is-invalid');
+  document.getElementById('imgDropPlaceholder').classList.remove('d-none');
+  document.getElementById('imgPreviewWrap').classList.add('d-none');
+  document.getElementById('analyzeBtn').classList.add('d-none');
+  document.getElementById('analyzeError').classList.add('d-none');
+  document.getElementById('analyzeSuccess').classList.add('d-none');
+  document.getElementById('saveError').classList.add('d-none');
+  document.getElementById('imgFileInput').value = '';
+  document.getElementById('saveBtn').disabled = false;
+  document.getElementById('saveBtn').innerHTML = '<i class="bi bi-check-lg me-1"></i>등록하기';
+  switchRegTab('text');
+});
+</script>
 {% endblock %}

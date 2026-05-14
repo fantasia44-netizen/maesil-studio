@@ -61,7 +61,83 @@ def index():
     return render_template('product/index.html', products=products, brands=brands)
 
 
-# ── 상품 등록 ───────────────────────────────────────────
+# ── 이미지 분석으로 상품 정보 추출 ───────────────────────
+@product_bp.route('/analyze-image', methods=['POST'])
+@login_required
+def analyze_image_for_product():
+    """상품 이미지 업로드 → Claude Vision 분석 → 상품 정보 JSON 반환"""
+    f = request.files.get('image')
+    if not f:
+        return jsonify(ok=False, message='이미지 파일을 선택하세요.')
+
+    MAX = 5 * 1024 * 1024  # 5MB
+    image_bytes = f.read(MAX + 1)
+    if len(image_bytes) > MAX:
+        return jsonify(ok=False, message='파일 크기는 5MB 이하로 업로드하세요.')
+
+    media_type = f.mimetype or 'image/jpeg'
+    if media_type not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
+        media_type = 'image/jpeg'
+
+    try:
+        from services.claude_service import analyze_product_image
+        info = analyze_product_image(image_bytes, media_type)
+        return jsonify(ok=True, **info)
+    except Exception as e:
+        logger.error(f'[PRODUCT] analyze_image error: {e}')
+        return jsonify(ok=False, message=f'이미지 분석에 실패했습니다: {str(e)[:120]}')
+
+
+# ── 모달에서 AJAX 상품 등록 ───────────────────────────────
+@product_bp.route('/save-new', methods=['POST'])
+@login_required
+def save_new():
+    """상품 등록 모달 → AJAX JSON 저장"""
+    supabase = current_app.supabase
+    brands   = get_accessible_brands(supabase)
+    data     = request.get_json(force=True) or {}
+
+    brand_id = data.get('brand_id') or None
+    if not brand_id and brands:
+        default  = next((b for b in brands if b.get('is_default')), brands[0] if brands else None)
+        brand_id = default['id'] if default else None
+
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify(ok=False, message='상품명을 입력하세요.')
+
+    features_raw = data.get('features', '')
+    if isinstance(features_raw, list):
+        features = [str(f).strip() for f in features_raw if str(f).strip()]
+    else:
+        features = _parse_features(str(features_raw))
+
+    row = {
+        'brand_id':    brand_id,
+        'name':        name,
+        'category':    (data.get('category') or '').strip() or None,
+        'price':       int(data['price']) if data.get('price') else None,
+        'product_url': (data.get('product_url') or '').strip() or None,
+        'description': (data.get('description') or '').strip() or None,
+        'features':    features,
+        'user_id':     current_user.id,
+        'is_active':   True,
+        'created_at':  now_kst().isoformat(),
+        'updated_at':  now_kst().isoformat(),
+    }
+    if current_user.operator_id:
+        row['operator_id'] = current_user.operator_id
+
+    try:
+        result     = supabase.table('products').insert(row).execute()
+        product_id = result.data[0]['id']
+        return jsonify(ok=True, product_id=product_id)
+    except Exception as e:
+        logger.error(f'[PRODUCT] save_new error: {e}')
+        return jsonify(ok=False, message='저장 중 오류가 발생했습니다.')
+
+
+# ── 상품 등록 (기존 페이지 — 하위 호환) ──────────────────
 @product_bp.route('/new', methods=['GET', 'POST'])
 @login_required
 def new():

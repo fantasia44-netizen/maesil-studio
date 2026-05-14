@@ -142,3 +142,55 @@ def generate_text(system_prompt: str, user_prompt: str,
         messages=[{'role': 'user', 'content': user_prompt}],
     )
     return message.content[0].text
+
+
+def analyze_product_image(image_bytes: bytes, media_type: str = 'image/jpeg') -> dict:
+    """Claude Vision으로 상품 이미지 분석 → 상품 정보 JSON 반환.
+
+    반환 형식:
+        {name, category, price(int|None), features(list[str]), description}
+    """
+    import base64, json, re
+    client = get_client()
+    img_b64 = base64.standard_b64encode(image_bytes).decode('utf-8')
+
+    message = client.messages.create(
+        model='claude-haiku-4-5-20251001',
+        max_tokens=800,
+        system=(
+            '당신은 상품 이미지를 분석해 상품 정보를 추출하는 전문가입니다. '
+            '이미지를 보고 상품명, 카테고리, 가격, 핵심 특징, 설명을 추출하여 '
+            '반드시 순수 JSON만 출력하세요(코드블록·설명 없이).'
+        ),
+        messages=[{
+            'role': 'user',
+            'content': [
+                {
+                    'type': 'image',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': media_type,
+                        'data': img_b64,
+                    },
+                },
+                {
+                    'type': 'text',
+                    'text': (
+                        '이 상품 이미지를 분석하고 아래 JSON 형식으로만 응답하세요:\n'
+                        '{"name":"상품명","category":"카테고리",'
+                        '"price":숫자또는null,'
+                        '"features":["특징1","특징2","특징3"],'
+                        '"description":"상품 설명 1~2문장"}\n\n'
+                        '규칙:\n'
+                        '- 이미지에 텍스트·로고·패키지가 있으면 적극 활용\n'
+                        '- 가격이 보이지 않으면 null\n'
+                        '- features 3~5개, 각 10~30자\n'
+                        '- 순수 JSON만 출력'
+                    ),
+                },
+            ],
+        }],
+    )
+    raw = message.content[0].text.strip()
+    raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw, flags=re.MULTILINE).strip()
+    return json.loads(raw)
