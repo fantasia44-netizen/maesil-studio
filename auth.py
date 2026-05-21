@@ -328,11 +328,14 @@ def register():
             except Exception:
                 pass
 
-            # ── 웰컴 포인트 지급 (신규 가입자 한정) ──
+            # ── 웰컴 포인트 지급 (신규 가입자 한정, 30일 만료) ──
             try:
                 from services.point_service import add_points
+                from datetime import timedelta
+                welcome_expiry = (now_kst() + timedelta(days=30)).isoformat()
                 add_points(user_id, 5000, 'welcome',
-                           ref_id=user_id, note='신규 가입 웰컴 포인트')
+                           ref_id=user_id, note='신규 가입 웰컴 포인트',
+                           expires_at=welcome_expiry)
             except Exception as _pe:
                 logger.warning(f'[AUTH] 웰컴 포인트 지급 실패 (무시): {_pe}')
 

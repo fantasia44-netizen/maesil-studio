@@ -175,12 +175,15 @@ def payment_complete():
                 pay_row['operator_id'] = operator_id
             supabase.table('payments').insert(pay_row).execute()
 
-            # 포인트 충전 — current_user 객체 전달 (operator 풀 자동 라우팅)
+            # 포인트 충전 — 구매 포인트는 365일 만료
             from services.point_service import add_points
+            from datetime import timedelta
+            purchase_expiry = (now_kst() + timedelta(days=365)).isoformat()
             new_balance = add_points(
                 current_user, pkg['points'], 'purchase',
                 ref_id=payment_id,
                 note=f'포인트 충전 {pkg["label"]}',
+                expires_at=purchase_expiry,
             )
             return jsonify(ok=True, new_balance=new_balance, message=f'{pkg["label"]} 충전 완료!')
 
@@ -242,12 +245,13 @@ def payment_complete():
                 sub_row['operator_id'] = operator_id
             supabase.table('subscriptions').insert(sub_row).execute()
 
-            # 구독 포인트 지급 (팀 풀로)
+            # 구독 포인트 지급 — 구독 기간 종료일(period_end) 에 만료
             from services.point_service import add_points
             new_balance = add_points(
                 current_user, plan_info['points'], 'subscription_grant',
                 ref_id=payment_id,
                 note=f'{plan_info["label"]} 구독 포인트 지급',
+                expires_at=period_end,   # billing period end (30일 후)
             )
             return jsonify(ok=True, new_balance=new_balance, message=f'{plan_info["label"]} 플랜 시작!')
 
