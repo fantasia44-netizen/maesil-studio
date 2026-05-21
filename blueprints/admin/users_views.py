@@ -241,7 +241,9 @@ def view_as_user(user_id):
         return redirect(url_for('admin.users'))
 
     session['view_as_user_id'] = user_id
-    session['view_as_admin_id'] = current_user.get_id()
+    # current_user.get_id() 는 이전 view-as 로 캐시가 오염됐을 때 target_id 를 반환할 수 있음.
+    # Flask-Login 이 로그인 시 저장한 session['_user_id'] (원본 로그인 ID) 를 사용.
+    session['view_as_admin_id'] = session.get('_user_id') or current_user.get_id()
     session['view_as_user_email'] = target.get('email', user_id)
     logger.info(f'[ADMIN] view-as user {user_id} ({target.get("email")}) by {current_user.email}')
     flash(f'현재 {target["email"]} 으로 보는 중입니다.', 'warning')

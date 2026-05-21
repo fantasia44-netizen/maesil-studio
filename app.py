@@ -117,7 +117,15 @@ def _init_login(app):
         import time
         cached = _user_cache.get(user_id)
         if cached and time.time() - cached['ts'] < CACHE_TTL:
-            return cached['user']
+            cached_user = cached['user']
+            # view-as 모드가 아닌데 캐시 오염(id 불일치) 감지 → 캐시 무시하고 DB 재로드
+            # (gunicorn 멀티워커 환경에서 다른 워커가 view-as 종료해도 이 워커 캐시는
+            #  여전히 target_id 를 가지고 있을 수 있음)
+            from flask import session as _fs
+            if str(cached_user.id) != str(user_id) and not _fs.get('view_as_user_id'):
+                _user_cache.pop(user_id, None)  # 오염된 캐시 제거
+            else:
+                return cached_user
 
         if not app.supabase:
             return None
