@@ -232,15 +232,22 @@ def _register_hooks(app):
 
     @app.before_request
     def handle_view_as():
-        """슈퍼어드민 — 유저로 보기 세션 처리."""
+        """슈퍼어드민 — 유저로 보기 세션 처리.
+
+        current_user.id 를 대상 유저 ID로 교체해
+        모든 DB 쿼리(생성이력·포인트·브랜드 등)가 해당 유저 기준으로 동작.
+        어드민 권한(is_superadmin) 은 site_role 을 바꾸지 않으므로 그대로 유지.
+        """
         from flask import g
         view_as_uid = session.get('view_as_user_id')
-        admin_id = session.get('view_as_admin_id')
+        admin_id    = session.get('view_as_admin_id')
         if not view_as_uid or not admin_id:
             return
         if not current_user.is_authenticated:
             return
-        # 어드민 ID 검증
+
+        # ── 어드민 ID 검증 (id 오버라이드 전에 확인) ──────────────────
+        # current_user.get_id() 는 아직 실제 어드민 ID를 반환
         if current_user.get_id() != admin_id:
             session.pop('view_as_user_id', None)
             session.pop('view_as_admin_id', None)
@@ -248,20 +255,29 @@ def _register_hooks(app):
         if not app.supabase:
             return
         try:
-            res = app.supabase.table('users').select(
-                'id, email, name, plan_type, is_active, site_role, operator_id, last_seen_at'
-            ).eq('id', view_as_uid).execute()
+            res = app.supabase.table('users').select('*').eq('id', view_as_uid).execute()
             if not res.data:
                 return
             target = res.data[0]
-            # 플랜·팀 컨텍스트만 오버라이드 (어드민 권한은 유지)
-            current_user.plan_type = target.get('plan_type', 'free')
-            current_user.operator_id = target.get('operator_id')
+
+            # ── current_user 를 대상 유저 정보로 완전 교체 ─────────────
+            # id 를 바꾸면 brand/creation/point 등 모든 DB 쿼리가
+            # 대상 유저 기준으로 실행됨
+            current_user.id            = str(target['id'])
+            current_user.email         = target.get('email', '')
+            current_user.name          = target.get('name') or target.get('email', '').split('@')[0]
+            current_user.plan_type     = target.get('plan_type', 'free')
+            current_user.operator_id   = target.get('operator_id')
+            current_user._is_active    = target.get('is_active', True)
+            current_user.last_seen_at  = target.get('last_seen_at')
+            # site_role 은 건드리지 않음 → is_superadmin 유지 → 어드민 메뉴·라우트 정상 접근
             current_user._view_as_mode = True
-            g.view_as_mode = True
-            g.view_as_user_id = view_as_uid
+
+            g.view_as_mode       = True
+            g.view_as_admin_id   = admin_id
+            g.view_as_user_id    = view_as_uid
             g.view_as_user_email = target.get('email', view_as_uid)
-            g.view_as_user_name = target.get('name') or target.get('email', '')
+            g.view_as_user_name  = target.get('name') or target.get('email', '')
         except Exception as e:
             app.logger.warning(f'[view_as] 대상 유저 로드 실패: {e}')
 
