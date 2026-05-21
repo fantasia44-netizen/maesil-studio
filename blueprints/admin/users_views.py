@@ -253,8 +253,12 @@ def view_as_user(user_id):
 def exit_view_as():
     """유저로 보기 종료 — 어드민 원래 상태로 복귀."""
     uid = session.pop('view_as_user_id', None)
-    session.pop('view_as_admin_id', None)
-    email = session.pop('view_as_user_email', None)
+    admin_id = session.pop('view_as_admin_id', None)
+    session.pop('view_as_user_email', None)
+    # 캐시에 남은 수정된 어드민 user 객체를 즉시 무효화 — 다음 요청에서 DB에서 새로 로드
+    if admin_id:
+        user_cache = getattr(current_app, 'user_cache', {})
+        user_cache.pop(admin_id, None)
     if uid:
         return redirect(url_for('admin.user_detail', user_id=uid))
     return redirect(url_for('admin.users'))

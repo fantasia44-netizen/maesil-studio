@@ -109,6 +109,8 @@ def _init_login(app):
 
     _user_cache = {}
     CACHE_TTL = 300  # 5분
+    # 캐시를 앱 객체에 노출 — view-as 종료 시 즉시 무효화 가능
+    app.user_cache = _user_cache
 
     @login_manager.user_loader
     def load_user(user_id):
