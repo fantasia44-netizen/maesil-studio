@@ -94,7 +94,8 @@
             {% else %}
             <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.78rem">
               <i class="bi bi-exclamation-triangle me-1"></i>
-              자동갱신 해제 상태 — {{ subscription.current_period_end[:10] if subscription.current_period_end else '' }} 이후 무료 전환
+              자동갱신 해제 상태 — {{ subscription.current_period_end[:10] if subscription.current_period_end else '' }} 이후 무료 전환<br>
+              <span style="color:#92400e">이 날짜 이후 잔여 구독 포인트는 자동 소멸됩니다.</span>
             </div>
             {% endif %}
           </div>
@@ -182,10 +183,14 @@
           </div>
           {% endfor %}
         </div>
-        <div class="text-muted mt-3" style="font-size:.78rem">
-          <i class="bi bi-info-circle me-1"></i>
-          구독 포인트는 결제 즉시 지급됩니다. 자동갱신이며 언제든지 해제할 수 있습니다.
-          구독 중 추가 포인트 충전도 가능합니다.
+        <div class="mt-3 rounded-3 p-3" style="background:#fff8f0;font-size:.78rem;line-height:1.7;border:1px solid #fde68a">
+          <div class="fw-semibold mb-1" style="color:#92400e"><i class="bi bi-clock-history me-1"></i>포인트 유효기간 안내</div>
+          <ul class="mb-1 ps-3" style="color:#555">
+            <li>구독 포인트는 <strong>구독 기간 종료일</strong>까지만 유효합니다.</li>
+            <li>자동갱신 시 다음 달 포인트가 새로 지급됩니다.</li>
+            <li>자동갱신을 해제하면 기간 종료 후 잔여 구독 포인트가 소멸됩니다.</li>
+          </ul>
+          <span class="text-muted">자동갱신이며 언제든지 해제 가능. 구독 중 추가 포인트 충전도 가능합니다.</span>
         </div>
       </div>
     </div>
@@ -223,11 +228,14 @@
           </div>
           {% endfor %}
         </div>
-        <div class="text-muted mt-3" style="font-size:.78rem">
-          <i class="bi bi-info-circle me-1"></i>
-          포인트는 결제 즉시 지급되며, 유효기간은 1년입니다.
-          환불은 <a href="mailto:support@maesil-insight.com">support@maesil-insight.com</a>으로 문의하세요.
-          (<a href="{{ url_for('landing.terms') }}" target="_blank">환불 정책 보기</a>)
+        <div class="mt-3 rounded-3 p-3" style="background:#f0f7ff;font-size:.78rem;line-height:1.7;border:1px solid #bfdbfe">
+          <div class="fw-semibold mb-1" style="color:#1e40af"><i class="bi bi-clock-history me-1"></i>포인트 유효기간 안내</div>
+          <ul class="mb-1 ps-3" style="color:#555">
+            <li>충전 포인트는 결제일로부터 <strong>365일(1년)</strong> 유효합니다.</li>
+            <li>유효기간 내 미사용 포인트는 만료 후 자동 소멸되며 환불되지 않습니다.</li>
+          </ul>
+          <span class="text-muted">환불: <a href="mailto:support@maesil-insight.com">support@maesil-insight.com</a>
+          · <a href="{{ url_for('landing.terms') }}" target="_blank">환불 정책 보기</a></span>
         </div>
       </div>
     </div>
