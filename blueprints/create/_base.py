@@ -18,7 +18,12 @@ def get_accessible_brands(supabase) -> list:
     """
     user = current_user
     if user.operator_id:
-        if user.is_operator_admin:
+        # view-as 모드에서는 대상 유저의 실제 role 기준으로 판단
+        # (어드민의 is_operator_admin=True 가 아닌 target 의 site_role 사용)
+        is_op_admin = getattr(user, '_view_as_is_operator_admin', None)
+        if is_op_admin is None:
+            is_op_admin = user.is_operator_admin
+        if is_op_admin:
             # operator 브랜드 + 본인이 직접 만든 브랜드 모두 포함
             r1 = supabase.table('brand_profiles').select('*').eq(
                 'operator_id', user.operator_id

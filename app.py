@@ -284,6 +284,11 @@ def _register_hooks(app):
             current_user.last_seen_at  = target.get('last_seen_at')
             # site_role 은 건드리지 않음 → is_superadmin 유지 → 어드민 메뉴·라우트 정상 접근
             current_user._view_as_mode = True
+            # 대상 유저의 실제 operator_admin 여부 — get_accessible_brands/_max_brands 에서 사용
+            target_role = target.get('site_role', 'user')
+            current_user._view_as_is_operator_admin = (
+                target_role in ('superadmin', 'operator_admin')
+            )
 
             g.view_as_mode       = True
             g.view_as_admin_id   = admin_id
@@ -292,6 +297,29 @@ def _register_hooks(app):
             g.view_as_user_name  = target.get('name') or target.get('email', '')
         except Exception as e:
             app.logger.warning(f'[view_as] 대상 유저 로드 실패: {e}')
+
+    @app.before_request
+    def block_writes_in_view_as():
+        """view-as 모드에서 상태 변경 요청(POST 등) 차단.
+
+        어드민이 유저로 보기 중에 실수로 비밀번호 변경·설정 저장·결제 등
+        대상 유저 계정을 수정하는 사고를 방지한다.
+        어드민 전용 라우트(/admin/*)는 차단하지 않는다.
+        """
+        from flask import g
+        if not g.get('view_as_mode'):
+            return
+        if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            return
+        # 어드민 라우트는 허용 (exit-view-as 등 포함)
+        if request.endpoint and request.endpoint.startswith('admin.'):
+            return
+        # AJAX/JSON
+        if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(error='보기 모드에서는 수정할 수 없습니다. 먼저 보기를 종료하세요.'), 403
+        from flask import flash
+        flash('보기 모드에서는 수정할 수 없습니다. 먼저 보기를 종료하세요.', 'warning')
+        return redirect(request.referrer or url_for('main.dashboard'))
 
     @app.after_request
     def security_headers(response):

@@ -14,7 +14,8 @@ def _parse_list_field(value: str) -> list:
 
 
 def _max_brands() -> int:
-    if current_user.is_superadmin:
+    # view-as 모드에서는 대상 유저의 플랜 기준으로 계산 (9999 반환 안 함)
+    if current_user.is_superadmin and not getattr(current_user, '_view_as_mode', False):
         return 9999
     if current_user.operator_id:
         # operator plan 기준
