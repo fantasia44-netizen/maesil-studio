@@ -244,6 +244,10 @@ class User(UserMixin):
         self.trial_ends_at = row.get('trial_ends_at')
         self.current_period_end = row.get('current_period_end')
         self.created_at = row.get('created_at', '')
+        self.last_seen_at = row.get('last_seen_at')
+        self.failed_login_count = row.get('failed_login_count', 0)
+        self.locked_until = row.get('locked_until')
+        self._view_as_mode = False
 
     @property
     def is_active(self):

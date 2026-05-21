@@ -199,6 +199,70 @@ def _register_hooks(app):
                 pass
         session['last_activity'] = now_kst().isoformat()
 
+    @app.before_request
+    def track_last_seen():
+        """5분마다 users.last_seen_at 갱신 (정적 파일·로그인·로그아웃 제외)."""
+        if not current_user.is_authenticated:
+            return
+        if request.endpoint in ('auth.login', 'auth.logout', 'static'):
+            return
+        last_tracked = session.get('last_seen_tracked')
+        now = now_kst()
+        should_update = True
+        if last_tracked:
+            try:
+                from services.tz_utils import ensure_aware
+                lt = ensure_aware(datetime.fromisoformat(last_tracked))
+                if now - lt < timedelta(minutes=5):
+                    should_update = False
+            except Exception:
+                pass
+        if should_update and app.supabase:
+            try:
+                # view-as 모드일 때는 실제 어드민 ID 기준으로 갱신
+                uid = session.get('view_as_admin_id') or current_user.get_id()
+                app.supabase.table('users').update(
+                    {'last_seen_at': now.isoformat()}
+                ).eq('id', uid).execute()
+                session['last_seen_tracked'] = now.isoformat()
+            except Exception:
+                pass
+
+    @app.before_request
+    def handle_view_as():
+        """슈퍼어드민 — 유저로 보기 세션 처리."""
+        from flask import g
+        view_as_uid = session.get('view_as_user_id')
+        admin_id = session.get('view_as_admin_id')
+        if not view_as_uid or not admin_id:
+            return
+        if not current_user.is_authenticated:
+            return
+        # 어드민 ID 검증
+        if current_user.get_id() != admin_id:
+            session.pop('view_as_user_id', None)
+            session.pop('view_as_admin_id', None)
+            return
+        if not app.supabase:
+            return
+        try:
+            res = app.supabase.table('users').select(
+                'id, email, name, plan_type, is_active, site_role, operator_id, last_seen_at'
+            ).eq('id', view_as_uid).execute()
+            if not res.data:
+                return
+            target = res.data[0]
+            # 플랜·팀 컨텍스트만 오버라이드 (어드민 권한은 유지)
+            current_user.plan_type = target.get('plan_type', 'free')
+            current_user.operator_id = target.get('operator_id')
+            current_user._view_as_mode = True
+            g.view_as_mode = True
+            g.view_as_user_id = view_as_uid
+            g.view_as_user_email = target.get('email', view_as_uid)
+            g.view_as_user_name = target.get('name') or target.get('email', '')
+        except Exception as e:
+            app.logger.warning(f'[view_as] 대상 유저 로드 실패: {e}')
+
     @app.after_request
     def security_headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'

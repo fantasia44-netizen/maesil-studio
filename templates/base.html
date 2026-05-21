@@ -171,6 +171,18 @@
     </div>
   </div>
 
+  {% if g.get('view_as_mode') %}
+  <div style="background:#f59e0b;color:#1c1917;padding:.55rem 1.5rem;font-size:.85rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+    <span>
+      <i class="bi bi-eye-fill me-2"></i>
+      <strong>{{ g.view_as_user_email }}</strong> 계정으로 보는 중 — 플랜·팀 컨텍스트가 해당 유저 기준으로 표시됩니다.
+    </span>
+    <a href="{{ url_for('admin.exit_view_as') }}" class="btn btn-sm btn-dark py-0 px-2">
+      <i class="bi bi-x-lg me-1"></i>보기 종료
+    </a>
+  </div>
+  {% endif %}
+
   <div class="content-area">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}

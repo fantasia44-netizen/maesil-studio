@@ -3,18 +3,60 @@
 {% block breadcrumb %}<a href="{{ url_for('admin.users') }}" class="text-muted text-decoration-none">사용자 관리</a> / {{ user.email }}{% endblock %}
 
 {% block content %}
+<!-- 유저로 보기 중일 때 강조 배너 -->
+{% if view_as_uid == user.id %}
+<div class="alert alert-warning d-flex align-items-center justify-content-between mb-3 py-2">
+  <span><i class="bi bi-eye-fill me-2"></i><strong>{{ user.email }}</strong> 으로 보는 중입니다.</span>
+  <a href="{{ url_for('admin.exit_view_as') }}" class="btn btn-sm btn-warning">보기 종료</a>
+</div>
+{% endif %}
+
 <div class="row g-4">
   <div class="col-lg-4">
     <!-- 사용자 정보 -->
     <div class="card mb-3">
-      <div class="card-header py-3"><h6 class="mb-0 fw-bold">사용자 정보</h6></div>
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold">사용자 정보</h6>
+        {% if view_as_uid == user.id %}
+          <a href="{{ url_for('admin.exit_view_as') }}" class="btn btn-sm btn-warning py-0">
+            <i class="bi bi-eye-slash me-1"></i>보기 종료
+          </a>
+        {% else %}
+          <a href="{{ url_for('admin.view_as_user', user_id=user.id) }}"
+             class="btn btn-sm btn-outline-warning py-0"
+             onclick="return confirm('{{ user.email }} 계정으로 보시겠습니까?')">
+            <i class="bi bi-eye me-1"></i>유저로 보기
+          </a>
+        {% endif %}
+      </div>
       <div class="card-body">
         <dl class="row mb-0 small">
           <dt class="col-5 text-muted">이메일</dt><dd class="col-7">{{ user.email }}</dd>
           <dt class="col-5 text-muted">이름</dt><dd class="col-7">{{ user.name or '-' }}</dd>
+          <dt class="col-5 text-muted">권한</dt>
+          <dd class="col-7">
+            {% if user.site_role == 'superadmin' %}
+              <span class="badge bg-danger">슈퍼어드민</span>
+            {% elif user.site_role == 'operator_admin' %}
+              <span class="badge bg-secondary">운영사 관리자</span>
+            {% else %}
+              <span class="badge bg-light text-dark">일반 사용자</span>
+            {% endif %}
+          </dd>
           <dt class="col-5 text-muted">플랜</dt><dd class="col-7"><span class="badge bg-light text-dark">{{ user.plan_type }}</span></dd>
           <dt class="col-5 text-muted">포인트</dt><dd class="col-7 fw-bold text-success">{{ balance | number }}P</dd>
-          <dt class="col-5 text-muted">상태</dt><dd class="col-7"><span class="badge {{ 'bg-success' if user.is_active else 'bg-danger' }}">{{ '활성' if user.is_active else '비활성' }}</span></dd>
+          <dt class="col-5 text-muted">상태</dt>
+          <dd class="col-7">
+            {% if not user.is_active %}
+              <span class="badge bg-danger">비활성</span>
+            {% elif user.failed_login_count and user.failed_login_count > 0 %}
+              <span class="badge bg-warning text-dark">잠금 ({{ user.failed_login_count }}회)</span>
+            {% else %}
+              <span class="badge bg-success">활성</span>
+            {% endif %}
+          </dd>
+          <dt class="col-5 text-muted">마지막 접속</dt>
+          <dd class="col-7">{{ user.last_seen_at | kst('%Y-%m-%d %H:%M') if user.last_seen_at else '-' }}</dd>
           <dt class="col-5 text-muted">가입일</dt><dd class="col-7">{{ user.created_at | kst('%Y-%m-%d') }}</dd>
         </dl>
       </div>
@@ -49,17 +91,37 @@
       </div>
     </div>
 
-    {% if user.is_active %}
+    <!-- 계정 상태 관리 -->
     <div class="card">
-      <div class="card-body">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">계정 상태 관리</h6></div>
+      <div class="card-body d-flex flex-column gap-2">
+        {% if user.failed_login_count and user.failed_login_count > 0 %}
+        <form method="POST" action="{{ url_for('admin.unlock_user', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+            <i class="bi bi-unlock me-1"></i>로그인 잠금 해제 ({{ user.failed_login_count }}회 실패)
+          </button>
+        </form>
+        {% endif %}
+
+        {% if user.is_active %}
         <form method="POST" action="{{ url_for('admin.deactivate_user', user_id=user.id) }}"
               onsubmit="return confirm('계정을 비활성화할까요?')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm btn-outline-danger w-100">계정 비활성화</button>
+          <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+            <i class="bi bi-person-x me-1"></i>계정 비활성화
+          </button>
         </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('admin.activate_user', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-success w-100">
+            <i class="bi bi-person-check me-1"></i>계정 활성화
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
-    {% endif %}
   </div>
 
   <div class="col-lg-8">
@@ -88,7 +150,7 @@
     </div>
 
     <!-- 최근 생성 -->
-    <div class="card">
+    <div class="card mb-4">
       <div class="card-header py-3"><h6 class="mb-0 fw-bold">최근 생성 이력</h6></div>
       <div class="card-body p-0">
         <table class="table table-sm mb-0">
@@ -98,11 +160,34 @@
             <tr>
               <td class="ps-3 small">{{ c.creation_type }}</td>
               <td class="small">{{ c.points_used | number }}P</td>
-              <td><span class="badge {{ 'bg-success' if c.status == 'done' else 'bg-danger' }}">{{ c.status }}</span></td>
-              <td class="small text-muted">{{ c.created_at | kst('%m/%d') }}</td>
+              <td><span class="badge {{ 'bg-success' if c.status == 'done' else ('bg-warning text-dark' if c.status == 'generating' else 'bg-danger') }}">{{ c.status }}</span></td>
+              <td class="small text-muted">{{ c.created_at | kst('%m/%d %H:%M') }}</td>
             </tr>
             {% else %}
             <tr><td colspan="4" class="text-center text-muted py-3 small">생성 이력 없음</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 결제 이력 -->
+    <div class="card">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">결제 이력</h6></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th class="ps-3">유형</th><th>금액</th><th>포인트</th><th>상태</th><th>날짜</th></tr></thead>
+          <tbody>
+            {% for p in payments %}
+            <tr>
+              <td class="ps-3 small">{{ '구독' if p.payment_type == 'subscription' else '포인트 충전' }} {{ p.plan_type or '' }}</td>
+              <td class="small">{{ p.amount | number }}원</td>
+              <td class="small text-success">+{{ p.points_granted | number }}P</td>
+              <td><span class="badge {% if p.status == 'paid' %}bg-success{% else %}bg-danger{% endif %}">{{ p.status }}</span></td>
+              <td class="small text-muted">{{ p.paid_at | kst('%m/%d %H:%M') if p.paid_at else '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-3 small">결제 이력 없음</td></tr>
             {% endfor %}
           </tbody>
         </table>
