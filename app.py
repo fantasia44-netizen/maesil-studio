@@ -246,9 +246,13 @@ def _register_hooks(app):
         if not current_user.is_authenticated:
             return
 
-        # ── 어드민 ID 검증 (id 오버라이드 전에 확인) ──────────────────
-        # current_user.get_id() 는 아직 실제 어드민 ID를 반환
-        if current_user.get_id() != admin_id:
+        # ── 어드민 ID 검증 ──────────────────────────────────────────
+        # ※ current_user.get_id() 는 handle_view_as 가 이전 요청에서
+        #   current_user.id 를 대상 유저 ID 로 교체한 채 캐시에 남겨두기 때문에
+        #   이미 target_id 를 반환할 수 있다. 대신 Flask-Login 이 로그인 시
+        #   session 에 저장한 '_user_id' (원본 로그인 ID) 로 검증한다.
+        real_login_id = session.get('_user_id')
+        if not real_login_id or str(real_login_id) != str(admin_id):
             session.pop('view_as_user_id', None)
             session.pop('view_as_admin_id', None)
             return
