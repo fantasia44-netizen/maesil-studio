@@ -159,6 +159,19 @@ def payment_complete():
             if amount != pkg['price']:
                 return jsonify(ok=False, message='결제금액 불일치'), 400
 
+            # ── 구독 여부 확인 (포인트 충전은 구독자 전용) ──
+            has_active_sub = False
+            try:
+                sub_q = _scoped_subscription_query(supabase).eq('status', 'active').limit(1).execute()
+                has_active_sub = bool(sub_q.data)
+            except Exception:
+                pass
+            if not has_active_sub:
+                return jsonify(
+                    ok=False,
+                    message='포인트 충전은 구독 중인 회원만 이용할 수 있습니다. 먼저 구독을 시작해 주세요.'
+                ), 403
+
             # 결제 기록 — operator 모드면 풀 키 같이 저장
             pay_row = {
                 'id': str(uuid.uuid4()),

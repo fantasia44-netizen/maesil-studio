@@ -195,15 +195,28 @@
       </div>
     </div>
 
-    <!-- 2. 포인트 추가 충전 -->
-    <div class="card">
-      <div class="card-header py-3">
+    <!-- 2. 포인트 추가 충전 (구독자 전용) -->
+    {% set is_subscribed = subscription and subscription.status == 'active' %}
+    <div class="card {{ '' if is_subscribed else 'border-secondary' }}">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <h6 class="mb-0 fw-bold">
-          <i class="bi bi-plus-circle me-2" style="color:#e8355a"></i>포인트 추가 충전
-          <span class="text-muted fw-normal small ms-1">— 일회성 결제 · 즉시 지급</span>
+          <i class="bi bi-plus-circle me-2" style="color:{{ '#e8355a' if is_subscribed else '#adb5bd' }}"></i>
+          포인트 추가 충전
+          <span class="fw-normal small ms-1" style="color:#adb5bd">— 구독자 전용</span>
         </h6>
+        {% if not is_subscribed %}
+        <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>구독 후 이용</span>
+        {% endif %}
       </div>
-      <div class="card-body">
+      <div class="card-body {{ '' if is_subscribed else 'opacity-50' }}" style="{{ 'pointer-events:none' if not is_subscribed else '' }}">
+        {% if not is_subscribed %}
+        <div class="alert alert-warning py-3 mb-3" style="font-size:.85rem">
+          <i class="bi bi-lock-fill me-2"></i>
+          <strong>구독 회원 전용 기능입니다.</strong><br>
+          위에서 구독을 시작하면 포인트 추가 충전이 가능합니다.<br>
+          <span class="text-muted small">신규 가입 시 제공된 5,000P (30일 유효)로 먼저 서비스를 체험해 보세요.</span>
+        </div>
+        {% endif %}
         <div class="row g-3">
           {% for pkg in POINT_PACKAGES %}
           <div class="col-md-4">
@@ -220,7 +233,7 @@
               </div>
               <div class="mt-auto">
                 <button class="btn btn-sm btn-outline-danger w-100 fw-semibold"
-                        onclick="startPointPurchase({{ loop.index0 }}, {{ pkg.price }}, '{{ pkg.label }}')">
+                        {% if is_subscribed %}onclick="startPointPurchase({{ loop.index0 }}, {{ pkg.price }}, '{{ pkg.label }}')"{% else %}disabled{% endif %}>
                   충전하기
                 </button>
               </div>
