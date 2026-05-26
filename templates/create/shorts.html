@@ -1432,6 +1432,9 @@ function draftRestore(d) {
   // 스토리보드 UI 렌더링
   if (scriptScenes.length) {
     renderStoryboard(scriptScenes);
+    // 스피너 숨기고 카드 보이기 (이 두 줄이 없으면 "스토리보드 생성 중..." 스피너가 계속 표시됨)
+    document.getElementById('storyboardLoading').classList.add('d-none');
+    document.getElementById('storyboardCards').classList.remove('d-none');
     document.getElementById('step4Next').disabled = false;
     document.getElementById('step3Next') && (document.getElementById('step3Next').disabled = false);
   }
