@@ -527,7 +527,8 @@ def shorts_generate():
             bgm_volume=bgm_volume,
             kling_model=kling_model,
             product_image_url=product_image_url,
-            ref_image_url=ref_image_url,       # 미리보기 승인 이미지
+            ref_image_url=ref_image_url,
+            scene_images=scene_images,         # 사전 확인된 씬별 이미지
         )
     else:
         from tasks.shorts_task import generate_shorts_video

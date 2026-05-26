@@ -741,17 +741,11 @@ function _esc(s) {
 // ══════════════════════════════════════════════════════
 async function goStep5Image() {
   syncNarrationsFromDom();
-  const engine = document.getElementById('selectedEngine').value;
   goStep(5);
-  if (engine === 'kling') {
-    document.getElementById('step5Flux').classList.add('d-none');
-    document.getElementById('step5Kling').classList.remove('d-none');
-    await loadPreviewImage();
-  } else {
-    document.getElementById('step5Kling').classList.add('d-none');
-    document.getElementById('step5Flux').classList.remove('d-none');
-    await loadAllSceneImages();
-  }
+  // FLUX·Kling 모두 씬별 이미지 확인 패널 사용
+  document.getElementById('step5Kling').classList.add('d-none');
+  document.getElementById('step5Flux').classList.remove('d-none');
+  await loadAllSceneImages();
 }
 
 // ── FLUX 씬별 이미지 일괄 생성 ──────────────────────────────
@@ -1155,9 +1149,7 @@ async function startGenerate() {
   const bgmVol = bgmOn ? parseFloat(document.getElementById('bgmVolume').value) / 100 : 0;
 
   if (useKling) {
-    const isReveal = window._revealMode && window._productImageUrl;
-    document.getElementById('progressStep').textContent =
-      isReveal ? '공감 씬 생성 → 제품 리빌 체이닝 중...' : '라스트프레임 체이닝 영상 생성 중...';
+    document.getElementById('progressStep').textContent = 'Kling 영상 생성 중...';
     document.getElementById('progressSubtext').textContent =
       '약 15~20분 소요됩니다. 페이지를 닫아도 백그라운드에서 계속 진행됩니다.';
   } else {
@@ -1181,7 +1173,7 @@ async function startGenerate() {
         kling_model:       klingModel,
         product_image_url: window._productImageUrl  || null,
         ref_image_url:     window._approvedRefImageUrl || null,
-        scene_images:      (!useKling && _sceneImageUrls.some(u => u)) ? _sceneImageUrls : null,
+        scene_images:      _sceneImageUrls.some(u => u) ? _sceneImageUrls : null,
       })
     });
     const data = await res.json();

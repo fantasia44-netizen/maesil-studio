@@ -97,8 +97,9 @@ def generate_kling_shorts_video(
     kling_model: str = 'kling-v1-6',
     product_image_url: str | None = None,
     ref_image_url: str | None = None,
+    scene_images: list | None = None,
 ):
-    """Celery 워커 — Kling image2video 기반 쇼츠 영상 생성 (라스트프레임 체이닝)."""
+    """Celery 워커 — Kling image2video 기반 쇼츠 영상 생성."""
     import os, sys
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _root not in sys.path:
@@ -123,6 +124,7 @@ def generate_kling_shorts_video(
             kling_model=kling_model,
             product_image_url=product_image_url,
             ref_image_url=ref_image_url,
+            scene_images=scene_images,
         )
     except Exception as exc:
         logger.error('[kling_task] 태스크 실패 (%s): %s', creation_id, exc)

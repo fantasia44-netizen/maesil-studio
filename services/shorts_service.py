@@ -1359,6 +1359,7 @@ def run_kling_shorts_pipeline(
     kling_model: str = 'kling-v1-6',
     product_image_url: str | None = None,
     ref_image_url: str | None = None,
+    scene_images: list | None = None,
 ) -> None:
     """라스트프레임 체이닝 방식 Kling 쇼츠 파이프라인.
 
@@ -1410,8 +1411,7 @@ def run_kling_shorts_pipeline(
             submit_image2video, wait_for_task, download_video, ensure_english_prompt,
         )
 
-        # ── Step 1: 씬별 FLUX 이미지 개별 생성 ─────────────────────
-        # 체이닝 제거 — 각 씬이 서로 다른 FLUX 이미지로 시작해 시각적 다양성 확보
+        # ── Step 1: 씬별 이미지 결정 (사전 생성 이미지 우선) ────────
         scene_img_urls: list[str] = []
         for i, scene in enumerate(use_scenes):
             # 마지막 씬 + 제품 이미지 있으면 제품 이미지 우선
@@ -1419,10 +1419,10 @@ def run_kling_shorts_pipeline(
                 scene_img_urls.append(product_image_url)
                 logger.info('[kling_chain] 씬%d: 제품 이미지 사용 (리빌)', i + 1)
                 continue
-            # 씬 1 + 미리보기 승인 이미지 있으면 재사용
-            if i == 0 and ref_image_url:
-                scene_img_urls.append(ref_image_url)
-                logger.info('[kling_chain] 씬1: 미리보기 승인 이미지 사용')
+            # 사전 확인된 scene_images 있으면 재사용 (FLUX 생성 생략)
+            if scene_images and i < len(scene_images) and scene_images[i]:
+                scene_img_urls.append(scene_images[i])
+                logger.info('[kling_chain] 씬%d: 사전 확인 이미지 사용', i + 1)
                 continue
             # 씬별 FLUX 이미지 생성
             _update('generating', {
