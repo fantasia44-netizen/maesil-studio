@@ -378,6 +378,50 @@ def shorts_my_images():
 
 
 # ─────────────────────────────────────────────────────────────
+# FLUX 씬별 이미지 일괄 생성 (이미지 확인 단계용)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/scene-images', methods=['POST'])
+@login_required
+def shorts_scene_images():
+    """5씬 FLUX 이미지 일괄 생성 → 이미지 확인 단계에서 사용자 검토.
+
+    스토리보드 승인 후 호출. 영상 조립 전 이미지를 미리 확인/재생성할 수 있게 함.
+    Returns: {"ok": true, "images": [{"idx": 0, "image_url": "..."}, ...]}
+    """
+    data   = request.get_json(force=True) or {}
+    scenes = data.get('scenes') or []
+    style  = (data.get('style') or 'realistic_banner').strip()
+
+    if not scenes:
+        return jsonify(ok=False, message='씬 데이터가 없습니다.')
+
+    from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
+    from services.imagen_service import _generate_flux
+    from services.kling_service import ensure_english_prompt
+
+    style_mod = SHORTS_STYLE_PRESETS.get(style, '')
+    results = []
+
+    for i, scene in enumerate(scenes):
+        try:
+            flux_prompt = ensure_english_prompt(scene.get('flux_prompt', '') or scene.get('narration', ''))
+            full_prompt = (
+                flux_prompt +
+                (f', {style_mod}' if style_mod else '') +
+                ', 9:16 vertical frame, cinematic lighting' +
+                _NO_CJK + _NO_ANATOMY
+            )
+            img_url, _ = _generate_flux(full_prompt, 'flux_preview', '1080x1920')
+            results.append({'idx': i, 'image_url': img_url, 'ok': True})
+        except Exception as e:
+            logger.error('[shorts/scene-images] 씬%d 이미지 생성 실패: %s', i, e)
+            results.append({'idx': i, 'image_url': None, 'ok': False, 'error': str(e)[:100]})
+
+    return jsonify(ok=True, images=results)
+
+
+# ─────────────────────────────────────────────────────────────
 # 영상 생성 (비동기 백그라운드)
 # ─────────────────────────────────────────────────────────────
 
@@ -401,6 +445,8 @@ def shorts_generate():
     product_image_url = (data.get('product_image_url') or '').strip() or None
     # 미리보기에서 승인된 기준 이미지 — 있으면 FLUX 재생성 생략
     ref_image_url     = (data.get('ref_image_url')     or '').strip() or None
+    # FLUX 씬별 미리보기에서 사용자가 확인한 이미지 URL 목록 (있으면 재생성 생략)
+    scene_images      = data.get('scene_images') or None  # list[str] | None
 
     if not scenes:
         return jsonify(ok=False, message='씬 데이터가 없습니다. 먼저 대본을 생성하세요.')
@@ -486,6 +532,7 @@ def shorts_generate():
             supabase_url=supabase_url,
             supabase_key=supabase_key,
             bgm_volume=bgm_volume,
+            scene_images=scene_images,
         )
 
     return jsonify(ok=True, creation_id=creation_id, cost=cost, engine='kling' if use_kling else 'flux')

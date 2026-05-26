@@ -32,6 +32,7 @@ def generate_shorts_video(
     supabase_url: str,
     supabase_key: str,
     bgm_volume: float = 0.20,
+    scene_images: list | None = None,
 ):
     """Celery 워커에서 쇼츠 영상 생성."""
     import os, sys
@@ -55,6 +56,7 @@ def generate_shorts_video(
             tts_speed=tts_speed,
             supabase=supabase,
             bgm_volume=bgm_volume,
+            scene_images=scene_images,
         )
     except Exception as exc:
         # SoftTimeLimitExceeded 포함 모든 예외 — DB 실패 처리 + 포인트 환불

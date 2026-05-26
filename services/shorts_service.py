@@ -84,9 +84,11 @@ _NO_CJK = (
     ', absolutely no writing of any kind on any surface'
 )
 _NO_ANATOMY = (
-    ', anatomically correct, natural human proportions'
-    ', no extra limbs, no extra arms, no extra hands, no extra legs'
-    ', no duplicate body parts, realistic body structure'
+    ', perfect hands, anatomically correct hands, correct finger count'
+    ', five fingers per hand, realistic fingers, no extra fingers'
+    ', no missing fingers, no fused fingers, no malformed hands'
+    ', no extra limbs, no extra arms, no extra legs'
+    ', no duplicate body parts, anatomically correct body'
 )
 
 
@@ -393,9 +395,13 @@ def generate_shorts_script(
     )
 
     system = (
-        '당신은 숏폼 영상 전문 크리에이터입니다. '
-        '좋은 쇼츠 광고는 ① 문제 공감 → ② 해결책 제시 → ③ 변화/결과 의 서사 흐름을 갖습니다. '
-        '각 씬의 나레이션은 실제 TTS로 읽히므로 자연스러운 구어체로 작성하세요. '
+        '당신은 MZ세대가 열광하는 숏폼 크리에이터입니다. '
+        '좋은 쇼츠 광고의 핵심 원칙 4가지를 반드시 지키세요:\n'
+        '1. 기능 나열 절대 금지 — "효과적입니다, 편리합니다, 우수합니다" 같은 말은 공감을 죽입니다\n'
+        '2. 감성 장면으로 스토리 구성 — 타겟이 겪는 상황을 눈에 보이는 생생한 장면으로 그리세요\n'
+        '3. 해결은 감정 변화로 전달 — "이걸 쓰고 처음으로 여유 있는 아침을 맞았어요" 형태\n'
+        '4. 다음 씬이 궁금하게 — 각 씬 끝에 궁금증이나 기대감을 남기세요\n'
+        '나레이션은 친구에게 말하듯 구어체로, TTS로 읽히는 텍스트입니다. '
         '순수 JSON만 출력하세요.'
     )
     prompt = f"""인스타 릴스/유튜브 쇼츠용 5씬 대본을 JSON으로 생성하세요.
@@ -430,12 +436,16 @@ def generate_shorts_script(
   ...5개 씬...
 ]
 
-씬별 작성 가이드:
-- hook: 타겟이 겪는 문제 상황을 생생하게 묘사 또는 질문 → 스크롤 멈추게
-- empathy: "맞죠? 저도 그랬어요" 톤으로 공감 깊게 — 문제의 감정적 공명
-- solution: 상품이 그 문제를 어떻게 해결하는지 구체적으로 (기능·방식 언급)
-- benefit: 해결 후 실제 변화·수치·감정 — 가장 강력한 한 가지
-- cta: 구체적 행동 유도 (링크 클릭/팔로우/댓글 등)
+씬별 감성 작성 가이드:
+- hook: 타겟이 겪는 상황을 영화 한 장면처럼 생생하게 → 1초 안에 "맞아, 나 이거야" 반응
+  예시: "퇴근하고 집 들어오자마자 쓰러지는 사람"이 공감할 나레이션
+- empathy: 그 감정을 더 깊게 파고들기 — 고백하듯, 나도 겪어봤다는 톤
+  예시: "솔직히 이런 날 뭔가를 시작할 엄두가 안 나잖아요"
+- solution: 제품 기능 설명 절대 금지. 그 제품을 만난 순간의 감정 변화를 묘사
+  예시: "이거 하나가 그 무기력한 루틴을 바꿔줬어요" (기능 X, 변화 O)
+- benefit: 구체적인 삶의 변화를 한 장면으로 — 숫자보다 이야기
+  예시: "이제 아침에 눈 뜨는 게 무섭지 않아요"
+- cta: 공감한 사람들에게 손 내밀기 — "당신도 이런 경험 있다면"
 
 순수 JSON 배열만 출력"""
 
@@ -894,6 +904,7 @@ def run_shorts_pipeline(
     tts_speed: float,
     supabase,
     bgm_volume: float = 0.20,
+    scene_images: list | None = None,
 ) -> None:
     """백그라운드 스레드에서 실행. Supabase creation 상태 업데이트.
 
@@ -927,13 +938,17 @@ def run_shorts_pipeline(
             step = f'씬 {i+1}/{len(scenes)} 생성 중'
             _update('generating', {'progress': i, 'step': step})
 
-            # 이미지 생성 (flux_prompt 한글 → 영어 번역 안전망)
-            style_mod  = SHORTS_STYLE_PRESETS.get(style, '')
-            raw_prompt = scene.get('flux_prompt', '')
-            from services.kling_service import ensure_english_prompt
-            raw_prompt = ensure_english_prompt(raw_prompt)
-            flux_p = raw_prompt + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
-            img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
+            # 이미지 생성 — 사전 생성된 이미지가 있으면 재사용 (FLUX 생략)
+            if scene_images and i < len(scene_images) and scene_images[i]:
+                img_url = scene_images[i]
+                logger.info('[shorts] 씬%d: 사전 생성 이미지 사용 (%s)', i, img_url[:60])
+            else:
+                style_mod  = SHORTS_STYLE_PRESETS.get(style, '')
+                raw_prompt = scene.get('flux_prompt', '')
+                from services.kling_service import ensure_english_prompt
+                raw_prompt = ensure_english_prompt(raw_prompt)
+                flux_p = raw_prompt + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
+                img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
 
             # PIL 오버레이
             frame_b64 = composite_shorts_frame(

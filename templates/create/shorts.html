@@ -189,48 +189,102 @@
   </div>
 </div>
 
-<!-- ══════ Step 5: 기준 이미지 확인 (Kling 전용) ══════ -->
-<div id="step5" class="d-none" style="max-width:680px">
-  <div class="card">
-    <div class="card-header py-3">
-      <h6 class="mb-0 fw-bold"><i class="bi bi-image me-2" style="color:#d63384"></i>기준 이미지 확인</h6>
-    </div>
-    <div class="card-body p-4">
-      <div id="imgPreviewLoading" class="text-center py-5">
-        <div class="spinner-border text-primary mb-2"></div>
-        <div class="small text-muted">FLUX 이미지 생성 중 (약 10~20초)...</div>
+<!-- ══════ Step 5: 이미지 확인 ══════ -->
+<div id="step5" class="d-none" style="max-width:900px">
+
+  <!-- ── FLUX 씬별 이미지 확인 ── -->
+  <div id="step5Flux" class="d-none">
+    <div class="card">
+      <div class="card-header py-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-images me-2" style="color:#d63384"></i>씬별 이미지 확인</h6>
+        <span class="text-muted small">이미지를 크게 보거나 개별 재생성할 수 있습니다</span>
       </div>
-      <div id="imgPreviewResult" class="d-none">
-        <div class="alert alert-secondary py-2 px-3 small mb-3">
-          <i class="bi bi-info-circle me-1"></i>씬1 기준 이미지입니다. 라스트프레임 체이닝으로 씬2·3이 이어집니다.
-        </div>
-        <div class="d-flex gap-3 align-items-start">
-          <img id="previewImg" src="" alt="기준 이미지"
-               style="width:120px;height:213px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;flex-shrink:0">
-          <div class="flex-fill">
-            <div class="fw-semibold small mb-2">이 이미지로 영상을 만들까요?</div>
-            <div class="d-flex flex-column gap-2">
-              <button class="btn btn-sm btn-outline-secondary" onclick="regenPreviewImage()">
-                <i class="bi bi-arrow-clockwise me-1"></i>다시 생성
-              </button>
-              <label class="btn btn-sm btn-outline-secondary mb-0" style="cursor:pointer">
-                <i class="bi bi-upload me-1"></i>내 이미지 사용
-                <input type="file" id="customImgInput" accept="image/*" class="d-none" onchange="onCustomImage(this)">
-              </label>
-              <button class="btn btn-sm btn-outline-secondary" onclick="openMyImagesModal()">
-                <i class="bi bi-images me-1"></i>이전 이미지 불러오기
-              </button>
-              <button class="btn btn-sm btn-primary" onclick="approveImageAndNext()">
-                <i class="bi bi-check-lg me-1"></i>이 이미지로 진행
-              </button>
-            </div>
+      <div class="card-body p-4">
+        <div id="sceneImagesLoading" class="text-center py-5">
+          <div class="spinner-border text-primary mb-2"></div>
+          <div class="fw-semibold small mb-1" id="sceneImagesLoadingText">씬 이미지 생성 중...</div>
+          <div class="text-muted small" id="sceneImagesLoadingDetail">약 30~60초 소요됩니다</div>
+          <div class="progress mx-auto mt-3" style="max-width:300px;height:4px">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="sceneImagesProgressBar" style="width:5%"></div>
           </div>
         </div>
-        <input type="hidden" id="approvedRefImageUrl" value="">
+        <div id="sceneImagesResult" class="d-none">
+          <div class="alert alert-info py-2 px-3 mb-3 small">
+            <i class="bi bi-info-circle me-1"></i>각 씬 이미지를 확인하세요. 마음에 안 들면 <strong>재생성</strong>을 눌러주세요. 이미지 클릭 시 크게 볼 수 있습니다.
+          </div>
+          <div id="sceneImagesList" class="d-flex flex-column gap-3"></div>
+        </div>
+        <div id="sceneImagesError" class="d-none"></div>
+        <div class="d-flex justify-content-between mt-4">
+          <button class="btn btn-outline-secondary btn-sm" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+          <button class="btn btn-primary" id="step5FluxNext" onclick="goStep(6); checkStep6Ready()" disabled>
+            이미지 확인 완료 <i class="bi bi-arrow-right ms-1"></i>
+          </button>
+        </div>
       </div>
-      <div id="imgPreviewError" class="d-none"></div>
-      <div class="d-flex justify-content-between mt-4">
-        <button class="btn btn-outline-secondary btn-sm" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+    </div>
+  </div>
+
+  <!-- ── Kling 기준 이미지 확인 ── -->
+  <div id="step5Kling" class="d-none">
+    <div class="card">
+      <div class="card-header py-3">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-image me-2" style="color:#d63384"></i>기준 이미지 확인</h6>
+      </div>
+      <div class="card-body p-4">
+        <div id="imgPreviewLoading" class="text-center py-5">
+          <div class="spinner-border text-primary mb-2"></div>
+          <div class="small text-muted">FLUX 이미지 생성 중 (약 10~20초)...</div>
+        </div>
+        <div id="imgPreviewResult" class="d-none">
+          <div class="alert alert-secondary py-2 px-3 small mb-3">
+            <i class="bi bi-info-circle me-1"></i>씬1 기준 이미지입니다. 라스트프레임 체이닝으로 씬2·3이 이어집니다.
+          </div>
+          <div class="d-flex gap-3 align-items-start">
+            <img id="previewImg" src="" alt="기준 이미지"
+                 style="width:120px;height:213px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;flex-shrink:0">
+            <div class="flex-fill">
+              <div class="fw-semibold small mb-2">이 이미지로 영상을 만들까요?</div>
+              <div class="d-flex flex-column gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="regenPreviewImage()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>다시 생성
+                </button>
+                <label class="btn btn-sm btn-outline-secondary mb-0" style="cursor:pointer">
+                  <i class="bi bi-upload me-1"></i>내 이미지 사용
+                  <input type="file" id="customImgInput" accept="image/*" class="d-none" onchange="onCustomImage(this)">
+                </label>
+                <button class="btn btn-sm btn-outline-secondary" onclick="openMyImagesModal()">
+                  <i class="bi bi-images me-1"></i>이전 이미지 불러오기
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="approveImageAndNext()">
+                  <i class="bi bi-check-lg me-1"></i>이 이미지로 진행
+                </button>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" id="approvedRefImageUrl" value="">
+        </div>
+        <div id="imgPreviewError" class="d-none"></div>
+        <div class="d-flex justify-content-between mt-4">
+          <button class="btn btn-outline-secondary btn-sm" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>이전</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 이미지 크게 보기 모달 -->
+<div class="modal fade" id="imageFullModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold small" id="imageFullModalTitle">씬 이미지</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-2 text-center">
+        <img id="imageFullImg" src="" alt="씬 이미지" style="width:100%;border-radius:8px">
+        <div class="text-muted small mt-2" id="imageFullNarration"></div>
       </div>
     </div>
   </div>
@@ -686,18 +740,179 @@ function _esc(s) {
 // Step 4 → Step 5 (Kling) / Step 6 (Flux)
 // ══════════════════════════════════════════════════════
 async function goStep5Image() {
-  // DOM에서 나레이션 수정 반영
   syncNarrationsFromDom();
-
   const engine = document.getElementById('selectedEngine').value;
+  goStep(5);
   if (engine === 'kling') {
-    goStep(5);
+    document.getElementById('step5Flux').classList.add('d-none');
+    document.getElementById('step5Kling').classList.remove('d-none');
     await loadPreviewImage();
   } else {
-    // Flux: Step 5 건너뛰고 바로 Step 6
-    goStep(6);
-    checkStep6Ready();
+    document.getElementById('step5Kling').classList.add('d-none');
+    document.getElementById('step5Flux').classList.remove('d-none');
+    await loadAllSceneImages();
   }
+}
+
+// ── FLUX 씬별 이미지 일괄 생성 ──────────────────────────────
+let _sceneImageUrls = [];  // 승인된 씬별 이미지 URL 배열
+
+async function loadAllSceneImages(forceRegen = false) {
+  _sceneImageUrls = new Array(scriptScenes.length).fill(null);
+  document.getElementById('step5FluxNext').disabled = true;
+  document.getElementById('sceneImagesLoading').classList.remove('d-none');
+  document.getElementById('sceneImagesResult').classList.add('d-none');
+  document.getElementById('sceneImagesError').classList.add('d-none');
+
+  const total = scriptScenes.length;
+  let done = 0;
+
+  const updateProgress = () => {
+    const pct = Math.round((done / total) * 100);
+    document.getElementById('sceneImagesProgressBar').style.width = pct + '%';
+    document.getElementById('sceneImagesLoadingText').textContent =
+      `씬 이미지 생성 중... (${done}/${total})`;
+  };
+  updateProgress();
+
+  // 씬별 순차 생성 (서버 부하 고려)
+  const results = [];
+  for (let i = 0; i < total; i++) {
+    try {
+      const res = await fetch('/create/shorts/preview-image', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        body: JSON.stringify({
+          flux_prompt: scriptScenes[i].flux_prompt || '',
+          scene_desc:  scriptScenes[i].overlay_title || '',
+          narration:   scriptScenes[i].narration || '',
+          style:       selectedStyle || 'realistic_banner',
+        }),
+      });
+      const data = await res.json();
+      results.push({
+        idx: i,
+        ok: data.ok,
+        image_url: data.ok ? data.image_url : null,
+        error: data.message || '',
+      });
+      if (data.ok) _sceneImageUrls[i] = data.image_url;
+    } catch (e) {
+      results.push({idx: i, ok: false, image_url: null, error: e.message});
+    }
+    done++;
+    updateProgress();
+  }
+
+  document.getElementById('sceneImagesLoading').classList.add('d-none');
+  document.getElementById('sceneImagesResult').classList.remove('d-none');
+  renderSceneImages(results);
+  document.getElementById('step5FluxNext').disabled = false;
+}
+
+function renderSceneImages(results) {
+  const ROLE_LABELS_MAP = {
+    hook:'🎯 훅', empathy:'💬 공감', solution:'💡 해결',
+    benefit:'✨ 혜택', cta:'📣 CTA', product_reveal:'🎁 리빌',
+  };
+  const ROLE_BG_MAP = {
+    hook:'#dc2626', empathy:'#d97706', solution:'#059669',
+    benefit:'#2563eb', cta:'#7c3aed', product_reveal:'#7c3aed',
+  };
+
+  const list = document.getElementById('sceneImagesList');
+  list.innerHTML = '';
+
+  results.forEach((r, idx) => {
+    const scene = scriptScenes[idx] || {};
+    const role  = scene.role || '';
+    const label = ROLE_LABELS_MAP[role] || `씬 ${idx+1}`;
+    const bg    = ROLE_BG_MAP[role] || '#6b7280';
+
+    list.insertAdjacentHTML('beforeend', `
+      <div class="card border p-3" data-scene-idx="${idx}">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="badge rounded-pill" style="background:${bg};font-size:.72rem">${label}</span>
+          <span class="fw-semibold small">씬 ${idx+1}</span>
+        </div>
+        <div class="d-flex gap-3 align-items-start">
+          <div style="flex-shrink:0;width:90px;cursor:pointer" onclick="openImageFull(${idx})">
+            ${r.ok && r.image_url
+              ? `<img src="${r.image_url}" alt="씬${idx+1}" id="sceneImg${idx}"
+                     style="width:90px;height:160px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6">`
+              : `<div id="sceneImg${idx}" style="width:90px;height:160px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#999;border:1px dashed #ccc">생성 실패</div>`
+            }
+          </div>
+          <div class="flex-fill">
+            <div class="text-muted small mb-1" style="font-size:.73rem;font-weight:600">나레이션</div>
+            <div class="small mb-2" style="line-height:1.6">${_esc(scene.narration || '')}</div>
+            <div class="text-muted small mb-2" style="font-size:.7rem">
+              <i class="bi bi-card-text me-1"></i>${_esc(scene.overlay_title || '')}
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" style="font-size:.75rem"
+                    onclick="regenSceneImage(${idx})">
+              <i class="bi bi-arrow-clockwise me-1"></i>재생성
+            </button>
+          </div>
+        </div>
+      </div>
+    `);
+  });
+}
+
+async function regenSceneImage(idx) {
+  const scene = scriptScenes[idx] || {};
+  const imgEl = document.getElementById(`sceneImg${idx}`);
+  if (imgEl) {
+    imgEl.style.opacity = '0.4';
+    imgEl.style.filter  = 'blur(2px)';
+  }
+  try {
+    const res = await fetch('/create/shorts/preview-image', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify({
+        flux_prompt: scene.flux_prompt || '',
+        scene_desc:  scene.overlay_title || '',
+        narration:   scene.narration || '',
+        style:       selectedStyle || 'realistic_banner',
+      }),
+    });
+    const data = await res.json();
+    if (data.ok && data.image_url) {
+      _sceneImageUrls[idx] = data.image_url;
+      if (imgEl && imgEl.tagName === 'IMG') {
+        imgEl.src = data.image_url;
+        imgEl.style.opacity = '1';
+        imgEl.style.filter  = '';
+      } else {
+        // 실패 박스였다면 img로 교체
+        const wrapper = imgEl?.parentElement;
+        if (wrapper) {
+          const newImg = document.createElement('img');
+          newImg.src = data.image_url;
+          newImg.id  = `sceneImg${idx}`;
+          newImg.alt = `씬${idx+1}`;
+          newImg.style.cssText = 'width:90px;height:160px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6;cursor:pointer';
+          newImg.onclick = () => openImageFull(idx);
+          wrapper.replaceChild(newImg, imgEl);
+        }
+      }
+    }
+  } catch (e) {
+    if (imgEl) { imgEl.style.opacity = '1'; imgEl.style.filter = ''; }
+    alert('재생성 실패: ' + e.message);
+  }
+}
+
+function openImageFull(idx) {
+  const url   = _sceneImageUrls[idx];
+  const scene = scriptScenes[idx] || {};
+  if (!url) return;
+  document.getElementById('imageFullImg').src = url;
+  document.getElementById('imageFullModalTitle').textContent = `씬 ${idx+1} — ${scene.overlay_title || ''}`;
+  document.getElementById('imageFullNarration').textContent  = scene.narration || '';
+  new bootstrap.Modal(document.getElementById('imageFullModal')).show();
 }
 
 function syncNarrationsFromDom() {
@@ -911,10 +1126,17 @@ function checkStep6Ready() {
   document.getElementById('step6Next').disabled = !selectedVoice;
 }
 
-// Step 6 이전 버튼: Kling → Step 5, Flux → Step 4
+// Step 6 이전 버튼: 항상 Step 5로 (엔진별로 적절한 패널 표시)
 function goStep6Back() {
   const engine = document.getElementById('selectedEngine').value;
-  goStep(engine === 'kling' ? 5 : 4);
+  goStep(5);
+  if (engine === 'kling') {
+    document.getElementById('step5Flux').classList.add('d-none');
+    document.getElementById('step5Kling').classList.remove('d-none');
+  } else {
+    document.getElementById('step5Kling').classList.add('d-none');
+    document.getElementById('step5Flux').classList.remove('d-none');
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -959,6 +1181,7 @@ async function startGenerate() {
         kling_model:       klingModel,
         product_image_url: window._productImageUrl  || null,
         ref_image_url:     window._approvedRefImageUrl || null,
+        scene_images:      (!useKling && _sceneImageUrls.some(u => u)) ? _sceneImageUrls : null,
       })
     });
     const data = await res.json();
