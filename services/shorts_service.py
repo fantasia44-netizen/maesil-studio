@@ -891,48 +891,133 @@ def _get_audio_duration(mp3_path: str) -> float:
     return 3.0
 
 
+def _get_video_duration(path: str) -> float:
+    """ffprobe로 영상 길이(초) 반환."""
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-print_format', 'json',
+             '-show_format', path],
+            capture_output=True, text=True, timeout=15,
+        )
+        data = json.loads(result.stdout)
+        dur = data.get('format', {}).get('duration')
+        if dur:
+            return float(dur)
+    except Exception:
+        pass
+    return 5.0
+
+
+def _concat_with_crossfade(clip_paths: list, output_path: str, fade: float = 0.4) -> str:
+    """여러 MP4 클립을 xfade 크로스페이드로 연결 → output_path.
+
+    각 클립 duration을 ffprobe로 읽어 offset을 계산.
+    """
+    if len(clip_paths) == 1:
+        import shutil as _sh
+        _sh.copy2(clip_paths[0], output_path)
+        return output_path
+
+    durations = [_get_video_duration(p) for p in clip_paths]
+
+    inputs = []
+    for cp in clip_paths:
+        inputs += ['-i', cp]
+
+    n = len(clip_paths)
+    fc_parts = []
+    cumul = 0.0
+    cur_v, cur_a = '[0:v]', '[0:a]'
+
+    for k in range(n - 1):
+        cumul += durations[k]
+        offset = max(cumul - (k + 1) * fade, 0.1)
+        is_last = (k == n - 2)
+        out_v = '[vout]' if is_last else f'[v{k+1}]'
+        out_a = '[aout]' if is_last else f'[a{k+1}]'
+        fc_parts.append(
+            f'{cur_v}[{k+1}:v]xfade=transition=fade:duration={fade}:offset={offset:.3f}{out_v}'
+        )
+        fc_parts.append(
+            f'{cur_a}[{k+1}:a]acrossfade=d={fade}{out_a}'
+        )
+        cur_v, cur_a = out_v, out_a
+
+    _ffmpeg(
+        '-y',
+        *inputs,
+        '-filter_complex', ';'.join(fc_parts),
+        '-map', '[vout]',
+        '-map', '[aout]',
+        '-c:v', 'libx264', '-preset', 'fast',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-pix_fmt', 'yuv420p',
+        output_path,
+    )
+    return output_path
+
+
 def assemble_shorts_video(
     clip_data: list[dict],  # [{image_path, audio_path}, ...]
     output_path: str,
 ) -> str:
-    """이미지+오디오 리스트 → MP4 (1080×1920).
+    """이미지+오디오 → Ken Burns 줌/패닝 + 크로스페이드 → MP4 (1080×1920).
 
-    Returns: output_path
+    각 씬에 다른 방향의 Ken Burns 효과를 적용하고, 씬 간 0.4초 크로스페이드.
     """
-    tmp_dir = os.path.dirname(output_path)
+    FPS  = 25
+    FADE = 0.4   # 씬 간 크로스페이드 (초)
+
+    # Ken Burns 패턴 — 씬마다 순환 적용 (d=총프레임수, fps=FPS)
+    KB_PATTERNS = [
+        # 0: 중앙 줌인 (1.0 → 1.15)
+        "zoompan=z='1+on/d*0.15':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={d}:s=1080x1920:fps={fps}",
+        # 1: 오른쪽 패닝 (1.1x)
+        "zoompan=z='1.1':x='on/d*iw*0.06':y='ih/2-(ih/zoom/2)':d={d}:s=1080x1920:fps={fps}",
+        # 2: 중앙 줌아웃 (1.15 → 1.0)
+        "zoompan=z='1.15-on/d*0.15':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={d}:s=1080x1920:fps={fps}",
+        # 3: 왼쪽 패닝 (1.1x)
+        "zoompan=z='1.1':x='iw*0.06*(1-on/d)':y='ih/2-(ih/zoom/2)':d={d}:s=1080x1920:fps={fps}",
+        # 4: 상단 줌인
+        "zoompan=z='1+on/d*0.12':x='iw/2-(iw/zoom/2)':y='0':d={d}:s=1080x1920:fps={fps}",
+    ]
+
+    tmp_dir    = os.path.dirname(output_path)
     clip_paths = []
 
+    # ── Step 1: 씬별 Ken Burns 클립 생성 ─────────────────────────
     for i, item in enumerate(clip_data):
         img_path   = item['image_path']
         audio_path = item['audio_path']
         clip_out   = os.path.join(tmp_dir, f'clip_{i:02d}.mp4')
 
+        dur    = _get_audio_duration(audio_path)
+        # 크로스페이드를 위해 마지막 씬 외에는 FADE만큼 더 생성
+        total  = dur + FADE if i < len(clip_data) - 1 else dur
+        frames = max(int(total * FPS) + 2, 2)
+
+        pattern = KB_PATTERNS[i % len(KB_PATTERNS)]
+        vf = (
+            pattern.format(d=frames, fps=FPS) +
+            ',scale=1080:1920:force_original_aspect_ratio=increase'
+            ',crop=1080:1920,setsar=1'
+        )
+
         _ffmpeg(
             '-y',
             '-loop', '1', '-i', img_path,
             '-i', audio_path,
-            '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage',
+            '-vf', vf,
+            '-c:v', 'libx264', '-preset', 'fast',
             '-c:a', 'aac', '-b:a', '128k',
             '-pix_fmt', 'yuv420p',
-            '-shortest',
+            '-t', f'{total:.3f}',
             clip_out,
         )
         clip_paths.append(clip_out)
 
-    # concat list
-    concat_txt = os.path.join(tmp_dir, 'concat.txt')
-    with open(concat_txt, 'w') as f:
-        for cp in clip_paths:
-            f.write(f"file '{cp}'\n")
-
-    _ffmpeg(
-        '-y',
-        '-f', 'concat', '-safe', '0', '-i', concat_txt,
-        '-c', 'copy',
-        output_path,
-    )
-    return output_path
+    # ── Step 2: xfade 크로스페이드로 연결 ────────────────────────
+    return _concat_with_crossfade(clip_paths, output_path, fade=FADE)
 
 
 # ════════════════════════════════════════════════════════
@@ -1452,12 +1537,8 @@ def run_kling_shorts_pipeline(
 
         # ── Step 4: FFmpeg concat ──────────────────────────────────
         _update('generating', {'progress': total_steps - 2, 'step': '영상 합치는 중'})
-        concat_txt = os.path.join(tmp_dir, 'concat.txt')
-        with open(concat_txt, 'w') as f:
-            for cp in clip_data:
-                f.write(f"file '{cp}'\n")
         raw_mp4 = os.path.join(tmp_dir, 'kling_raw.mp4')
-        _ffmpeg('-y', '-f', 'concat', '-safe', '0', '-i', concat_txt, '-c', 'copy', raw_mp4)
+        _concat_with_crossfade(clip_data, raw_mp4, fade=0.4)
 
         # ── Step 5: BGM 믹싱 ───────────────────────────────────────
         output_mp4 = os.path.join(tmp_dir, 'kling_final.mp4')
