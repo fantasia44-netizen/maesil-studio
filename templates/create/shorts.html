@@ -520,7 +520,13 @@ const ROLE_BG = {
 // ══════════════════════════════════════════════════════
 // 스텝 이동 (1~7)
 // ══════════════════════════════════════════════════════
-function goStep(n) {
+let _currentStep = 1;
+
+function goStep(n, pushHistory = true) {
+  _currentStep = n;
+  if (pushHistory) {
+    history.pushState({ step: n }, '', `#step${n}`);
+  }
   for (let i = 1; i <= 7; i++) {
     const el = document.getElementById(`step${i}`);
     if (el) el.classList.toggle('d-none', i !== n);
@@ -544,6 +550,20 @@ function goStep(n) {
     if (line)  line.style.background = i < n ? '#198754' : '#ddd';
   }
 }
+
+// 브라우저 뒤로가기 → 이전 스텝으로
+window.addEventListener('popstate', function(e) {
+  const step = e.state?.step;
+  if (step && step >= 1 && step <= 7) {
+    goStep(step, false);
+  } else if (!step) {
+    // 히스토리 바닥 (step 1 이전) → step 1로
+    goStep(1, false);
+  }
+});
+
+// 초기 진입 시 히스토리에 step1 등록
+history.replaceState({ step: 1 }, '', '#step1');
 
 // ══════════════════════════════════════════════════════
 // Step 1 → Step 2: 소구포인트
