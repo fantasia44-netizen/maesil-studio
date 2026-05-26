@@ -187,7 +187,7 @@
           <span class="badge ms-1" style="background:#7c3aed;font-size:.7rem">PAS</span>
         </div>
         <div class="alert alert-info py-2 px-3 mb-3 small">
-          <i class="bi bi-info-circle me-1"></i>나레이션을 수정할 수 있습니다. 방향이 맞으면 <strong>승인</strong>을 눌러주세요.
+          <i class="bi bi-info-circle me-1"></i>나레이션·화면 타이틀·자막을 직접 수정할 수 있습니다. 확인 후 <strong>승인</strong>을 눌러주세요.
         </div>
         <div id="storyboardList" class="d-flex flex-column gap-3"></div>
       </div>
@@ -758,14 +758,24 @@ function renderStoryboard(scenes) {
           ${productBadge}
         </div>
         <div class="mb-2">
-          <label class="form-label mb-1" style="font-size:.75rem;font-weight:600">나레이션 <span class="fw-normal text-muted">(수정 가능)</span></label>
+          <label class="form-label mb-1" style="font-size:.75rem;font-weight:600">🎙 나레이션 <span class="fw-normal text-muted">(TTS 읽힘·수정 가능)</span></label>
           <textarea class="form-control form-control-sm scene-narration" rows="2"
                     style="font-size:.82rem;line-height:1.6">${_esc(sc.narration || '')}</textarea>
         </div>
-        <div class="text-muted" style="font-size:.73rem">
-          <i class="bi bi-card-text me-1"></i><strong>화면 문구:</strong> ${_esc(sc.overlay_title || '')}
+        <div class="row g-2 mb-1">
+          <div class="col-6">
+            <label class="form-label mb-1" style="font-size:.73rem;font-weight:600">👁 화면 타이틀 <span class="fw-normal text-muted">(10자↓)</span></label>
+            <input type="text" class="form-control form-control-sm scene-overlay-title"
+                   maxlength="15" value="${_esc(sc.overlay_title || '')}"
+                   style="font-size:.8rem">
+          </div>
+          <div class="col-6">
+            <label class="form-label mb-1" style="font-size:.73rem;font-weight:600">💬 화면 자막 <span class="fw-normal text-muted">(15자↓)</span></label>
+            <input type="text" class="form-control form-control-sm scene-overlay-body"
+                   maxlength="20" value="${_esc(sc.overlay_body || '')}"
+                   style="font-size:.8rem">
+          </div>
         </div>
-        ${sc.scene_desc ? `<div class="text-muted mt-1" style="font-size:.73rem"><i class="bi bi-image me-1"></i>${_esc(sc.scene_desc)}</div>` : ''}
       </div>
     `);
   });
@@ -779,7 +789,7 @@ function _esc(s) {
 // Step 4 → Step 5 (Kling) / Step 6 (Flux)
 // ══════════════════════════════════════════════════════
 async function goStep5Image() {
-  syncNarrationsFromDom();
+  syncScenesFromDom();   // 나레이션 + 타이틀 + 자막 모두 동기화
   goStep(5);
   // FLUX·Kling 모두 씬별 이미지 확인 패널 사용
   document.getElementById('step5Kling').classList.add('d-none');
@@ -878,10 +888,11 @@ function renderSceneImages(results) {
             }
           </div>
           <div class="flex-fill">
-            <div class="text-muted small mb-1" style="font-size:.73rem;font-weight:600">나레이션</div>
-            <div class="small mb-2" style="line-height:1.6">${_esc(scene.narration || '')}</div>
-            <div class="text-muted small mb-2" style="font-size:.7rem">
-              <i class="bi bi-card-text me-1"></i>${_esc(scene.overlay_title || '')}
+            <div class="text-muted small mb-1" style="font-size:.73rem;font-weight:600">🎙 나레이션</div>
+            <div class="small mb-2" style="line-height:1.5">${_esc(scene.narration || '')}</div>
+            <div class="d-flex gap-2 mb-2 flex-wrap">
+              ${scene.overlay_title ? `<span class="badge bg-light text-dark border" style="font-size:.72rem">👁 ${_esc(scene.overlay_title)}</span>` : ''}
+              ${scene.overlay_body  ? `<span class="badge bg-light text-dark border" style="font-size:.72rem">💬 ${_esc(scene.overlay_body)}</span>`  : ''}
             </div>
             <button class="btn btn-sm btn-outline-secondary" style="font-size:.75rem"
                     onclick="regenSceneImage(${idx})">
@@ -950,12 +961,21 @@ function openImageFull(idx) {
 }
 
 function syncNarrationsFromDom() {
+  // 하위호환 alias
+  syncScenesFromDom();
+}
+
+function syncScenesFromDom() {
   const cards = document.querySelectorAll('#storyboardList [data-idx]');
-  cards.forEach((card, i) => {
-    const ta = card.querySelector('.scene-narration');
-    if (ta && scriptScenes[i]) {
-      scriptScenes[i].narration = ta.value.trim();
-    }
+  cards.forEach(card => {
+    const idx = parseInt(card.dataset.idx, 10);
+    if (isNaN(idx) || !scriptScenes[idx]) return;
+    const narEl    = card.querySelector('.scene-narration');
+    const titleEl  = card.querySelector('.scene-overlay-title');
+    const bodyEl   = card.querySelector('.scene-overlay-body');
+    if (narEl)   scriptScenes[idx].narration     = narEl.value.trim();
+    if (titleEl) scriptScenes[idx].overlay_title = titleEl.value.trim();
+    if (bodyEl)  scriptScenes[idx].overlay_body  = bodyEl.value.trim();
   });
 }
 
@@ -1229,8 +1249,8 @@ async function startGenerate() {
 }
 
 function collectScenes() {
-  // DOM에서 나레이션 수정분 반영 후 scriptScenes 반환
-  syncNarrationsFromDom();
+  // DOM에서 수정분 반영 후 scriptScenes 반환
+  syncScenesFromDom();
   return scriptScenes;
 }
 
