@@ -780,9 +780,18 @@ function renderStoryboard(scenes) {
           <summary style="font-size:.73rem;font-weight:600;cursor:pointer;color:#6b7280;user-select:none">
             🖼 이미지 프롬프트 <span style="font-weight:400">(수정하면 이미지가 바뀝니다)</span>
           </summary>
-          <textarea class="form-control form-control-sm scene-flux-prompt mt-1" rows="3"
-                    style="font-size:.75rem;line-height:1.5;color:#555;font-family:monospace"
-                    placeholder="영문으로 이미지 장면 묘사...">${_esc(sc.flux_prompt || '')}</textarea>
+          <div class="mt-1 d-flex gap-2 align-items-start">
+            <textarea class="form-control form-control-sm scene-flux-prompt flex-fill" rows="3"
+                      style="font-size:.75rem;line-height:1.5;color:#555;font-family:monospace"
+                      placeholder="영문으로 이미지 장면 묘사...">${_esc(sc.flux_prompt || '')}</textarea>
+            <button class="btn btn-sm btn-outline-primary flex-shrink-0"
+                    style="font-size:.72rem;white-space:nowrap"
+                    onclick="translateFluxPrompt(this, ${i})"
+                    title="나레이션 기반으로 영문 프롬프트 자동 생성">
+              🌐 한→영
+            </button>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.68rem">한글 나레이션을 바꿨다면 [한→영] 버튼으로 프롬프트를 업데이트하세요.</div>
         </details>
       </div>
     `);
@@ -1262,6 +1271,49 @@ function collectScenes() {
   // DOM에서 수정분 반영 후 scriptScenes 반환
   syncScenesFromDom();
   return scriptScenes;
+}
+
+async function translateFluxPrompt(btn, idx) {
+  // 현재 DOM값을 먼저 sync해서 최신 나레이션 가져오기
+  syncScenesFromDom();
+  const scene = scriptScenes[idx];
+  if (!scene) return;
+
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '번역 중...';
+
+  try {
+    const res = await fetch('/create/shorts/translate-prompt', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify({
+        narration:     scene.narration     || '',
+        overlay_title: scene.overlay_title || '',
+        overlay_body:  scene.overlay_body  || '',
+        style:         selectedStyle       || 'realistic_banner',
+        role:          scene.role          || 'hook',
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // textarea 업데이트
+      const card = document.querySelector(`#storyboardList [data-idx="${idx}"]`);
+      const ta   = card && card.querySelector('.scene-flux-prompt');
+      if (ta) ta.value = data.flux_prompt;
+      scriptScenes[idx].flux_prompt = data.flux_prompt;
+      btn.textContent = '✓ 완료';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+    } else {
+      alert('번역 실패: ' + (data.message || ''));
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  } catch (e) {
+    alert('오류: ' + e.message);
+    btn.textContent = orig;
+    btn.disabled = false;
+  }
 }
 
 // ══════════════════════════════════════════════════════

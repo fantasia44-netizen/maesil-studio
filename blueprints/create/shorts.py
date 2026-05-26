@@ -301,6 +301,71 @@ def shorts_preview_image():
 
 
 # ─────────────────────────────────────────────────────────────
+# 한글 씬 설명 → 영문 FLUX 이미지 프롬프트 변환
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/translate-prompt', methods=['POST'])
+@login_required
+def shorts_translate_prompt():
+    """나레이션(한글) → 영문 FLUX 이미지 프롬프트 생성.
+
+    body: { narration, overlay_title, overlay_body, style, role }
+    """
+    data          = request.get_json(force=True) or {}
+    narration     = (data.get('narration')     or '').strip()
+    overlay_title = (data.get('overlay_title') or '').strip()
+    overlay_body  = (data.get('overlay_body')  or '').strip()
+    style         = (data.get('style')         or 'realistic_banner').strip()
+    role          = (data.get('role')          or 'hook').strip()
+
+    if not narration and not overlay_title:
+        return jsonify(ok=False, message='나레이션 또는 화면 타이틀이 없습니다.')
+
+    from services.claude_service import generate_text
+    from services.shorts_service import SHORTS_STYLE_PRESETS
+
+    style_guide = SHORTS_STYLE_PRESETS.get(style, '')
+
+    # 역할별 이미지 힌트
+    role_hint = {
+        'hook':           'problem/tension scene, relatable everyday situation',
+        'empathy':        'emotional/frustrated person, empathetic atmosphere',
+        'solution':       'product discovery moment, relief and positive change',
+        'benefit':        'positive lifestyle result, aspirational scene',
+        'cta':            'clean product display on surface, studio background — NO hands/fingers',
+        'product_reveal': 'dramatic product reveal, spotlight effect',
+    }.get(role, 'lifestyle scene')
+
+    scene_text = narration or overlay_title
+    if overlay_title:
+        scene_text += f' / 화면 문구: {overlay_title}'
+    if overlay_body:
+        scene_text += f' / 자막: {overlay_body}'
+
+    system = (
+        'You are a FLUX image prompt expert for vertical (9:16) short-form video ads. '
+        'Convert Korean scene descriptions into precise English image generation prompts. '
+        'Output ONLY the English prompt, 60-80 words, no explanations.'
+    )
+    prompt = (
+        f'Korean scene: {scene_text}\n'
+        f'Scene role: {role_hint}\n'
+        f'Style guide: {style_guide}\n\n'
+        f'Write a FLUX image prompt (English only, 60-80 words, 9:16 vertical, '
+        f'cinematic lighting, no text/watermark/CJK in image, no hands or fingers for cta scenes).'
+    )
+
+    try:
+        flux_prompt = generate_text(system, prompt, max_tokens=200, model='claude-haiku-4-5').strip()
+        # 따옴표·마크다운 제거
+        flux_prompt = flux_prompt.strip('"\'`').strip()
+        return jsonify(ok=True, flux_prompt=flux_prompt)
+    except Exception as e:
+        logger.error('[shorts/translate-prompt] %s', e)
+        return jsonify(ok=False, message=f'번역 실패: {str(e)[:200]}')
+
+
+# ─────────────────────────────────────────────────────────────
 # 사용자 직접 업로드 이미지 → Supabase Storage → 공개 URL
 # ─────────────────────────────────────────────────────────────
 
