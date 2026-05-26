@@ -198,6 +198,13 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
         },
         json={
             'prompt': prompt,
+            'negative_prompt': (
+                'deformed hands, extra fingers, missing fingers, fused fingers, '
+                'too many fingers, mutated hands, bad anatomy, extra limbs, '
+                'malformed limbs, missing arms, missing legs, extra arms, extra legs, '
+                'cloned face, disfigured, ugly, gross proportions, long neck, '
+                'bad proportions, watermark, signature, text, logo'
+            ),
             'image_size': {'width': int(w), 'height': int(h)},
             'num_images': 1,
             'enable_safety_checker': True,
