@@ -20,6 +20,18 @@
   {% endfor %}
 </div>
 
+<!-- ══════ 이전 작업 이어하기 배너 ══════ -->
+<div id="shortsDraftBanner" class="d-none alert d-flex align-items-center justify-content-between py-2 px-3 mb-3"
+     style="max-width:900px;background:#fff8e1;border:1px solid #ffe082;border-radius:10px">
+  <span class="small"><i class="bi bi-clock-history me-2" style="color:#f59e0b"></i>
+    <strong>이전 작업이 있습니다.</strong> <span id="draftSavedAt" class="text-muted"></span>이어서 진행하시겠어요?
+  </span>
+  <div class="d-flex gap-2 ms-3 flex-shrink-0">
+    <button class="btn btn-sm btn-warning fw-semibold" onclick="draftRestoreClick()">이어하기</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="draftDismiss()">무시하고 새로 시작</button>
+  </div>
+</div>
+
 <!-- ══════ Step 1: 기본 설정 ══════ -->
 <div id="step1" style="max-width:680px">
   <div class="card">
@@ -489,6 +501,7 @@ const CSRF = document.getElementById('csrfToken').value;
 let selectedAngle     = null;
 let scriptScenes      = [];          // 스토리보드에서 받은 씬 데이터 (flux_prompt 포함)
 let selectedStyle     = null;
+let _lastStoryboardStyle = null;     // 마지막 스토리보드 생성에 사용된 스타일
 let selectedVoice     = 'female_natural';
 let selectedBrandColor = '#e8355a';
 let currentCreationId  = null;
@@ -659,6 +672,10 @@ function checkStep3Ready() {
 // Step 3 → Step 4: 스토리보드 생성
 // ══════════════════════════════════════════════════════
 async function goStep4Storyboard(regen = false) {
+  // 스타일이 바뀌었으면 무조건 재생성 (이전 웹툰→실사 전환 등)
+  if (_lastStoryboardStyle && _lastStoryboardStyle !== selectedStyle) {
+    regen = true;
+  }
   goStep(4);
   // 이미 생성된 씬이 있고 재생성이 아니면 재사용
   if (!regen && scriptScenes.length > 0) {
@@ -707,8 +724,10 @@ async function goStep4Storyboard(regen = false) {
 
     document.getElementById('revealModeBadge').classList.toggle('d-none', !data.reveal_mode);
 
+    _lastStoryboardStyle = selectedStyle;  // 생성된 스타일 기록
     renderStoryboard(scriptScenes);
     document.getElementById('step4Next').disabled = false;
+    draftSave();  // 스토리보드 완성 시 자동 저장
 
   } catch (err) {
     document.getElementById('storyboardLoading').classList.add('d-none');
@@ -822,6 +841,7 @@ async function loadAllSceneImages(forceRegen = false) {
   document.getElementById('sceneImagesResult').classList.remove('d-none');
   renderSceneImages(results);
   document.getElementById('step5FluxNext').disabled = false;
+  draftSave();  // 씬 이미지 완성 시 자동 저장
 }
 
 function renderSceneImages(results) {
@@ -1293,10 +1313,110 @@ function resetAll() {
   currentCreationId        = null;
   selectedAngle            = null;
   scriptScenes             = [];
+  _sceneImageUrls          = [];
   window._approvedRefImageUrl = null;
   window._previewImageUrl  = null;
   window._productImageUrl  = null;
   window._revealMode       = false;
+  _lastStoryboardStyle     = null;
+  draftClear();
+}
+
+// ══════════════════════════════════════════════════════
+// 자동저장 / 복원 (localStorage)
+// ══════════════════════════════════════════════════════
+const DRAFT_KEY = 'maesil_shorts_draft';
+
+function draftSave() {
+  try {
+    const draft = {
+      savedAt:        new Date().toISOString(),
+      step:           _currentStep,
+      brandId:        document.getElementById('brandSelect')?.value || '',
+      productId:      document.getElementById('productSelect')?.value || '',
+      angle:          selectedAngle,
+      style:          selectedStyle,
+      revealMode:     window._revealMode,
+      productImgUrl:  window._productImageUrl,
+      scenes:         scriptScenes,
+      sceneImages:    _sceneImageUrls,
+      voice:          selectedVoice,
+      brandColor:     selectedBrandColor,
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch(e) {}
+}
+
+function draftClear() {
+  localStorage.removeItem(DRAFT_KEY);
+}
+
+function draftLoad() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    // 24시간 이상 된 드래프트는 무시
+    if (!d.savedAt || (Date.now() - new Date(d.savedAt)) > 86400000) {
+      draftClear(); return;
+    }
+    if (!d.scenes || !d.scenes.length) return;
+    return d;
+  } catch(e) {}
+}
+
+function draftRestoreClick() {
+  const d = draftLoad();
+  if (d) {
+    document.getElementById('shortsDraftBanner').classList.add('d-none');
+    draftRestore(d);
+  }
+}
+
+function draftDismiss() {
+  draftClear();
+  document.getElementById('shortsDraftBanner').classList.add('d-none');
+}
+
+function draftRestore(d) {
+  // 씬/이미지 복원
+  scriptScenes     = d.scenes || [];
+  _sceneImageUrls  = d.sceneImages || [];
+  selectedAngle    = d.angle || null;
+  window._revealMode      = d.revealMode || false;
+  window._productImageUrl = d.productImgUrl || null;
+
+  // 스타일 복원
+  if (d.style) {
+    const card = document.querySelector(`.style-card[data-style="${d.style}"]`);
+    if (card) selectStyle(d.style, card);
+  }
+  // 음성 복원
+  if (d.voice) {
+    const vc = document.querySelector(`.voice-card[data-voice="${d.voice}"]`);
+    if (vc) selectVoice(d.voice, vc);
+  }
+  // 브랜드/상품 복원
+  if (d.brandId) {
+    const bsel = document.getElementById('brandSelect');
+    if (bsel) bsel.value = d.brandId;
+  }
+  if (d.productId) {
+    const psel = document.getElementById('productSelect');
+    if (psel) psel.value = d.productId;
+  }
+
+  // 스텝 4(스토리보드)까지 복원 — 이미지 확인 전 단계까지만 안전하게
+  const restoreStep = Math.min(d.step || 1, 4);
+
+  // 스토리보드 UI 렌더링
+  if (scriptScenes.length) {
+    renderStoryboard(scriptScenes);
+    document.getElementById('step4Next').disabled = false;
+    document.getElementById('step3Next') && (document.getElementById('step3Next').disabled = false);
+  }
+
+  goStep(restoreStep);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1317,13 +1437,35 @@ async function onBrandChange(brandId) {
 // 초기화
 // ══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  goStep(1);
+  // 기본 선택값 초기화
   const firstStyle = document.querySelector('.style-card');
   if (firstStyle) selectStyle(firstStyle.dataset.style, firstStyle);
   const firstVoice = document.querySelector('.voice-card');
   if (firstVoice) selectVoice(firstVoice.dataset.voice, firstVoice);
   const firstDot = document.querySelector('.color-dot');
   if (firstDot) selectColor(firstDot.title, firstDot);
+
+  // 이전 작업 드래프트 확인
+  const draft = draftLoad();
+  if (draft) {
+    // 저장 시각 표시
+    const banner = document.getElementById('shortsDraftBanner');
+    const savedAt = document.getElementById('draftSavedAt');
+    const ago = _formatAgo(new Date(draft.savedAt));
+    savedAt.textContent = `(${ago}) `;
+    banner.classList.remove('d-none');
+    goStep(1);  // 배너 보이도록 스텝1로 초기화
+  } else {
+    goStep(1);
+  }
 });
+
+function _formatAgo(date) {
+  const sec = Math.round((Date.now() - date) / 1000);
+  if (sec < 60)   return `${sec}초 전`;
+  if (sec < 3600) return `${Math.floor(sec/60)}분 전`;
+  if (sec < 86400) return `${Math.floor(sec/3600)}시간 전`;
+  return `${Math.floor(sec/86400)}일 전`;
+}
 </script>
 {% endblock %}
