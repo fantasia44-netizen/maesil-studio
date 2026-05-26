@@ -963,9 +963,10 @@ def _concat_with_crossfade(clip_paths: list, output_path: str, fade: float = 0.4
         '-filter_complex', ';'.join(fc_parts),
         '-map', '[vout]',
         '-map', '[aout]',
-        '-c:v', 'libx264', '-preset', 'fast',
+        '-c:v', 'libx264', '-preset', 'veryfast',
         '-c:a', 'aac', '-b:a', '128k',
         '-pix_fmt', 'yuv420p',
+        '-threads', '1',
         output_path,
     )
     return output_path
@@ -983,20 +984,21 @@ def assemble_shorts_video(
     FADE = 0.4   # 씬 간 크로스페이드 (초)
 
     # Ken Burns 패턴 생성 함수 — d(프레임수)를 표현식 안에 리터럴로 삽입
+    # ※ zoompan은 절반 해상도(540x960)에서 처리 후 scale up → 메모리 사용 4배 절감
     # zoompan 표현식에서 'd'는 변수가 아니므로 Python에서 실제 숫자로 계산해야 함
     def _kb_pattern(idx: int, frames: int, fps: int) -> str:
         f = frames  # 가독성
         patterns = [
             # 0: 중앙 줌인 (1.0 → 1.15)
-            f"zoompan=z='min(zoom+{0.15/f:.6f},1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={f}:s=1080x1920:fps={fps}",
+            f"zoompan=z='min(zoom+{0.15/f:.6f},1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={f}:s=540x960:fps={fps}",
             # 1: 오른쪽 패닝 (zoom 1.1 고정)
-            f"zoompan=z='1.1':x='on/{f}*iw*0.06':y='ih/2-(ih/zoom/2)':d={f}:s=1080x1920:fps={fps}",
+            f"zoompan=z='1.1':x='on/{f}*iw*0.06':y='ih/2-(ih/zoom/2)':d={f}:s=540x960:fps={fps}",
             # 2: 중앙 줌아웃 (1.15 → 1.0)
-            f"zoompan=z='max(1.15-on/{f}*0.15,1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={f}:s=1080x1920:fps={fps}",
+            f"zoompan=z='max(1.15-on/{f}*0.15,1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={f}:s=540x960:fps={fps}",
             # 3: 왼쪽 패닝 (zoom 1.1 고정)
-            f"zoompan=z='1.1':x='iw*0.06*(1-on/{f})':y='ih/2-(ih/zoom/2)':d={f}:s=1080x1920:fps={fps}",
+            f"zoompan=z='1.1':x='iw*0.06*(1-on/{f})':y='ih/2-(ih/zoom/2)':d={f}:s=540x960:fps={fps}",
             # 4: 상단 줌인 (1.0 → 1.12)
-            f"zoompan=z='min(zoom+{0.12/f:.6f},1.12)':x='iw/2-(iw/zoom/2)':y='0':d={f}:s=1080x1920:fps={fps}",
+            f"zoompan=z='min(zoom+{0.12/f:.6f},1.12)':x='iw/2-(iw/zoom/2)':y='0':d={f}:s=540x960:fps={fps}",
         ]
         return patterns[idx % len(patterns)]
 
@@ -1014,10 +1016,11 @@ def assemble_shorts_video(
         total  = dur + FADE if i < len(clip_data) - 1 else dur
         frames = max(int(total * FPS) + 2, 2)
 
+        # zoompan은 540x960에서 처리 후 1080x1920으로 scale up (메모리 4배 절감)
         vf = (
-            _kb_pattern(i, frames, FPS) +
-            ',scale=1080:1920:force_original_aspect_ratio=increase'
-            ',crop=1080:1920,setsar=1'
+            'scale=540:960:force_original_aspect_ratio=increase,crop=540:960,'
+            + _kb_pattern(i, frames, FPS) +
+            ',scale=1080:1920:flags=lanczos,setsar=1'
         )
 
         _ffmpeg(
@@ -1025,9 +1028,10 @@ def assemble_shorts_video(
             '-loop', '1', '-i', img_path,
             '-i', audio_path,
             '-vf', vf,
-            '-c:v', 'libx264', '-preset', 'fast',
+            '-c:v', 'libx264', '-preset', 'veryfast',  # fast→veryfast: CPU 절감
             '-c:a', 'aac', '-b:a', '128k',
             '-pix_fmt', 'yuv420p',
+            '-threads', '1',   # 메모리 절감: 단일 스레드
             '-t', f'{total:.3f}',
             clip_out,
         )
