@@ -68,20 +68,30 @@ def shorts_angles():
     import re as _re
 
     brand_ctx = build_brand_context(brand, product)
+
+    # 방향이 있을 때와 없을 때 프롬프트를 다르게 구성
+    if direction:
+        direction_block = f"""[사용자가 직접 지정한 소구 방향 — 반드시 이 내용을 중심으로 소구포인트를 작성하세요]
+"{direction}"
+
+※ 위 방향에서 벗어나거나 반대 의미의 소구포인트를 만들지 마세요.
+※ 위 방향에 언급된 문제/상황을 problem 필드에 그대로 반영하세요.
+※ 3개는 위 방향의 서로 다른 타겟층·표현 방식·각도로 변형하세요 (핵심 방향은 동일하게 유지)."""
+    else:
+        direction_block = '[소구 방향]\n상품의 핵심 문제 해결력 강조 — 타겟이 가장 공감할 불편함을 찾아 3가지 각도로 접근하세요.'
+
     system = (
         '당신은 숏폼 영상 전문 마케터입니다. '
-        '좋은 제품 광고는 타겟의 구체적인 문제를 정확히 짚고, '
-        '그 해결책으로 상품을 자연스럽게 연결하는 서사를 가집니다. '
+        '사용자가 지정한 소구 방향을 최우선으로 따르며, '
+        '타겟의 구체적인 문제를 정확히 짚고 상품과 연결하는 서사를 만듭니다. '
         '순수 JSON만 출력하세요.'
     )
     prompt = f"""아래 브랜드·상품의 쇼츠/릴스용 소구포인트 3개를 생성하세요.
-각 소구포인트는 서로 다른 문제-해결 각도로 접근해야 합니다.
 
 [브랜드·상품]
 {brand_ctx}
 
-[게시 방향]
-{direction or '상품의 핵심 문제 해결력 강조'}
+{direction_block}
 
 [출력 형식 — 순수 JSON 배열]
 [
@@ -100,7 +110,7 @@ def shorts_angles():
 순수 JSON 배열만 출력."""
 
     try:
-        raw   = generate_text(system, prompt, max_tokens=800, model='claude-haiku-4-5-20251001')
+        raw   = generate_text(system, prompt, max_tokens=1000, model='claude-sonnet-4-6')
         clean = _re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:
