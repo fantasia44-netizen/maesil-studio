@@ -402,7 +402,7 @@ def generate_shorts_script(
         '3. 해결은 감정 변화로 전달 — "이걸 쓰고 처음으로 여유 있는 아침을 맞았어요" 형태\n'
         '4. 다음 씬이 궁금하게 — 각 씬 끝에 궁금증이나 기대감을 남기세요\n'
         '나레이션은 친구에게 말하듯 구어체로, TTS로 읽히는 텍스트입니다. '
-        'overlay_title은 8자 이내로 짧고 강렬하게, 띄어쓰기 없이 붙여씁니다. '
+        'overlay_title은 10자 이내로 짧고 강렬하게, 시청자가 즉시 공감할 구어체 표현입니다. '
         'narration은 맞춤법과 띄어쓰기를 정확히 지켜서 TTS가 자연스럽게 읽히도록 합니다. '
         '순수 JSON만 출력하세요.'
     )
@@ -431,7 +431,7 @@ def generate_shorts_script(
   {{
     "role": "hook",
     "narration": "나레이션 (구어체 한글, 2~4초 분량, 15~35자. 타겟의 문제 상황을 건드리는 질문·상황 묘사)",
-    "overlay_title": "화면 상단 임팩트 텍스트 (8자 이내, 띄어쓰기 없이. 예: '지금당장봐', '이거실화냐', '솔직히나도', '진짜달라짐')",
+    "overlay_title": "화면 상단 임팩트 텍스트 (10자 이내. 예: '이거 내 얘기', '실화냐', '솔직히 나도', '진짜 달라짐')",
     "overlay_body": "화면 하단 자막 (20자 이내, 핵심 한 문장. 맞춤법·띄어쓰기 정확히)",
     "flux_prompt": "FLUX 이미지 프롬프트 — 반드시 영문(English)만, 60~80단어, 9:16 vertical frame. 씬 내용과 분위기에 맞는 피사체·조명·배경을 구체적으로 묘사. 글자·텍스트·CJK 문자 절대 포함 금지"
   }},
@@ -601,15 +601,34 @@ def _draw_text_stroke(
 
 
 def _wrap_text(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
-    lines, cur = [], ''
-    for ch in text:
-        test = cur + ch
-        bb = font.getbbox(test)
+    """단어(공백) 경계 우선으로 줄바꿈. 공백 없으면 글자 단위 폴백."""
+    words = text.split(' ')
+    lines: list[str] = []
+    cur = ''
+    for word in words:
+        # 현재 줄에 단어 추가 시도
+        candidate = (cur + ' ' + word).strip() if cur else word
+        bb = font.getbbox(candidate)
         if (bb[2] - bb[0]) > max_px and cur:
-            lines.append(cur)
-            cur = ch
+            # 현재 줄 확정 후 새 줄 시작
+            # 단어 자체가 max_px 초과하면 글자 단위로 분리
+            if not cur:
+                # 단어 하나가 너무 긴 경우 — 글자 단위 분리
+                tmp = ''
+                for ch in word:
+                    test = tmp + ch
+                    bb2 = font.getbbox(test)
+                    if (bb2[2] - bb2[0]) > max_px and tmp:
+                        lines.append(tmp)
+                        tmp = ch
+                    else:
+                        tmp = test
+                cur = tmp
+            else:
+                lines.append(cur)
+                cur = word
         else:
-            cur = test
+            cur = candidate
     if cur:
         lines.append(cur)
     return lines
