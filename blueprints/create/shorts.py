@@ -412,7 +412,7 @@ def shorts_scene_images():
                 ', 9:16 vertical frame, cinematic lighting' +
                 _NO_CJK + _NO_ANATOMY
             )
-            img_url, _ = _generate_flux(full_prompt, 'flux_preview', '1080x1920')
+            img_url, _ = _generate_flux(full_prompt, 'flux_standard', '1080x1920')
             results.append({'idx': i, 'image_url': img_url, 'ok': True})
         except Exception as e:
             logger.error('[shorts/scene-images] 씬%d 이미지 생성 실패: %s', i, e)

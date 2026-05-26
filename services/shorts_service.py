@@ -402,6 +402,8 @@ def generate_shorts_script(
         '3. 해결은 감정 변화로 전달 — "이걸 쓰고 처음으로 여유 있는 아침을 맞았어요" 형태\n'
         '4. 다음 씬이 궁금하게 — 각 씬 끝에 궁금증이나 기대감을 남기세요\n'
         '나레이션은 친구에게 말하듯 구어체로, TTS로 읽히는 텍스트입니다. '
+        'overlay_title은 8자 이내로 짧고 강렬하게, 띄어쓰기 없이 붙여씁니다. '
+        'narration은 맞춤법과 띄어쓰기를 정확히 지켜서 TTS가 자연스럽게 읽히도록 합니다. '
         '순수 JSON만 출력하세요.'
     )
     prompt = f"""인스타 릴스/유튜브 쇼츠용 5씬 대본을 JSON으로 생성하세요.
@@ -429,8 +431,8 @@ def generate_shorts_script(
   {{
     "role": "hook",
     "narration": "나레이션 (구어체 한글, 2~4초 분량, 15~35자. 타겟의 문제 상황을 건드리는 질문·상황 묘사)",
-    "overlay_title": "화면 상단 임팩트 텍스트 (12자 이내, 시청자 시선 고정용)",
-    "overlay_body": "화면 하단 자막 (narration과 동일하거나 핵심만 축약)",
+    "overlay_title": "화면 상단 임팩트 텍스트 (8자 이내, 띄어쓰기 없이. 예: '지금당장봐', '이거실화냐', '솔직히나도', '진짜달라짐')",
+    "overlay_body": "화면 하단 자막 (20자 이내, 핵심 한 문장. 맞춤법·띄어쓰기 정확히)",
     "flux_prompt": "FLUX 이미지 프롬프트 — 반드시 영문(English)만, 60~80단어, 9:16 vertical frame. 씬 내용과 분위기에 맞는 피사체·조명·배경을 구체적으로 묘사. 글자·텍스트·CJK 문자 절대 포함 금지"
   }},
   ...5개 씬...
@@ -643,17 +645,17 @@ def composite_shorts_frame(
             a = int(210 * ratio)
             d.line([(0, y), (W, y)], fill=(r, g, b_c, a))
 
-        tf = _font(bold=True, size=int(H * 0.062))
-        lines = _wrap_text(overlay_title, tf, int(W * 0.84))[:2]
+        tf = _font(bold=True, size=int(H * 0.080))
+        lines = _wrap_text(overlay_title, tf, int(W * 0.88))[:2]
         ty = int(H * 0.028)
         for ln in lines:
             bb_box = tf.getbbox(ln)
             lw = bb_box[2] - bb_box[0]
             tx = (W - lw) // 2
             _draw_text_stroke(d, (tx, ty), ln, tf,
-                              fill=(255, 255, 255, 255),
-                              stroke_fill=(0, 0, 0, 220), stroke_w=4)
-            ty += int((bb_box[3] - bb_box[1]) * 1.3)
+                              fill=(255, 230, 0, 255),
+                              stroke_fill=(0, 0, 0, 255), stroke_w=8)
+            ty += int((bb_box[3] - bb_box[1]) * 1.25)
 
     # ── 하단 자막 배너 (78%~100%) ───────────────────────────
     if overlay_body:
@@ -670,22 +672,23 @@ def composite_shorts_frame(
         # 하단 자막 카드 배경
         card_top = int(H * 0.795)
         card_bot = H - 52
-        d.rectangle([(0, card_top), (W, card_bot)], fill=(0, 0, 0, 110))
+        d.rectangle([(0, card_top), (W, card_bot)], fill=(0, 0, 0, 160))
 
         # 브랜드 컬러 바
         d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
 
-        bf = _font(bold=True, size=int(H * 0.042))
+        bf = _font(bold=True, size=int(H * 0.048))
         max_w = int(W * 0.88)
         lines = _wrap_text(overlay_body, bf, max_w)[:3]
-        ty = card_top + int(H * 0.010)
-        pad = int(W * 0.055)
+        ty = card_top + int(H * 0.012)
         for ln in lines:
-            _draw_text_stroke(d, (pad, ty), ln, bf,
-                              fill=(255, 255, 255, 255),
-                              stroke_fill=(0, 0, 0, 200), stroke_w=3)
             bb_box = bf.getbbox(ln)
-            ty += int((bb_box[3] - bb_box[1]) * 1.4)
+            lw = bb_box[2] - bb_box[0]
+            tx = (W - lw) // 2
+            _draw_text_stroke(d, (tx, ty), ln, bf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 220), stroke_w=5)
+            ty += int((bb_box[3] - bb_box[1]) * 1.40)
 
     combined = Image.alpha_composite(img, ov)
     result = _jpeg_b64(combined)
@@ -745,15 +748,16 @@ def composite_cta_product_frame(
             a = int(200 * (1 - y / top_h))
             d.line([(0, y), (W, y)], fill=(8, 8, 8, a))
 
-        tf = _font(bold=True, size=int(H * 0.055))
+        tf = _font(bold=True, size=int(H * 0.070))
         lines = _wrap_text(overlay_title, tf, int(W * 0.88))[:2]
         ty = int(H * 0.03)
         for ln in lines:
             bb_box = tf.getbbox(ln)
             lw = bb_box[2] - bb_box[0]
             tx = (W - lw) // 2
-            d.text((tx + 2, ty + 2), ln, font=tf, fill=(0, 0, 0, 160))
-            d.text((tx,     ty    ), ln, font=tf, fill=(255, 255, 255, 255))
+            _draw_text_stroke(d, (tx, ty), ln, tf,
+                              fill=(255, 230, 0, 255),
+                              stroke_fill=(0, 0, 0, 255), stroke_w=7)
             ty += int((bb_box[3] - bb_box[1]) * 1.35)
 
     # ── 하단 자막 배너 (82%~100%) ───────────────────────
@@ -948,7 +952,7 @@ def run_shorts_pipeline(
                 from services.kling_service import ensure_english_prompt
                 raw_prompt = ensure_english_prompt(raw_prompt)
                 flux_p = raw_prompt + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
-                img_url, _ = _generate_flux(flux_p, 'flux_preview', '1080x1920')
+                img_url, _ = _generate_flux(flux_p, 'flux_standard', '1080x1920')
 
             # PIL 오버레이
             frame_b64 = composite_shorts_frame(
@@ -1113,17 +1117,17 @@ def _make_text_overlay_png(
             ratio = 1 - (y / top_h)
             a = int(200 * ratio)
             d.line([(0, y), (W, y)], fill=(0, 0, 0, a))
-        tf   = _font(bold=True, size=int(H * 0.060))
-        lines = _wrap_text(overlay_title, tf, int(W * 0.84))[:2]
+        tf   = _font(bold=True, size=int(H * 0.075))
+        lines = _wrap_text(overlay_title, tf, int(W * 0.88))[:2]
         ty   = int(H * 0.026)
         for ln in lines:
             bb_box = tf.getbbox(ln)
             lw = bb_box[2] - bb_box[0]
             tx = (W - lw) // 2
             _draw_text_stroke(d, (tx, ty), ln, tf,
-                              fill=(255, 255, 255, 255),
-                              stroke_fill=(0, 0, 0, 220), stroke_w=4)
-            ty += int((bb_box[3] - bb_box[1]) * 1.3)
+                              fill=(255, 230, 0, 255),
+                              stroke_fill=(0, 0, 0, 255), stroke_w=8)
+            ty += int((bb_box[3] - bb_box[1]) * 1.25)
 
     # ── 하단 자막 배너 (78%~100%) ──
     if overlay_body:
@@ -1136,16 +1140,17 @@ def _make_text_overlay_png(
         d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
 
         card_top = int(H * 0.795)
-        d.rectangle([(0, card_top), (W, H - 52)], fill=(0, 0, 0, 100))
-        bf   = _font(bold=True, size=int(H * 0.040))
+        d.rectangle([(0, card_top), (W, H - 52)], fill=(0, 0, 0, 160))
+        bf   = _font(bold=True, size=int(H * 0.044))
         lines = _wrap_text(overlay_body, bf, int(W * 0.88))[:3]
-        ty   = card_top + int(H * 0.010)
-        pad  = int(W * 0.055)
+        ty   = card_top + int(H * 0.012)
         for ln in lines:
-            _draw_text_stroke(d, (pad, ty), ln, bf,
-                              fill=(255, 255, 255, 255),
-                              stroke_fill=(0, 0, 0, 200), stroke_w=3)
             bb_box = bf.getbbox(ln)
+            lw = bb_box[2] - bb_box[0]
+            tx = (W - lw) // 2
+            _draw_text_stroke(d, (tx, ty), ln, bf,
+                              fill=(255, 255, 255, 255),
+                              stroke_fill=(0, 0, 0, 220), stroke_w=5)
             ty += int((bb_box[3] - bb_box[1]) * 1.4)
 
     ov.save(dest_path, 'PNG')
