@@ -1217,6 +1217,9 @@ function goStep6Back() {
 // ══════════════════════════════════════════════════════
 async function startGenerate() {
   goStep(7);
+  // 영상 생성 시작 = 드래프트 초기화 (완료 후 배너 재표시 방지)
+  draftClear();
+  document.getElementById('shortsDraftBanner').classList.add('d-none');
   document.getElementById('generateProgress').classList.remove('d-none');
   document.getElementById('generateResult').classList.add('d-none');
   document.getElementById('generateError').classList.add('d-none');
@@ -1324,7 +1327,20 @@ function startPolling(sceneCount, isKling) {
   // 일반: 씬 + FFmpeg + 업로드 + 완료 = n+2
   const totalSteps = isKling ? sceneCount * 4 + 3 : sceneCount + 2;
 
+  // 워커 크래시 등 비정상 상황 대비 최대 대기 시간 (20분)
+  const MAX_WAIT_MS  = 20 * 60 * 1000;
+  const pollStart    = Date.now();
+  let   lastProgress = -1;
+  let   stuckCount   = 0;  // 진행 없는 폴링 횟수
+
   pollTimer = setInterval(async () => {
+    // 최대 대기 시간 초과 → 워커 사망으로 판단
+    if (Date.now() - pollStart > MAX_WAIT_MS) {
+      clearInterval(pollTimer);
+      showError('영상 생성 시간이 초과됐습니다. 워커 서버가 응답하지 않습니다.\n잠시 후 다시 시도해주세요. (포인트는 자동 환불됩니다)');
+      return;
+    }
+
     try {
       const res  = await fetch(`/create/shorts/status/${currentCreationId}`);
       const data = await res.json();
@@ -1337,6 +1353,19 @@ function startPolling(sceneCount, isKling) {
       document.getElementById('progressBar').style.width  = pct + '%';
       document.getElementById('progressStep').textContent = step;
       document.getElementById('progressDetail').textContent = `${progress}/${totalSteps} 단계`;
+
+      // 5분(75회×4초) 이상 진행 없으면 워커 사망으로 판단
+      if (progress === lastProgress) {
+        stuckCount++;
+        if (stuckCount >= 75) {
+          clearInterval(pollTimer);
+          showError('영상 생성이 응답하지 않습니다. 워커 서버 문제일 수 있습니다.\n잠시 후 다시 시도해주세요. (포인트는 자동 환불됩니다)');
+          return;
+        }
+      } else {
+        stuckCount = 0;
+        lastProgress = progress;
+      }
 
       if (data.status === 'done') {
         clearInterval(pollTimer);
@@ -1530,16 +1559,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const firstDot = document.querySelector('.color-dot');
   if (firstDot) selectColor(firstDot.title, firstDot);
 
-  // 이전 작업 드래프트 확인
+  // 이전 작업 드래프트 확인 (영상 생성 중/완료 상태는 배너 무시)
   const draft = draftLoad();
-  if (draft) {
+  if (draft && (draft.step || 1) < 7) {
     // 저장 시각 표시
     const banner = document.getElementById('shortsDraftBanner');
     const savedAt = document.getElementById('draftSavedAt');
     const ago = _formatAgo(new Date(draft.savedAt));
     savedAt.textContent = `(${ago}) `;
     banner.classList.remove('d-none');
-    goStep(1);  // 배너 보이도록 스텝1로 초기화
+    goStep(1);
   } else {
     goStep(1);
   }
