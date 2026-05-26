@@ -705,7 +705,10 @@ let lastImageUrl     = null;
 let aiFluxPrompt     = '';   // AI가 분석한 flux_prompt (고급 설정에서 덮어쓸 수 있음)
 
 // ── 스텝 이동 ──────────────────────────────────────────────
-function goStep(n) {
+function goStep(n, pushHistory = true) {
+  if (pushHistory) {
+    history.pushState({ step: n }, '', `#step${n}`);
+  }
   [1, 2, 3].forEach(i => {
     document.getElementById(`step${i}`)?.classList.toggle('d-none', i !== n);
   });
@@ -728,6 +731,19 @@ function goStep(n) {
     if (ln) ln.style.background = i < n ? '#198754' : '#ddd';
   }
 }
+
+// 브라우저 뒤로가기 → 이전 스텝으로
+window.addEventListener('popstate', function(e) {
+  const step = e.state?.step;
+  if (step && step >= 1 && step <= 3) {
+    goStep(step, false);
+  } else {
+    goStep(1, false);
+  }
+});
+
+// 초기 진입 시 히스토리에 step1 등록
+history.replaceState({ step: 1 }, '', '#step1');
 
 // ── 예시 칩 ────────────────────────────────────────────────
 function setExample(text) {

@@ -1048,13 +1048,29 @@ function updateStepIndicator(step) {
     }
   }
 }
-function goStep(n) {
+function goStep(n, pushHistory = true) {
   currentStep = n;
+  if (pushHistory) {
+    history.pushState({ step: n }, '', `#step${n}`);
+  }
   for (let i=1;i<=5;i++) document.getElementById('step'+i).classList.toggle('d-none', i!==n);
   updateStepIndicator(n);
   window.scrollTo({top:0, behavior:'smooth'});
 }
 updateStepIndicator(1);
+
+// 브라우저 뒤로가기 → 이전 스텝으로
+window.addEventListener('popstate', function(e) {
+  const step = e.state?.step;
+  if (step && step >= 1 && step <= 5) {
+    goStep(step, false);
+  } else {
+    goStep(1, false);
+  }
+});
+
+// 초기 진입 시 히스토리에 step1 등록
+history.replaceState({ step: 1 }, '', '#step1');
 
 // ── 시리즈 관계 모드 ─────────────────────────────────────────
 function _instaApplyRelationMode(mode) {
