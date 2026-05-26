@@ -601,36 +601,50 @@ def _draw_text_stroke(
 
 
 def _wrap_text(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
-    """단어(공백) 경계 우선으로 줄바꿈. 공백 없으면 글자 단위 폴백."""
+    """단어(공백) 경계 우선 줄바꿈 + widow(홀로 남는 단어) 방지."""
+    def _px(s: str) -> int:
+        bb = font.getbbox(s)
+        return bb[2] - bb[0]
+
     words = text.split(' ')
+
+    # ── 1단계: 탐욕적 단어 단위 줄바꿈 ──
     lines: list[str] = []
     cur = ''
     for word in words:
-        # 현재 줄에 단어 추가 시도
         candidate = (cur + ' ' + word).strip() if cur else word
-        bb = font.getbbox(candidate)
-        if (bb[2] - bb[0]) > max_px and cur:
-            # 현재 줄 확정 후 새 줄 시작
-            # 단어 자체가 max_px 초과하면 글자 단위로 분리
-            if not cur:
-                # 단어 하나가 너무 긴 경우 — 글자 단위 분리
+        if _px(candidate) > max_px and cur:
+            lines.append(cur)
+            # 단어 하나가 max_px 초과하면 글자 단위 강제 분리
+            if _px(word) > max_px:
                 tmp = ''
                 for ch in word:
                     test = tmp + ch
-                    bb2 = font.getbbox(test)
-                    if (bb2[2] - bb2[0]) > max_px and tmp:
+                    if _px(test) > max_px and tmp:
                         lines.append(tmp)
                         tmp = ch
                     else:
                         tmp = test
                 cur = tmp
             else:
-                lines.append(cur)
                 cur = word
         else:
             cur = candidate
     if cur:
         lines.append(cur)
+
+    # ── 2단계: widow 방지 — 마지막 줄이 단어 1개면 앞 줄에서 하나 당겨옴 ──
+    if len(lines) >= 2:
+        last_words = lines[-1].split(' ')
+        prev_words = lines[-2].split(' ')
+        if len(last_words) == 1 and len(prev_words) >= 2:
+            moved = prev_words[-1]
+            new_last = moved + ' ' + lines[-1]
+            # 옮긴 줄이 max_px 안에 들어올 때만 적용
+            if _px(new_last) <= max_px:
+                lines[-2] = ' '.join(prev_words[:-1])
+                lines[-1] = new_last
+
     return lines
 
 
