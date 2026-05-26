@@ -762,7 +762,7 @@ function renderStoryboard(scenes) {
           <textarea class="form-control form-control-sm scene-narration" rows="2"
                     style="font-size:.82rem;line-height:1.6">${_esc(sc.narration || '')}</textarea>
         </div>
-        <div class="row g-2 mb-1">
+        <div class="row g-2 mb-2">
           <div class="col-6">
             <label class="form-label mb-1" style="font-size:.73rem;font-weight:600">👁 화면 타이틀 <span class="fw-normal text-muted">(10자↓)</span></label>
             <input type="text" class="form-control form-control-sm scene-overlay-title"
@@ -776,6 +776,14 @@ function renderStoryboard(scenes) {
                    style="font-size:.8rem">
           </div>
         </div>
+        <details style="margin-top:2px">
+          <summary style="font-size:.73rem;font-weight:600;cursor:pointer;color:#6b7280;user-select:none">
+            🖼 이미지 프롬프트 <span style="font-weight:400">(수정하면 이미지가 바뀝니다)</span>
+          </summary>
+          <textarea class="form-control form-control-sm scene-flux-prompt mt-1" rows="3"
+                    style="font-size:.75rem;line-height:1.5;color:#555;font-family:monospace"
+                    placeholder="영문으로 이미지 장면 묘사...">${_esc(sc.flux_prompt || '')}</textarea>
+        </details>
       </div>
     `);
   });
@@ -973,9 +981,11 @@ function syncScenesFromDom() {
     const narEl    = card.querySelector('.scene-narration');
     const titleEl  = card.querySelector('.scene-overlay-title');
     const bodyEl   = card.querySelector('.scene-overlay-body');
+    const fluxEl   = card.querySelector('.scene-flux-prompt');
     if (narEl)   scriptScenes[idx].narration     = narEl.value.trim();
     if (titleEl) scriptScenes[idx].overlay_title = titleEl.value.trim();
     if (bodyEl)  scriptScenes[idx].overlay_body  = bodyEl.value.trim();
+    if (fluxEl && fluxEl.value.trim()) scriptScenes[idx].flux_prompt = fluxEl.value.trim();
   });
 }
 
