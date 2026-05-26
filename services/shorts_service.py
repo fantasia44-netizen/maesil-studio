@@ -1410,42 +1410,50 @@ def run_kling_shorts_pipeline(
             submit_image2video, wait_for_task, download_video, ensure_english_prompt,
         )
 
-        # ── Step 1: 기준 이미지 결정 ────────────────────────────────
-        if ref_image_url:
-            # 미리보기에서 사용자가 승인한 이미지 → FLUX 재생성 생략
-            ref_img_url = ref_image_url
-            _update('generating', {'progress': 0, 'step': '승인된 기준 이미지 사용 중'})
-            logger.info('[kling_chain] 미리보기 승인 이미지 사용: %s', ref_img_url[:80])
-        else:
-            # FLUX로 기준 이미지 생성
-            _update('generating', {'progress': 0, 'step': '기준 이미지 생성 중 (FLUX 1회)'})
-            raw_ref = use_scenes[0].get('flux_prompt', '')
-            raw_ref = ensure_english_prompt(raw_ref)
-            ref_prompt = raw_ref + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
-            ref_img_url, _ = _generate_flux(ref_prompt, 'flux_preview', '1080x1920')
-            logger.info('[kling_chain] FLUX 기준 이미지 생성 완료: %s', ref_img_url)
-        logger.info('[kling_chain] FLUX 기준 이미지 생성 완료: %s', ref_img_url)
-        gc.collect()
+        # ── Step 1: 씬별 FLUX 이미지 개별 생성 ─────────────────────
+        # 체이닝 제거 — 각 씬이 서로 다른 FLUX 이미지로 시작해 시각적 다양성 확보
+        scene_img_urls: list[str] = []
+        for i, scene in enumerate(use_scenes):
+            # 마지막 씬 + 제품 이미지 있으면 제품 이미지 우선
+            if i == n - 1 and product_image_url:
+                scene_img_urls.append(product_image_url)
+                logger.info('[kling_chain] 씬%d: 제품 이미지 사용 (리빌)', i + 1)
+                continue
+            # 씬 1 + 미리보기 승인 이미지 있으면 재사용
+            if i == 0 and ref_image_url:
+                scene_img_urls.append(ref_image_url)
+                logger.info('[kling_chain] 씬1: 미리보기 승인 이미지 사용')
+                continue
+            # 씬별 FLUX 이미지 생성
+            _update('generating', {
+                'progress': i,
+                'step': f'씬{i+1}/{n} 이미지 생성 중 (FLUX)',
+            })
+            raw_prompt = scene.get('flux_prompt', '')
+            raw_prompt = ensure_english_prompt(raw_prompt)
+            flux_p = raw_prompt + (f', {style_mod}' if style_mod else '') + _NO_CJK + _NO_ANATOMY
+            img_url, _ = _generate_flux(flux_p, 'flux_standard', '1080x1920')
+            scene_img_urls.append(img_url)
+            logger.info('[kling_chain] 씬%d FLUX 이미지 생성: %s', i + 1, img_url[:60])
+            gc.collect()
 
-        # ── Steps 2~4: 씬별 순차 처리 (라스트프레임 체이닝) ─────────
-        current_img_url = ref_img_url  # 첫 씬은 FLUX 이미지 사용
-        kling_clips     = []           # 씬별 다운로드된 .mp4 경로
+        # ── Steps 2~4: 씬별 Kling 순차 처리 ─────────────────────────
+        kling_clips = []
 
         for i, scene in enumerate(use_scenes):
-            role = scene.get('role', 'hook')
-            step_base = 1 + i * 4
+            role      = scene.get('role', 'hook')
+            step_base = n + i * 3  # FLUX 생성 n단계 이후
 
-            # ── 2a: Kling 제출 ──────────────────────────────────
+            # ── Kling 제출 ──────────────────────────────────────
             _update('generating', {
                 'progress': step_base,
                 'step': f'씬{i+1}/{n} Kling 영상 생성 제출 중',
             })
-            # 첫 씬 이후 씬 간 딜레이 — rate limit 회피 (3초)
             if i > 0:
-                time.sleep(3)
+                time.sleep(3)  # rate limit 회피
 
             task_id = submit_image2video(
-                image_url=current_img_url,
+                image_url=scene_img_urls[i],
                 scene_role=role,
                 access_key=kling_access,
                 secret_key=kling_secret,
@@ -1455,7 +1463,7 @@ def run_kling_shorts_pipeline(
             )
             logger.info('[kling_chain] 씬%d 제출: task_id=%s role=%s', i + 1, task_id, role)
 
-            # ── 2b: 완료 대기 (순차) ────────────────────────────
+            # ── 완료 대기 ───────────────────────────────────────
             _update('generating', {
                 'progress': step_base + 1,
                 'step': f'씬{i+1}/{n} Kling 처리 중 (약 3~5분)',
@@ -1476,7 +1484,7 @@ def run_kling_shorts_pipeline(
             )
             logger.info('[kling_chain] 씬%d 완료: %s', i + 1, video_url)
 
-            # ── 2c: 영상 다운로드 ───────────────────────────────
+            # ── 영상 다운로드 ────────────────────────────────────
             _update('generating', {
                 'progress': step_base + 2,
                 'step': f'씬{i+1}/{n} 다운로드 중',
@@ -1484,30 +1492,13 @@ def run_kling_shorts_pipeline(
             kling_mp4 = os.path.join(tmp_dir, f'kling_{i:02d}.mp4')
             download_video(video_url, kling_mp4)
             kling_clips.append(kling_mp4)
-
-            # ── 2d: 다음 씬 입력 이미지 결정 ───────────────────────
-            if i < n - 1:
-                next_is_last = (i == n - 2)
-                if next_is_last and product_image_url:
-                    # 마지막 씬(제품 리빌)은 실제 제품 이미지 사용
-                    current_img_url = product_image_url
-                    logger.info('[kling_chain] 씬%d 제품 이미지 → 씬%d (리빌): %s',
-                                i + 1, i + 2, product_image_url[:80])
-                else:
-                    # 라스트프레임 추출 → Supabase 임시업로드 → 다음 씬 입력
-                    last_frame_png = os.path.join(tmp_dir, f'last_frame_{i:02d}.png')
-                    _extract_last_frame(kling_mp4, last_frame_png)
-                    current_img_url = _upload_temp_frame(supabase, last_frame_png, creation_id, i)
-                    logger.info('[kling_chain] 씬%d 라스트프레임 → 씬%d 입력: %s',
-                                i + 1, i + 2, current_img_url[:80])
-
             gc.collect()
 
         # ── Step 3: 씬별 TTS + 텍스트 오버레이 조립 ──────────────
         clip_data = []
         for i, (scene, kling_mp4) in enumerate(zip(use_scenes, kling_clips)):
             _update('generating', {
-                'progress': n * 4 + 1 + i,
+                'progress': n * 4 + i,
                 'step': f'씬{i+1} 조립 중 (TTS + 텍스트)',
             })
 
