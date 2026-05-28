@@ -1,6 +1,6 @@
 """어드민 대시보드"""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import render_template, request, current_app
 from flask_login import login_required, current_user
 from blueprints.admin import admin_bp
@@ -21,6 +21,66 @@ def check_superadmin():
         abort(403)
 
 
+def _fetch_revenue_summary(supabase) -> dict:
+    """이달 결제 집계 + 오늘 현황 + 구독 상태 카운트."""
+    now     = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    result = {
+        'revenue_today': 0, 'paid_today': 0, 'failed_today': 0,
+        'revenue_mtd':   0, 'refund_mtd': 0, 'net_mtd': 0,
+        'sub_active': 0, 'sub_trial': 0, 'sub_past_due': 0,
+        'sub_cancelled': 0, 'sub_expired': 0,
+        'mrr_forecast': 0,
+    }
+
+    # ── 이달 결제 ──
+    try:
+        rows = supabase.table('payments') \
+            .select('amount,refund_amount,refund_status,status,paid_at') \
+            .gte('paid_at', month_start) \
+            .execute().data or []
+        for r in rows:
+            amt = int(r.get('amount') or 0)
+            if r.get('status') == 'paid':
+                result['revenue_mtd'] += amt
+                if r.get('paid_at', '') >= today_start:
+                    result['revenue_today'] += amt
+                    result['paid_today']    += 1
+                if r.get('refund_status') == 'completed':
+                    result['refund_mtd'] += int(r.get('refund_amount') or 0)
+            elif r.get('status') == 'failed':
+                if r.get('paid_at', '') >= today_start:
+                    result['failed_today'] += 1
+        result['net_mtd'] = result['revenue_mtd'] - result['refund_mtd']
+    except Exception as e:
+        logger.warning(f'[ADMIN] revenue_summary payments 실패: {e}')
+
+    # ── 구독 상태 분포 ──
+    try:
+        from models import PLAN_FEATURES
+        subs = supabase.table('subscriptions') \
+            .select('status,plan_type,auto_renewal') \
+            .execute().data or []
+        for s in subs:
+            st = s.get('status', '')
+            if st == 'active':
+                result['sub_active'] += 1
+                if s.get('auto_renewal'):
+                    price = int(PLAN_FEATURES.get(s.get('plan_type', ''), {}).get('price', 0) or 0)
+                    result['mrr_forecast'] += price
+            elif st == 'trial':    result['sub_trial']     += 1
+            elif st == 'past_due': result['sub_past_due']  += 1
+            elif st in ('cancelled', 'canceled'):
+                result['sub_cancelled'] += 1
+            elif st == 'expired':  result['sub_expired']   += 1
+    except Exception as e:
+        logger.warning(f'[ADMIN] revenue_summary subs 실패: {e}')
+
+    return result
+
+
 @admin_bp.route('/')
 @login_required
 @require_superadmin
@@ -36,6 +96,8 @@ def dashboard():
     recent_users = []
     recent_payments = []
     online_users = []
+
+    revenue = _fetch_revenue_summary(supabase)
 
     try:
         users_r = supabase.table('users').select('id', count='exact').execute()
@@ -104,6 +166,7 @@ def dashboard():
 
     return render_template('admin/dashboard.html',
                            stats=stats,
+                           revenue=revenue,
                            recent_users=recent_users,
                            recent_payments=recent_payments,
                            online_users=online_users,
