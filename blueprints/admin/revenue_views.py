@@ -194,49 +194,46 @@ def revenue():
 @admin_bp.route('/revenue/payments')
 @require_superadmin
 def revenue_payments():
-    sb      = current_app.supabase
-    now_kst = datetime.now(_KST)
-    year    = int(request.args.get('year',  now_kst.year))
-    month   = int(request.args.get('month', now_kst.month))
-    status  = request.args.get('status', '')
-    ptype   = request.args.get('type', '')
-    start, end = _month_range(year, month)
+    import traceback
+    try:
+        sb      = current_app.supabase
+        now_kst = datetime.now(_KST)
+        year    = int(request.args.get('year',  now_kst.year))
+        month   = int(request.args.get('month', now_kst.month))
+        status  = request.args.get('status', '')
+        ptype   = request.args.get('type', '')
+        start, end = _month_range(year, month)
 
-    refund_only = request.args.get('refund_only') == '1'
+        refund_only = request.args.get('refund_only') == '1'
 
-    full_cols = ('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
-                 'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
-                 'pg_provider,order_name,payment_type,paid_at,refunded_at')
-    minimal_cols = ('id,user_id,payment_id,amount,status,refund_status,refund_amount,'
-                    'refund_reason,refund_requested_at,payment_type,paid_at')
-
-    rows = []
-    for cols in (full_cols, minimal_cols):
         try:
+            q = sb.table('payments') \
+                .select('id,user_id,payment_id,amount,supply_amount,tax_amount,'
+                        'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
+                        'pg_provider,order_name,payment_type,paid_at,refunded_at')
             if refund_only:
-                q = sb.table('payments').select(cols) \
-                    .eq('refund_status', 'requested') \
-                    .order('refund_requested_at', desc=True) \
-                    .limit(500)
+                q = q.eq('refund_status', 'requested') \
+                     .order('refund_requested_at', desc=True).limit(500)
             else:
-                q = sb.table('payments').select(cols) \
-                    .gte('paid_at', start).lt('paid_at', end)
+                q = q.gte('paid_at', start).lt('paid_at', end)
                 if status:
                     q = q.eq('status', status)
                 if ptype:
                     q = q.eq('payment_type', ptype)
                 q = q.order('paid_at', desc=True).limit(2000)
             rows = q.execute().data or []
-            break  # 성공 시 루프 탈출
         except Exception as e:
-            logger.warning(f'[Admin/Revenue] 내역 조회 실패 (cols={cols[:40]}...): {e}')
-            if cols == minimal_cols:
-                rows = []
+            logger.warning(f'[Admin/Revenue] 내역 조회 실패: {e}')
+            rows = []
 
-    return render_template('admin/revenue_payments.html',
-        rows=rows, year=year, month=month, status=status, ptype=ptype,
-        refund_only=refund_only,
-    )
+        return render_template('admin/revenue_payments.html',
+            rows=rows, year=year, month=month, status=status, ptype=ptype,
+            refund_only=refund_only,
+        )
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f'[Admin/Revenue] revenue_payments 500:\n{tb}')
+        return f'<pre style="padding:2rem;color:red">[DEBUG] {e}\n\n{tb}</pre>', 500
 
 
 # ──────────────────────────────────────
