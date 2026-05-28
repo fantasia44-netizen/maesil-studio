@@ -91,16 +91,51 @@
   </div>
   <div class="card-body p-0">
     <table class="table table-sm mb-0 align-middle">
-      <thead class="table-light"><tr><th class="ps-3">이메일</th><th>플랜</th><th>마지막 접속</th><th>가입일</th><th></th></tr></thead>
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">이메일</th>
+          <th>플랜</th>
+          <th>구독 상태</th>
+          <th>만료일</th>
+          <th>가입일</th>
+          <th>마지막 접속</th>
+          <th></th>
+        </tr>
+      </thead>
       <tbody>
         {% for u in recent_users %}
+        {% set sub_st = u.get('sub_status', '') %}
+        {% set sub_ex = u.get('sub_expires', '') %}
         <tr>
           <td class="ps-3 small fw-semibold">
             <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="text-decoration-none">{{ u.email }}</a>
           </td>
-          <td><span class="badge bg-light text-dark">{{ PLAN_FEATURES.get(u.plan_type, {}).get('label', u.plan_type) }}</span></td>
-          <td class="small text-muted">{{ u.last_seen_at | kst('%m/%d %H:%M') if u.last_seen_at else '-' }}</td>
-          <td class="small text-muted">{{ u.created_at | kst('%m/%d') }}</td>
+          <td>
+            <span class="badge bg-light text-dark">
+              {{ PLAN_FEATURES.get(u.plan_type, {}).get('label', u.plan_type or 'free') }}
+            </span>
+          </td>
+          <td>
+            {% if sub_st == 'active' %}
+              <span class="badge bg-success-subtle text-success">활성</span>
+            {% elif sub_st == 'trial' %}
+              <span class="badge bg-info-subtle text-info">체험중</span>
+            {% elif sub_st == 'past_due' %}
+              <span class="badge bg-warning-subtle text-warning">연체</span>
+            {% elif sub_st == 'cancelled' %}
+              <span class="badge bg-danger-subtle text-danger">해지</span>
+            {% elif sub_st == 'expired' %}
+              <span class="badge bg-secondary-subtle text-secondary">만료</span>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td class="small text-nowrap
+            {% if sub_ex and sub_ex[:10] <= today_str %}text-danger{% else %}text-muted{% endif %}">
+            {{ sub_ex | kst('%y/%m/%d') if sub_ex else '—' }}
+          </td>
+          <td class="small text-muted text-nowrap">{{ u.created_at | kst('%m/%d %H:%M') }}</td>
+          <td class="small text-muted text-nowrap">{{ u.last_seen_at | kst('%m/%d %H:%M') if u.last_seen_at else '—' }}</td>
           <td class="pe-3">
             <a href="{{ url_for('admin.view_as_user', user_id=u.id) }}"
                class="btn btn-sm btn-outline-warning py-0"

@@ -64,8 +64,34 @@ def dashboard():
         # 최근 가입자
         ru = supabase.table('users').select(
             'id, email, name, plan_type, last_seen_at, created_at'
-        ).order('created_at', desc=True).limit(10).execute()
+        ).order('created_at', desc=True).limit(20).execute()
         recent_users = ru.data or []
+
+        # 최근 가입자 구독 정보 (status + 만료일) 병합
+        if recent_users:
+            user_ids = [u['id'] for u in recent_users]
+            try:
+                sub_r = supabase.table('subscriptions') \
+                    .select('user_id, status, current_period_end, plan_type') \
+                    .in_('user_id', user_ids) \
+                    .in_('status', ['active', 'trial', 'past_due', 'cancelled', 'expired']) \
+                    .order('current_period_end', desc=True) \
+                    .execute()
+                # user_id → 최신 구독 한 건 매핑
+                sub_map: dict = {}
+                for s in (sub_r.data or []):
+                    uid = s['user_id']
+                    if uid not in sub_map:
+                        sub_map[uid] = s
+                for u in recent_users:
+                    sub = sub_map.get(u['id'], {})
+                    u['sub_status']  = sub.get('status', '')
+                    u['sub_expires'] = sub.get('current_period_end', '')
+            except Exception as sub_err:
+                logger.warning(f'[ADMIN] 구독 정보 병합 실패: {sub_err}')
+                for u in recent_users:
+                    u['sub_status'] = ''
+                    u['sub_expires'] = ''
 
         # 최근 결제
         rp = supabase.table('payments').select(
@@ -80,4 +106,5 @@ def dashboard():
                            stats=stats,
                            recent_users=recent_users,
                            recent_payments=recent_payments,
-                           online_users=online_users)
+                           online_users=online_users,
+                           today_str=now_kst().strftime('%Y-%m-%d'))
