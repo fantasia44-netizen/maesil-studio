@@ -402,7 +402,16 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body pt-3 pb-4">
-        <p class="text-muted small mb-3" id="pgSelectDesc"></p>
+        <p class="text-muted small mb-2" id="pgSelectDesc"></p>
+
+        <!-- 구독일 때만 표시되는 자동갱신 고지 -->
+        <div id="pgAutoRenewalNotice" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:.6rem .85rem;margin-bottom:.9rem;font-size:.75rem;color:#166534;line-height:1.6">
+          <i class="bi bi-arrow-repeat me-1"></i>
+          <strong>자동갱신 구독</strong>입니다. 매월 같은 금액이 자동 청구되며,
+          <strong>결제 관리 페이지</strong>에서 언제든지 해제할 수 있습니다.<br>
+          <span style="color:#6b7280">해지 시 당월 기간은 유지되며 다음 달부터 청구가 중단됩니다.</span>
+        </div>
+
         <div class="d-grid gap-2">
           <button class="btn fw-semibold py-3" id="btnKakao"
                   style="background:#FEE500;color:#191919;font-size:.95rem"
@@ -478,13 +487,15 @@ function startPointPurchase(pkgIdx, amount, label) {
   _pgCtx = { type: 'point', pkgIdx, amount, label };
   document.getElementById('pgSelectTitle').textContent = '포인트 충전 결제수단';
   document.getElementById('pgSelectDesc').textContent = label + ' · ' + amount.toLocaleString() + '원';
+  document.getElementById('pgAutoRenewalNotice').style.display = 'none';
   new bootstrap.Modal(document.getElementById('pgSelectModal')).show();
 }
 
 function startSubscription(planType, amount, label) {
   _pgCtx = { type: 'subscription', planType, amount, label };
   document.getElementById('pgSelectTitle').textContent = '구독 결제수단 선택';
-  document.getElementById('pgSelectDesc').textContent = label + ' · ' + amount.toLocaleString() + '원/월 (자동갱신)';
+  document.getElementById('pgSelectDesc').textContent = label + ' · ' + amount.toLocaleString() + '원/월';
+  document.getElementById('pgAutoRenewalNotice').style.display = '';
   new bootstrap.Modal(document.getElementById('pgSelectModal')).show();
 }
 
