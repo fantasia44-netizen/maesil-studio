@@ -194,61 +194,55 @@ def revenue():
 @admin_bp.route('/revenue/payments')
 @require_superadmin
 def revenue_payments():
-    import traceback
-    try:
-        sb      = current_app.supabase
-        now_kst = datetime.now(_KST)
-        year    = int(request.args.get('year',  now_kst.year))
-        month   = int(request.args.get('month', now_kst.month))
-        status  = request.args.get('status', '')
-        ptype   = request.args.get('type', '')
-        start, end = _month_range(year, month)
+    sb      = current_app.supabase
+    now_kst = datetime.now(_KST)
+    year    = int(request.args.get('year',  now_kst.year))
+    month   = int(request.args.get('month', now_kst.month))
+    status  = request.args.get('status', '')
+    ptype   = request.args.get('type', '')
+    start, end = _month_range(year, month)
 
-        refund_only = request.args.get('refund_only') == '1'
+    refund_only = request.args.get('refund_only') == '1'
 
-        # DB에 확실히 존재하는 기본 컬럼만 SELECT
-        base_cols = 'id,user_id,payment_id,amount,status,refund_status,refund_amount,payment_type,paid_at'
-        # 추가 컬럼은 별도로 시도 (없으면 기본만 사용)
-        extra_cols = 'supply_amount,tax_amount,pg_provider,order_name,refund_reason,refund_requested_at,refunded_at'
-        rows = []
-        for cols in (f'{base_cols},{extra_cols}', base_cols):
-            try:
-                q = sb.table('payments').select(cols)
-                if refund_only:
-                    q = q.eq('refund_status', 'requested') \
-                         .order('refund_requested_at', desc=True).limit(500)
-                else:
-                    q = q.gte('paid_at', start).lt('paid_at', end)
-                    if status:
-                        q = q.eq('status', status)
-                    if ptype:
-                        q = q.eq('payment_type', ptype)
-                    q = q.order('paid_at', desc=True).limit(2000)
-                rows = q.execute().data or []
-                break
-            except Exception as e:
-                logger.warning(f'[Admin/Revenue] 내역 조회 실패 ({cols[:30]}...): {e}')
-                rows = []
+    # DB에 확실히 존재하는 기본 컬럼만 SELECT
+    base_cols = 'id,user_id,payment_id,amount,status,refund_status,refund_amount,payment_type,paid_at'
+    # 추가 컬럼은 별도로 시도 (없으면 기본만 사용)
+    extra_cols = 'supply_amount,tax_amount,pg_provider,order_name,refund_reason,refund_requested_at,refunded_at'
+    rows = []
+    for cols in (f'{base_cols},{extra_cols}', base_cols):
+        try:
+            q = sb.table('payments').select(cols)
+            if refund_only:
+                q = q.eq('refund_status', 'requested') \
+                     .order('refund_requested_at', desc=True).limit(500)
+            else:
+                q = q.gte('paid_at', start).lt('paid_at', end)
+                if status:
+                    q = q.eq('status', status)
+                if ptype:
+                    q = q.eq('payment_type', ptype)
+                q = q.order('paid_at', desc=True).limit(2000)
+            rows = q.execute().data or []
+            break
+        except Exception as e:
+            logger.warning(f'[Admin/Revenue] 내역 조회 실패 ({cols[:30]}...): {e}')
+            rows = []
 
-        # 템플릿이 기대하는 키 정규화 (없는 컬럼 → None/0 기본값)
-        _row_defaults = {
-            'supply_amount': 0, 'tax_amount': 0, 'refund_amount': 0,
-            'pg_provider': None, 'order_name': None,
-            'refund_reason': None, 'refund_requested_at': None,
-            'refunded_at': None, 'refund_status': None, 'payment_id': None,
-        }
-        for r in rows:
-            for k, v in _row_defaults.items():
-                r.setdefault(k, v)
+    # 템플릿이 기대하는 키 정규화 (없는 컬럼 → None/0 기본값)
+    _row_defaults = {
+        'supply_amount': 0, 'tax_amount': 0, 'refund_amount': 0,
+        'pg_provider': None, 'order_name': None,
+        'refund_reason': None, 'refund_requested_at': None,
+        'refunded_at': None, 'refund_status': None, 'payment_id': None,
+    }
+    for r in rows:
+        for k, v in _row_defaults.items():
+            r.setdefault(k, v)
 
-        return render_template('admin/revenue_payments.html',
-            rows=rows, year=year, month=month, status=status, ptype=ptype,
-            refund_only=refund_only,
-        )
-    except Exception as e:
-        tb = traceback.format_exc()
-        logger.error(f'[Admin/Revenue] revenue_payments 500:\n{tb}')
-        return f'<pre style="padding:2rem;color:red">[DEBUG] {e}\n\n{tb}</pre>', 500
+    return render_template('admin/revenue_payments.html',
+        rows=rows, year=year, month=month, status=status, ptype=ptype,
+        refund_only=refund_only,
+    )
 
 
 # ──────────────────────────────────────
