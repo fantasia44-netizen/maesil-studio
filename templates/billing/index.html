@@ -21,23 +21,44 @@
     <div class="card mb-3">
       <div class="card-body text-center py-4">
         <div class="text-muted small mb-1">현재 포인트 잔액</div>
-        <div class="fw-bold mb-2" style="font-size:2.2rem;color:#e8355a">{{ balance | number }}P</div>
+        <div class="fw-bold mb-2" style="font-size:2.2rem;color:{% if balance <= 0 %}#dc2626{% else %}#e8355a{% endif %}">
+          {{ balance | number }}P
+        </div>
+        {% if balance <= 0 %}
+        <div class="alert alert-danger py-2 mb-0 mt-1" style="font-size:.78rem">
+          <i class="bi bi-exclamation-circle me-1"></i>
+          포인트가 소진됐습니다. 구독하거나 포인트를 충전해야 콘텐츠를 생성할 수 있습니다.
+        </div>
+        {% elif balance <= 500 %}
+        <div class="alert alert-warning py-2 mb-0 mt-1" style="font-size:.78rem">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          잔여 포인트가 얼마 남지 않았습니다.
+        </div>
+        {% else %}
         <div class="text-muted small">매 콘텐츠 생성 시 자동 차감</div>
+        {% endif %}
       </div>
     </div>
 
     <!-- 구독 현황 -->
+    {% set sub_status = subscription.status if subscription else '' %}
     <div class="card mb-3">
       <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <h6 class="mb-0 fw-bold">현재 구독</h6>
-        {% if subscription and subscription.status == 'active' %}
-        <span class="badge bg-success">구독 중</span>
+        {% if sub_status == 'active' %}
+          <span class="badge bg-success">구독 중</span>
+        {% elif sub_status == 'trial' %}
+          <span class="badge bg-info">체험 중</span>
+        {% elif sub_status == 'past_due' %}
+          <span class="badge bg-warning text-dark">결제 실패</span>
+        {% elif sub_status in ('cancelled', 'expired') %}
+          <span class="badge bg-secondary">종료됨</span>
         {% else %}
-        <span class="badge bg-secondary">무료</span>
+          <span class="badge bg-secondary">무료</span>
         {% endif %}
       </div>
       <div class="card-body">
-        {% if subscription and subscription.status == 'active' %}
+        {% if sub_status == 'active' %}
           {% set plan = PLAN_PRICES[subscription.plan_type] if subscription.plan_type in PLAN_PRICES else None %}
 
           <!-- 플랜명 + 월 포인트 -->
@@ -100,9 +121,93 @@
             {% endif %}
           </div>
 
+        {% elif sub_status == 'past_due' %}
+          <!-- 결제 실패 / 연체 -->
+          {% set plan = PLAN_PRICES.get(subscription.plan_type, {}) %}
+          <div class="alert alert-warning py-3 mb-3" style="font-size:.82rem">
+            <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>결제가 실패하였습니다</div>
+            <div>등록된 결제수단으로 자동 재청구를 시도합니다.</div>
+            {% if subscription.next_billing_at %}
+            <div class="mt-1">다음 재시도: <strong>{{ subscription.next_billing_at[:10] }}</strong></div>
+            {% endif %}
+            {% set attempt = subscription.failed_attempt_count | int %}
+            <div class="mt-1 text-muted small">실패 횟수: {{ attempt }}/3 — 3회 실패 시 구독이 해지됩니다.</div>
+          </div>
+          <div style="font-size:.82rem">
+            <div class="d-flex justify-content-between py-1 border-bottom">
+              <span class="text-muted">플랜</span>
+              <span class="fw-semibold">{{ plan.get('label', subscription.plan_type) }}</span>
+            </div>
+            {% if subscription.current_period_end %}
+            <div class="d-flex justify-content-between py-1">
+              <span class="text-muted">구독 만료일</span>
+              <span class="fw-semibold text-danger">{{ subscription.current_period_end[:10] }}</span>
+            </div>
+            {% endif %}
+          </div>
+          <div class="mt-3">
+            <a href="{{ url_for('billing.index') }}" class="btn btn-sm btn-warning w-100 fw-semibold"
+               onclick="alert('결제수단을 재등록하려면 아래 구독 시작 버튼을 눌러주세요.'); return false;">
+              <i class="bi bi-credit-card me-1"></i>결제수단 변경 / 재구독
+            </a>
+          </div>
+
+        {% elif sub_status == 'cancelled' %}
+          <!-- 해지됨 -->
+          {% set plan = PLAN_PRICES.get(subscription.plan_type, {}) %}
+          <div class="alert alert-secondary py-3 mb-3" style="font-size:.82rem">
+            <div class="fw-semibold mb-1"><i class="bi bi-x-circle me-1"></i>구독이 해지되었습니다</div>
+            {% if subscription.current_period_end %}
+            <div>{{ subscription.current_period_end[:10] }}에 서비스가 종료되었습니다.</div>
+            {% endif %}
+          </div>
+          <div style="font-size:.82rem">
+            <div class="d-flex justify-content-between py-1">
+              <span class="text-muted">이전 플랜</span>
+              <span class="text-muted">{{ plan.get('label', subscription.plan_type) }}</span>
+            </div>
+          </div>
+          <div class="mt-3 text-center text-muted" style="font-size:.78rem">
+            아래에서 다시 구독을 시작하면 포인트가 즉시 지급됩니다.
+          </div>
+
+        {% elif sub_status == 'expired' %}
+          <!-- 체험/구독 만료 -->
+          {% set plan = PLAN_PRICES.get(subscription.plan_type, {}) %}
+          <div class="alert alert-secondary py-3 mb-3" style="font-size:.82rem">
+            <div class="fw-semibold mb-1"><i class="bi bi-clock-history me-1"></i>구독 기간이 만료되었습니다</div>
+            {% if subscription.current_period_end %}
+            <div>만료일: <strong>{{ subscription.current_period_end[:10] }}</strong></div>
+            {% endif %}
+          </div>
+          <div class="mt-3 text-center text-muted" style="font-size:.78rem">
+            아래에서 다시 구독을 시작하면 포인트가 즉시 지급됩니다.
+          </div>
+
+        {% elif sub_status == 'trial' %}
+          <!-- 체험 중 -->
+          {% set plan = PLAN_PRICES.get(subscription.plan_type, {}) %}
+          <div class="text-center mb-3 pb-3 border-bottom">
+            <div class="fw-bold mb-1" style="font-size:1.15rem">체험 플랜</div>
+            <div class="text-muted small">체험 종료 후 구독을 시작하시면 포인트가 지급됩니다.</div>
+          </div>
+          {% if subscription.current_period_end %}
+          <div style="font-size:.82rem">
+            <div class="d-flex justify-content-between py-1">
+              <span class="text-muted">체험 종료일</span>
+              <span class="fw-semibold {% if days_left is not none and days_left <= 3 %}text-danger{% endif %}">
+                {{ subscription.current_period_end[:10] }}
+                {% if days_left is not none %}({{ days_left }}일 남음){% endif %}
+              </span>
+            </div>
+          </div>
+          {% endif %}
+
         {% else %}
+          <!-- 구독 없음 -->
           <div class="text-center py-3">
-            <div class="text-muted small mb-2">현재 구독 플랜이 없습니다.</div>
+            <i class="bi bi-box-seam text-muted mb-2" style="font-size:2rem;display:block"></i>
+            <div class="text-muted small mb-1">현재 구독 플랜이 없습니다.</div>
             <div class="text-muted" style="font-size:.78rem">아래에서 구독을 시작하면<br>매달 포인트가 자동 지급됩니다.</div>
           </div>
         {% endif %}
