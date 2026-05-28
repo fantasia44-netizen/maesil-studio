@@ -100,7 +100,8 @@ def _run_subscription_renewal(app):
             try:
                 subs_res = supabase.table('subscriptions') \
                     .select('id,user_id,operator_id,plan_type,billing_key,'
-                            'failed_attempt_count,auto_renewal,status') \
+                            'failed_attempt_count,auto_renewal,status,'
+                            'current_period_end') \
                     .eq('auto_renewal', True) \
                     .in_('status', ['active', 'past_due']) \
                     .lte('next_billing_at', now_iso) \
@@ -119,6 +120,15 @@ def _run_subscription_renewal(app):
             success_count = failed_count = locked_count = 0
 
             for sub in subs_rows:
+                # active 상태라도 current_period_end 가 이미 지난 건 이상 데이터 — 스킵
+                period_end = sub.get('current_period_end') or ''
+                if sub.get('status') == 'active' and period_end and period_end < now_iso:
+                    logger.warning(
+                        f'[Renewal] active 구독이지만 period_end 만료 — 스킵 '
+                        f'id={sub.get("id")} end={period_end}'
+                    )
+                    continue
+
                 user_id     = sub.get('user_id')
                 operator_id = sub.get('operator_id')
                 plan_type   = sub.get('plan_type') or 'starter'
