@@ -98,9 +98,16 @@
             </td>
             <td>
               {% if r.refund_status == 'completed' %}
-                <span class="badge bg-warning-subtle text-warning">환불 {{ refund | number }}</span>
+                <span class="badge bg-warning-subtle text-warning">환불완료 {{ refund | number }}원</span>
               {% elif r.refund_status == 'requested' %}
-                <span class="badge bg-danger-subtle text-danger">요청중</span>
+                <span class="badge bg-danger-subtle text-danger me-1">요청중</span>
+                <button class="btn btn-xs btn-outline-danger py-0 px-1"
+                        style="font-size:.7rem"
+                        onclick="approveRefund('{{ r.payment_id }}', {{ r.amount }}, '{{ r.refund_reason or '' }}')">
+                  승인
+                </button>
+              {% elif r.refund_status == 'processing' %}
+                <span class="badge bg-secondary-subtle text-secondary">처리중</span>
               {% elif r.refund_status %}
                 <span class="badge bg-secondary-subtle text-secondary">{{ r.refund_status }}</span>
               {% endif %}
@@ -121,4 +128,65 @@
     </div>
   </div>
 </div>
+
+<!-- 환불 승인 모달 -->
+<div class="modal fade" id="refundApproveModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold">환불 승인</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pb-4">
+        <input type="hidden" id="approvePaymentId">
+        <p class="small text-muted mb-1">결제금액: <strong id="approveAmount"></strong></p>
+        <p class="small text-muted mb-3">사유: <span id="approveReason" class="text-dark"></span></p>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">처리 메모 (선택)</label>
+          <input id="approveMemo" type="text" class="form-control form-control-sm"
+                 placeholder="예: 고객 요청에 따라 전액 환불">
+        </div>
+        <div class="alert alert-warning py-2 small mb-3">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          PortOne을 통해 <strong>즉시 실환불</strong>됩니다. 취소 불가.
+        </div>
+        <button id="approveSubmitBtn" class="btn btn-danger w-100 fw-semibold"
+                onclick="submitRefundApproval()">환불 실행</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const _adminCsrf = document.querySelector('meta[name=csrf-token]')?.content
+                || document.getElementById('csrfToken')?.value || '';
+
+function approveRefund(paymentId, amount, reason) {
+  document.getElementById('approvePaymentId').value = paymentId;
+  document.getElementById('approveAmount').textContent = amount.toLocaleString() + '원';
+  document.getElementById('approveReason').textContent = reason || '-';
+  document.getElementById('approveMemo').value = '';
+  new bootstrap.Modal(document.getElementById('refundApproveModal')).show();
+}
+
+async function submitRefundApproval() {
+  const paymentId = document.getElementById('approvePaymentId').value;
+  const memo      = document.getElementById('approveMemo').value.trim();
+  const btn       = document.getElementById('approveSubmitBtn');
+  if (!confirm('실제 환불을 실행합니다. 계속하시겠습니까?')) return;
+  btn.disabled = true; btn.textContent = '처리 중...';
+  try {
+    const res  = await fetch('/admin/revenue/refund', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _adminCsrf },
+      body: JSON.stringify({ payment_id: paymentId, reason: memo || '어드민 수동 환불 승인', amount: 0 }),
+    });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('refundApproveModal')).hide();
+    alert(data.success ? '✅ 환불 완료' : ('❌ ' + (data.error || '환불 실패')));
+    if (data.success) location.reload();
+  } catch (e) { alert('오류: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = '환불 실행'; }
+}
+</script>
 {% endblock %}
