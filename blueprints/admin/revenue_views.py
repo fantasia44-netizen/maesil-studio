@@ -40,19 +40,27 @@ def _quarter_range(year: int, quarter: int) -> tuple[str, str]:
 
 
 def _fetch_payments(supabase, start_iso: str, end_iso: str) -> list:
-    try:
-        res = supabase.table('payments') \
-            .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
-                    'status,refund_status,refund_amount,pg_provider,'
-                    'order_name,payment_type,paid_at,refunded_at,updated_at') \
-            .gte('paid_at', start_iso) \
-            .lt('paid_at', end_iso) \
-            .limit(10000) \
-            .execute()
-        return res.data or []
-    except Exception as e:
-        logger.warning(f'[Admin/Revenue] payments 조회 실패: {e}')
-        return []
+    full_cols = ('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
+                 'status,refund_status,refund_amount,pg_provider,'
+                 'order_name,payment_type,paid_at,refunded_at,updated_at')
+    minimal_cols = 'id,user_id,payment_id,amount,status,refund_status,refund_amount,payment_type,paid_at'
+
+    for cols in (full_cols, minimal_cols):
+        try:
+            res = supabase.table('payments') \
+                .select(cols) \
+                .gte('paid_at', start_iso) \
+                .lt('paid_at', end_iso) \
+                .limit(10000) \
+                .execute()
+            return res.data or []
+        except Exception as e:
+            logger.warning(f'[Admin/Revenue] payments 조회 실패 (cols={cols[:40]}...): {e}')
+            if cols == minimal_cols:
+                return []
+            # 풀 컬럼 실패 → 최소 컬럼으로 재시도
+            logger.warning('[Admin/Revenue] 최소 컬럼으로 폴백 재시도')
+    return []
 
 
 def _aggregate(rows: list) -> dict:
@@ -196,32 +204,34 @@ def revenue_payments():
 
     refund_only = request.args.get('refund_only') == '1'
 
-    try:
-        if refund_only:
-            # 날짜 무관, refund_status = 'requested' 전체
-            q = sb.table('payments') \
-                .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
-                        'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
-                        'pg_provider,order_name,payment_type,paid_at,refunded_at') \
-                .eq('refund_status', 'requested') \
-                .order('refund_requested_at', desc=True) \
-                .limit(500)
-        else:
-            q = sb.table('payments') \
-                .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
-                        'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
-                        'pg_provider,order_name,payment_type,paid_at,refunded_at') \
-                .gte('paid_at', start).lt('paid_at', end)
-            if status:
-                q = q.eq('status', status)
-            if ptype:
-                q = q.eq('payment_type', ptype)
-            q = q.order('paid_at', desc=True).limit(2000)
-        res = q.execute()
-        rows = res.data or []
-    except Exception as e:
-        logger.warning(f'[Admin/Revenue] 내역 조회 실패: {e}')
-        rows = []
+    full_cols = ('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
+                 'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
+                 'pg_provider,order_name,payment_type,paid_at,refunded_at')
+    minimal_cols = ('id,user_id,payment_id,amount,status,refund_status,refund_amount,'
+                    'refund_reason,refund_requested_at,payment_type,paid_at')
+
+    rows = []
+    for cols in (full_cols, minimal_cols):
+        try:
+            if refund_only:
+                q = sb.table('payments').select(cols) \
+                    .eq('refund_status', 'requested') \
+                    .order('refund_requested_at', desc=True) \
+                    .limit(500)
+            else:
+                q = sb.table('payments').select(cols) \
+                    .gte('paid_at', start).lt('paid_at', end)
+                if status:
+                    q = q.eq('status', status)
+                if ptype:
+                    q = q.eq('payment_type', ptype)
+                q = q.order('paid_at', desc=True).limit(2000)
+            rows = q.execute().data or []
+            break  # 성공 시 루프 탈출
+        except Exception as e:
+            logger.warning(f'[Admin/Revenue] 내역 조회 실패 (cols={cols[:40]}...): {e}')
+            if cols == minimal_cols:
+                rows = []
 
     return render_template('admin/revenue_payments.html',
         rows=rows, year=year, month=month, status=status, ptype=ptype,
