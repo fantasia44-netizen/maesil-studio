@@ -400,6 +400,10 @@ async function _pgSubscribe(pg) {
     return;
   }
 
+  // 리다이렉트 모드 복귀 시 플랜 복구를 위해 sessionStorage에 저장
+  sessionStorage.setItem('_pending_plan_type', ctx.planType);
+  sessionStorage.setItem('_pending_pg', isKakao ? 'kakaopay' : 'card');
+
   const params = {
     storeId:    STORE_ID,
     channelKey: channelKey,
@@ -598,5 +602,58 @@ async function _verify(paymentId, extra) {
     alert('검증 오류: ' + e.message);
   }
 }
+
+// ── PortOne 리다이렉트 모드 복귀 처리 (모바일/iOS Safari 팝업 차단 환경) ──
+document.addEventListener('DOMContentLoaded', function () {
+  var params     = new URLSearchParams(window.location.search);
+  var billingKey = params.get('billing_key');
+  var errorCode  = params.get('code');
+
+  if (billingKey || errorCode) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
+  if (errorCode) {
+    if (errorCode !== 'USER_CANCEL') {
+      alert('카드 등록 실패: ' + (params.get('message') || errorCode));
+    }
+    sessionStorage.removeItem('_pending_plan_type');
+    sessionStorage.removeItem('_pending_pg');
+    return;
+  }
+
+  if (!billingKey) return;
+
+  var planType = sessionStorage.getItem('_pending_plan_type') || '';
+  var pg       = sessionStorage.getItem('_pending_pg') || 'card';
+  sessionStorage.removeItem('_pending_plan_type');
+  sessionStorage.removeItem('_pending_pg');
+
+  var endpoint = planType ? '/billing/billing-key/subscribe' : '/billing/billing-key/save';
+  var body     = planType
+    ? JSON.stringify({ billing_key: billingKey, pg: pg, plan_type: planType })
+    : JSON.stringify({ billing_key: billingKey, pg: pg });
+  var csrf = (document.getElementById('csrfToken') || {}).value || '';
+
+  fetch(endpoint, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+    body: body,
+  })
+  .then(function (r) {
+    if (r.status === 401 || r.redirected) {
+      alert('세션 만료. 다시 로그인 후 재시도해주세요.');
+      window.location.href = '/login';
+      return null;
+    }
+    return r.json();
+  })
+  .then(function (d) {
+    if (!d) return;
+    alert(d.ok ? ('✅ ' + d.message) : ('❌ ' + (d.message || '카드 등록 실패')));
+    if (d.ok) location.reload();
+  })
+  .catch(function (e) { alert('오류: ' + e.message); });
+});
 </script>
 {% endblock %}
