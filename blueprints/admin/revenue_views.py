@@ -206,25 +206,40 @@ def revenue_payments():
 
         refund_only = request.args.get('refund_only') == '1'
 
-        try:
-            q = sb.table('payments') \
-                .select('id,user_id,payment_id,amount,supply_amount,tax_amount,'
-                        'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
-                        'pg_provider,order_name,payment_type,paid_at,refunded_at')
-            if refund_only:
-                q = q.eq('refund_status', 'requested') \
-                     .order('refund_requested_at', desc=True).limit(500)
-            else:
-                q = q.gte('paid_at', start).lt('paid_at', end)
-                if status:
-                    q = q.eq('status', status)
-                if ptype:
-                    q = q.eq('payment_type', ptype)
-                q = q.order('paid_at', desc=True).limit(2000)
-            rows = q.execute().data or []
-        except Exception as e:
-            logger.warning(f'[Admin/Revenue] 내역 조회 실패: {e}')
-            rows = []
+        # DB에 확실히 존재하는 기본 컬럼만 SELECT
+        base_cols = 'id,user_id,payment_id,amount,status,refund_status,refund_amount,payment_type,paid_at'
+        # 추가 컬럼은 별도로 시도 (없으면 기본만 사용)
+        extra_cols = 'supply_amount,tax_amount,pg_provider,order_name,refund_reason,refund_requested_at,refunded_at'
+        rows = []
+        for cols in (f'{base_cols},{extra_cols}', base_cols):
+            try:
+                q = sb.table('payments').select(cols)
+                if refund_only:
+                    q = q.eq('refund_status', 'requested') \
+                         .order('refund_requested_at', desc=True).limit(500)
+                else:
+                    q = q.gte('paid_at', start).lt('paid_at', end)
+                    if status:
+                        q = q.eq('status', status)
+                    if ptype:
+                        q = q.eq('payment_type', ptype)
+                    q = q.order('paid_at', desc=True).limit(2000)
+                rows = q.execute().data or []
+                break
+            except Exception as e:
+                logger.warning(f'[Admin/Revenue] 내역 조회 실패 ({cols[:30]}...): {e}')
+                rows = []
+
+        # 템플릿이 기대하는 키 정규화 (없는 컬럼 → None/0 기본값)
+        _row_defaults = {
+            'supply_amount': 0, 'tax_amount': 0, 'refund_amount': 0,
+            'pg_provider': None, 'order_name': None,
+            'refund_reason': None, 'refund_requested_at': None,
+            'refunded_at': None, 'refund_status': None, 'payment_id': None,
+        }
+        for r in rows:
+            for k, v in _row_defaults.items():
+                r.setdefault(k, v)
 
         return render_template('admin/revenue_payments.html',
             rows=rows, year=year, month=month, status=status, ptype=ptype,
