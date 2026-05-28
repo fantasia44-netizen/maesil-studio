@@ -462,8 +462,8 @@ function _pgDispatch(pg) {
 }
 
 async function _pgPay(pg) {
-  // 선택 모달 닫기
-  bootstrap.Modal.getInstance(document.getElementById('pgSelectModal')).hide();
+  const _pgModal = bootstrap.Modal.getInstance(document.getElementById('pgSelectModal'));
+  if (_pgModal) _pgModal.hide();
 
   const isKakao     = pg === 'kakao';
   const channelKey  = isKakao ? CHANNEL_KAKAO : CHANNEL_CARD;
