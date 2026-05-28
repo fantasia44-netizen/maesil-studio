@@ -1,11 +1,10 @@
 -- 012_revenue_columns_ensure.sql
 -- payments 테이블 생성(없는 경우) + 누락 컬럼 추가 (멱등)
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- FK 없이 생성 — 실제 DB의 users.id / operators.id 타입에 무관하게 동작
 
 CREATE TABLE IF NOT EXISTS payments (
-  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id              bigserial PRIMARY KEY,
+  user_id         bigint NOT NULL,
   payment_id      text UNIQUE,
   payment_type    text NOT NULL DEFAULT 'subscription',
   plan_type       text,
@@ -16,7 +15,7 @@ CREATE TABLE IF NOT EXISTS payments (
   status          text NOT NULL DEFAULT 'paid',
   refund_status   text,
   refund_amount   int DEFAULT 0,
-  operator_id     uuid REFERENCES operators(id) ON DELETE CASCADE,
+  operator_id     bigint,
   pg_provider     text,
   method          text,
   receipt_url     text,
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS operator_id         uuid REFERENCES operators(id) ON DELETE CASCADE;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS operator_id         bigint;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS supply_amount       int DEFAULT 0;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS tax_amount          int DEFAULT 0;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_amount       int DEFAULT 0;
