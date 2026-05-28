@@ -99,6 +99,19 @@ def dashboard():
 
     revenue = _fetch_revenue_summary(supabase)
 
+    # 환불 대기 건 (refund_status = 'requested') — 날짜 무관 전체
+    refund_queue = []
+    try:
+        rq = supabase.table('payments') \
+            .select('id,payment_id,user_id,amount,order_name,refund_reason,refund_requested_at,paid_at') \
+            .eq('refund_status', 'requested') \
+            .order('refund_requested_at', desc=True) \
+            .limit(20) \
+            .execute()
+        refund_queue = rq.data or []
+    except Exception as e:
+        logger.warning(f'[ADMIN] refund_queue 조회 실패: {e}')
+
     try:
         users_r = supabase.table('users').select('id', count='exact').execute()
         stats['total_users'] = users_r.count or 0
@@ -167,6 +180,7 @@ def dashboard():
     return render_template('admin/dashboard.html',
                            stats=stats,
                            revenue=revenue,
+                           refund_queue=refund_queue,
                            recent_users=recent_users,
                            recent_payments=recent_payments,
                            online_users=online_users,

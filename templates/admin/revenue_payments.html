@@ -12,6 +12,15 @@
 <!-- 필터 -->
 <div class="card mb-3">
   <div class="card-body py-2">
+    {% if refund_only %}
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+        <i class="bi bi-exclamation-circle me-1"></i>환불 요청 대기 — {{ rows | length }}건
+      </span>
+      <a href="{{ url_for('admin.revenue_payments', year=year, month=month) }}"
+         class="btn btn-sm btn-outline-secondary">← 전체 내역으로</a>
+    </div>
+    {% else %}
     <form class="d-flex flex-wrap gap-2 align-items-center" method="get">
       <select name="year" class="form-select form-select-sm" style="width:90px">
         {% for y in range(2024, year + 2) %}
@@ -36,12 +45,17 @@
         <option value="point"        {{ 'selected' if ptype == 'point' }}>포인트 충전</option>
       </select>
       <button class="btn btn-sm btn-outline-primary" type="submit">조회</button>
+      <a href="{{ url_for('admin.revenue_payments', refund_only='1') }}"
+         class="btn btn-sm btn-outline-warning">
+        <i class="bi bi-exclamation-circle me-1"></i>환불 요청만 보기
+      </a>
       <span class="ms-auto text-muted small">{{ rows | length | number }} 건</span>
       <a href="{{ url_for('admin.revenue_export_csv', year=year, month=month) }}"
          class="btn btn-sm btn-outline-success">
         <i class="bi bi-download me-1"></i>CSV
       </a>
     </form>
+    {% endif %}
   </div>
 </div>
 

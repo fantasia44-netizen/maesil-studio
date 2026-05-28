@@ -194,17 +194,30 @@ def revenue_payments():
     ptype   = request.args.get('type', '')
     start, end = _month_range(year, month)
 
+    refund_only = request.args.get('refund_only') == '1'
+
     try:
-        q = sb.table('payments') \
-            .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
-                    'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
-                    'pg_provider,order_name,payment_type,paid_at,refunded_at') \
-            .gte('paid_at', start).lt('paid_at', end)
-        if status:
-            q = q.eq('status', status)
-        if ptype:
-            q = q.eq('payment_type', ptype)
-        res = q.order('paid_at', desc=True).limit(2000).execute()
+        if refund_only:
+            # 날짜 무관, refund_status = 'requested' 전체
+            q = sb.table('payments') \
+                .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
+                        'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
+                        'pg_provider,order_name,payment_type,paid_at,refunded_at') \
+                .eq('refund_status', 'requested') \
+                .order('refund_requested_at', desc=True) \
+                .limit(500)
+        else:
+            q = sb.table('payments') \
+                .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
+                        'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
+                        'pg_provider,order_name,payment_type,paid_at,refunded_at') \
+                .gte('paid_at', start).lt('paid_at', end)
+            if status:
+                q = q.eq('status', status)
+            if ptype:
+                q = q.eq('payment_type', ptype)
+            q = q.order('paid_at', desc=True).limit(2000)
+        res = q.execute()
         rows = res.data or []
     except Exception as e:
         logger.warning(f'[Admin/Revenue] 내역 조회 실패: {e}')
@@ -212,6 +225,7 @@ def revenue_payments():
 
     return render_template('admin/revenue_payments.html',
         rows=rows, year=year, month=month, status=status, ptype=ptype,
+        refund_only=refund_only,
     )
 
 
