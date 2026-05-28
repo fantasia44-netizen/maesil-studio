@@ -6,6 +6,7 @@
 <div class="d-flex align-items-center gap-2 mb-4">
   <span class="badge bg-danger">ADMIN</span>
   <h5 class="fw-bold mb-0">결제 내역 상세</h5>
+  <a href="{{ url_for('admin.revenue') }}" class="btn btn-sm btn-outline-secondary ms-auto">← 매출 요약</a>
 </div>
 
 <!-- 필터 -->
@@ -24,15 +25,15 @@
       </select>
       <select name="status" class="form-select form-select-sm" style="width:100px">
         <option value="">전체 상태</option>
-        <option value="paid" {{ 'selected' if status == 'paid' }}>결제완료</option>
-        <option value="failed" {{ 'selected' if status == 'failed' }}>실패</option>
+        <option value="paid"      {{ 'selected' if status == 'paid' }}>결제완료</option>
+        <option value="failed"    {{ 'selected' if status == 'failed' }}>실패</option>
         <option value="cancelled" {{ 'selected' if status == 'cancelled' }}>취소</option>
       </select>
       <select name="type" class="form-select form-select-sm" style="width:120px">
         <option value="">전체 유형</option>
         <option value="subscription" {{ 'selected' if ptype == 'subscription' }}>구독결제</option>
         <option value="auto_renewal" {{ 'selected' if ptype == 'auto_renewal' }}>자동갱신</option>
-        <option value="point" {{ 'selected' if ptype == 'point' }}>포인트 충전</option>
+        <option value="point"        {{ 'selected' if ptype == 'point' }}>포인트 충전</option>
       </select>
       <button class="btn btn-sm btn-outline-primary" type="submit">조회</button>
       <span class="ms-auto text-muted small">{{ rows | length | number }} 건</span>
@@ -53,27 +54,28 @@
           <tr>
             <th class="ps-3">결제일시</th>
             <th>주문명</th>
-            <th>금액</th>
-            <th>공급가</th>
-            <th>부가세</th>
+            <th class="text-end">금액</th>
+            <th class="text-end">공급가</th>
+            <th class="text-end">부가세</th>
             <th>PG</th>
             <th>유형</th>
             <th>상태</th>
-            <th>환불</th>
+            <th class="text-center">환불</th>
             <th class="pe-3">payment_id</th>
           </tr>
         </thead>
         <tbody>
           {% for r in rows %}
-          {% set amt = r.amount | int %}
+          {% set amt    = r.amount | int %}
           {% set supply = r.supply_amount | int %}
-          {% set tax = r.tax_amount | int %}
+          {% set tax    = r.tax_amount | int %}
           {% set refund = r.refund_amount | int %}
           <tr>
             <td class="ps-3 small text-muted text-nowrap">
               {{ r.paid_at | kst('%Y-%m-%d %H:%M') if r.paid_at else '—' }}
             </td>
-            <td class="small" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            <td class="small" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                title="{{ r.order_name or '' }}">
               {{ r.order_name or '—' }}
             </td>
             <td class="small fw-semibold text-end">{{ amt | number }}</td>
@@ -89,27 +91,46 @@
             <td class="small text-muted">{{ r.payment_type or '—' }}</td>
             <td>
               {% if r.status == 'paid' %}
-                <span class="badge bg-success-subtle text-success">완료</span>
+                {% if r.refund_status == 'completed' %}
+                  <span class="badge bg-secondary-subtle text-secondary">환불완료</span>
+                {% else %}
+                  <span class="badge bg-success-subtle text-success">완료</span>
+                {% endif %}
               {% elif r.status == 'failed' %}
                 <span class="badge bg-danger-subtle text-danger">실패</span>
               {% else %}
                 <span class="badge bg-secondary-subtle text-secondary">{{ r.status or '—' }}</span>
               {% endif %}
             </td>
-            <td>
+            <td class="text-center">
               {% if r.refund_status == 'completed' %}
-                <span class="badge bg-warning-subtle text-warning">환불완료 {{ refund | number }}원</span>
+                <span class="badge bg-warning-subtle text-warning small">환불완료<br>{{ refund | number }}원</span>
               {% elif r.refund_status == 'requested' %}
-                <span class="badge bg-danger-subtle text-danger me-1">요청중</span>
                 <button class="btn btn-xs btn-outline-danger py-0 px-1"
                         style="font-size:.7rem"
-                        onclick="approveRefund('{{ r.payment_id }}', {{ r.amount }}, '{{ r.refund_reason or '' }}')">
-                  승인
+                        onclick="openRefundModal(
+                          '{{ r.payment_id }}',
+                          {{ amt }},
+                          '{{ (r.refund_reason or '') | replace("'", "\\'") }}',
+                          '{{ (r.order_name or '') | replace("'", "\\'") }}'
+                        )">
+                  <i class="bi bi-exclamation-circle me-1"></i>요청중 — 승인
                 </button>
               {% elif r.refund_status == 'processing' %}
-                <span class="badge bg-secondary-subtle text-secondary">처리중</span>
-              {% elif r.refund_status %}
-                <span class="badge bg-secondary-subtle text-secondary">{{ r.refund_status }}</span>
+                <span class="badge bg-secondary-subtle text-secondary small">처리중</span>
+              {% elif r.status == 'paid' and r.payment_id %}
+                <button class="btn btn-xs btn-outline-secondary py-0 px-1"
+                        style="font-size:.7rem"
+                        onclick="openRefundModal(
+                          '{{ r.payment_id }}',
+                          {{ amt }},
+                          '관리자 환불',
+                          '{{ (r.order_name or '') | replace("'", "\\'") }}'
+                        )">
+                  환불
+                </button>
+              {% else %}
+                <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td class="pe-3 small text-muted font-monospace"
@@ -129,29 +150,60 @@
   </div>
 </div>
 
-<!-- 환불 승인 모달 -->
-<div class="modal fade" id="refundApproveModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
+<!-- 환불 처리 모달 (관리자 직접 실행 + 요청 승인 통합) -->
+<div class="modal fade" id="refundModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
     <div class="modal-content border-0 shadow">
       <div class="modal-header border-0 pb-0">
-        <h6 class="modal-title fw-bold">환불 승인</h6>
+        <h6 class="modal-title fw-bold text-danger">
+          <i class="bi bi-arrow-counterclockwise me-2"></i>환불 처리
+        </h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body pb-4">
-        <input type="hidden" id="approvePaymentId">
-        <p class="small text-muted mb-1">결제금액: <strong id="approveAmount"></strong></p>
-        <p class="small text-muted mb-3">사유: <span id="approveReason" class="text-dark"></span></p>
+      <div class="modal-body pt-2">
+        <div class="alert alert-warning py-2 mb-3 small">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          PortOne을 통해 즉시 실환불됩니다. 되돌릴 수 없습니다.
+        </div>
+        <table class="table table-sm mb-3 small">
+          <tr>
+            <th class="text-muted fw-normal" style="width:90px">주문명</th>
+            <td id="rm-order" class="fw-semibold"></td>
+          </tr>
+          <tr>
+            <th class="text-muted fw-normal">Payment ID</th>
+            <td><code id="rm-pid" style="font-size:.72rem"></code></td>
+          </tr>
+          <tr>
+            <th class="text-muted fw-normal">결제금액</th>
+            <td id="rm-amount" class="fw-bold text-primary"></td>
+          </tr>
+        </table>
         <div class="mb-3">
-          <label class="form-label small fw-semibold">처리 메모 (선택)</label>
-          <input id="approveMemo" type="text" class="form-control form-control-sm"
-                 placeholder="예: 고객 요청에 따라 전액 환불">
+          <label class="form-label fw-semibold small">
+            환불금액 <span class="text-muted fw-normal">(비워두면 전액)</span>
+          </label>
+          <div class="input-group input-group-sm">
+            <input type="number" id="rm-refund-amt" class="form-control"
+                   placeholder="전액 환불" min="1">
+            <span class="input-group-text">원</span>
+          </div>
+          <div class="form-text small">부분환불 시 금액 입력. 전액환불은 비워두세요.</div>
         </div>
-        <div class="alert alert-warning py-2 small mb-3">
-          <i class="bi bi-exclamation-triangle me-1"></i>
-          PortOne을 통해 <strong>즉시 실환불</strong>됩니다. 취소 불가.
+        <div class="mb-2">
+          <label class="form-label fw-semibold small">환불 사유</label>
+          <input type="text" id="rm-reason" class="form-control form-control-sm"
+                 value="관리자 환불 승인" maxlength="200">
         </div>
-        <button id="approveSubmitBtn" class="btn btn-danger w-100 fw-semibold"
-                onclick="submitRefundApproval()">환불 실행</button>
+        <div id="rm-result" style="display:none" class="mt-2"></div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-danger"
+                id="rm-confirm-btn" onclick="doRefund()">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행
+        </button>
       </div>
     </div>
   </div>
@@ -160,33 +212,73 @@
 <script>
 const _adminCsrf = document.querySelector('meta[name=csrf-token]')?.content
                 || document.getElementById('csrfToken')?.value || '';
+let _rmMaxAmt = 0;
 
-function approveRefund(paymentId, amount, reason) {
-  document.getElementById('approvePaymentId').value = paymentId;
-  document.getElementById('approveAmount').textContent = amount.toLocaleString() + '원';
-  document.getElementById('approveReason').textContent = reason || '-';
-  document.getElementById('approveMemo').value = '';
-  new bootstrap.Modal(document.getElementById('refundApproveModal')).show();
+function openRefundModal(paymentId, amount, reason, orderName) {
+  _rmMaxAmt = amount;
+  document.getElementById('rm-pid').textContent    = paymentId;
+  document.getElementById('rm-order').textContent  = orderName || '-';
+  document.getElementById('rm-amount').textContent = amount.toLocaleString() + '원';
+  document.getElementById('rm-refund-amt').value   = '';
+  document.getElementById('rm-refund-amt').max     = amount;
+  document.getElementById('rm-reason').value       = reason || '관리자 환불 승인';
+  document.getElementById('rm-result').style.display = 'none';
+  const btn = document.getElementById('rm-confirm-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행';
+  new bootstrap.Modal(document.getElementById('refundModal')).show();
 }
 
-async function submitRefundApproval() {
-  const paymentId = document.getElementById('approvePaymentId').value;
-  const memo      = document.getElementById('approveMemo').value.trim();
-  const btn       = document.getElementById('approveSubmitBtn');
-  if (!confirm('실제 환불을 실행합니다. 계속하시겠습니까?')) return;
-  btn.disabled = true; btn.textContent = '처리 중...';
+async function doRefund() {
+  const paymentId = document.getElementById('rm-pid').textContent.trim();
+  const amtInput  = document.getElementById('rm-refund-amt').value.trim();
+  const reason    = document.getElementById('rm-reason').value.trim() || '관리자 환불 승인';
+  const resultEl  = document.getElementById('rm-result');
+  const btn       = document.getElementById('rm-confirm-btn');
+
+  const amount = amtInput ? parseInt(amtInput, 10) : null;
+  if (amount && (isNaN(amount) || amount <= 0 || amount > _rmMaxAmt)) {
+    resultEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">금액이 유효하지 않습니다.</div>';
+    resultEl.style.display = '';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+  resultEl.style.display = 'none';
+
   try {
     const res  = await fetch('/admin/revenue/refund', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _adminCsrf },
-      body: JSON.stringify({ payment_id: paymentId, reason: memo || '어드민 수동 환불 승인', amount: 0 }),
+      body: JSON.stringify({ payment_id: paymentId, reason, amount }),
     });
     const data = await res.json();
-    bootstrap.Modal.getInstance(document.getElementById('refundApproveModal')).hide();
-    alert(data.success ? '✅ 환불 완료' : ('❌ ' + (data.error || '환불 실패')));
-    if (data.success) location.reload();
-  } catch (e) { alert('오류: ' + e.message); }
-  finally { btn.disabled = false; btn.textContent = '환불 실행'; }
+
+    if (data.success) {
+      const amt = (data.cancelled_amount || 0).toLocaleString();
+      let msg = `<div class="alert alert-success py-2 mb-0 small">
+        <i class="bi bi-check-circle-fill me-1"></i>
+        환불 완료 — <strong>${amt}원</strong>`;
+      if (data.warning) msg += `<br><small class="text-warning">${data.warning}</small>`;
+      msg += '</div>';
+      resultEl.innerHTML = msg;
+      resultEl.style.display = '';
+      btn.innerHTML = '<i class="bi bi-check me-1"></i>완료';
+      setTimeout(() => location.reload(), 2500);
+    } else {
+      resultEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">
+        <i class="bi bi-x-circle-fill me-1"></i>${data.error || '환불 실패'}</div>`;
+      resultEl.style.display = '';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행';
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">네트워크 오류: ${e.message}</div>`;
+    resultEl.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행';
+  }
 }
 </script>
 {% endblock %}

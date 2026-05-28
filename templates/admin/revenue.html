@@ -77,13 +77,19 @@
       <div class="card-header py-2"><small class="fw-semibold text-muted">PG 수단별</small></div>
       <div class="card-body p-3">
         <div class="d-flex justify-content-between mb-2">
-          <span class="small">카드결제</span>
+          <span class="small">카드결제 (KPN)</span>
           <span class="fw-semibold small">{{ summary.by_pg.card | number }} 원</span>
         </div>
-        <div class="d-flex justify-content-between">
+        <div class="d-flex justify-content-between mb-2">
           <span class="small">카카오페이</span>
           <span class="fw-semibold small">{{ summary.by_pg.kakaopay | number }} 원</span>
         </div>
+        {% if summary.by_pg.other %}
+        <div class="d-flex justify-content-between">
+          <span class="small text-muted">기타</span>
+          <span class="small text-muted">{{ summary.by_pg.other | number }} 원</span>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -141,11 +147,12 @@
           <td class="ps-3 small text-muted">{{ r.paid_at | kst('%m/%d') if r.paid_at else '—' }}</td>
           <td class="small">{{ r.order_name or '—' }}</td>
           <td class="small fw-semibold">{{ r.amount | number }} 원</td>
-          <td class="small text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.refund_reason or '—' }}</td>
+          <td class="small text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ r.refund_reason or '' }}">{{ r.refund_reason or '—' }}</td>
           <td class="small text-muted">{{ r.refund_requested_at | kst('%m/%d %H:%M') if r.refund_requested_at else '—' }}</td>
           <td class="pe-3">
             <button class="btn btn-sm btn-outline-danger py-0"
-                    onclick="confirmRefund('{{ r.payment_id }}', {{ r.amount }})">
+                    onclick="openRefundModal('{{ r.payment_id }}', {{ r.amount }}, '{{ (r.refund_reason or '') | replace("'", "\\'") }}', '{{ (r.order_name or '') | replace("'", "\\'") }}')">
               환불 승인
             </button>
           </td>
@@ -156,6 +163,56 @@
   </div>
 </div>
 {% endif %}
+
+<!-- 세금 안내 -->
+<div class="alert alert-info small mb-4">
+  <i class="bi bi-info-circle me-1"></i>
+  카드결제는 PG사(KPN·카카오페이)가 매출신고를 자동 대행합니다.
+  매월 1일에 전월 결제내역을 CSV로 다운로드해 세무사에 인계하시면 됩니다.
+</div>
+
+<!-- 환불 처리 모달 -->
+<div class="modal fade" id="adminRefundModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold text-danger"><i class="bi bi-arrow-counterclockwise me-2"></i>환불 처리</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <div class="alert alert-warning py-2 mb-3 small">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          포트원에서 즉시 취소됩니다. 되돌릴 수 없습니다.
+        </div>
+        <table class="table table-sm mb-3 small">
+          <tr><th class="text-muted fw-normal" style="width:90px">주문명</th><td id="arm-order" class="fw-semibold"></td></tr>
+          <tr><th class="text-muted fw-normal">Payment ID</th><td><code id="arm-pid" style="font-size:.72rem"></code></td></tr>
+          <tr><th class="text-muted fw-normal">결제금액</th><td id="arm-amount" class="fw-bold text-primary"></td></tr>
+        </table>
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">환불금액 <span class="text-muted fw-normal">(비워두면 전액)</span></label>
+          <div class="input-group input-group-sm">
+            <input type="number" id="arm-refund-amt" class="form-control" placeholder="전액 환불" min="1">
+            <span class="input-group-text">원</span>
+          </div>
+          <div class="form-text small">부분환불 시 금액 입력. 전액환불은 비워두세요.</div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold small">환불 사유</label>
+          <input type="text" id="arm-reason" class="form-control form-control-sm"
+                 value="관리자 환불 승인" maxlength="200">
+        </div>
+        <div id="arm-result" style="display:none" class="mt-2"></div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-danger" id="arm-confirm-btn" onclick="doAdminRefund()">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -181,28 +238,73 @@ new Chart(document.getElementById('trendChart'), {
   }
 });
 
-function confirmRefund(paymentId, amount) {
-  const reason = prompt(`환불 사유 입력 (금액: ${amount.toLocaleString()}원)`);
-  if (!reason) return;
-  if (!confirm(`${paymentId} 를 ${amount.toLocaleString()}원 환불하시겠습니까?`)) return;
+let _armMaxAmt = 0;
 
-  fetch('{{ url_for("admin.revenue_refund") }}', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.content || '',
-    },
-    body: JSON.stringify({ payment_id: paymentId, reason }),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) {
-      alert(`환불 완료: ${(d.cancelled_amount || 0).toLocaleString()}원`);
-      location.reload();
+function openRefundModal(paymentId, amount, reason, orderName) {
+  _armMaxAmt = amount;
+  document.getElementById('arm-pid').textContent    = paymentId;
+  document.getElementById('arm-order').textContent  = orderName || '-';
+  document.getElementById('arm-amount').textContent = amount.toLocaleString() + '원';
+  document.getElementById('arm-refund-amt').value   = '';
+  document.getElementById('arm-refund-amt').max     = amount;
+  document.getElementById('arm-reason').value       = reason || '관리자 환불 승인';
+  document.getElementById('arm-result').style.display = 'none';
+  const btn = document.getElementById('arm-confirm-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행';
+  new bootstrap.Modal(document.getElementById('adminRefundModal')).show();
+}
+
+async function doAdminRefund() {
+  const paymentId = document.getElementById('arm-pid').textContent.trim();
+  const amtInput  = document.getElementById('arm-refund-amt').value.trim();
+  const reason    = document.getElementById('arm-reason').value.trim() || '관리자 환불 승인';
+  const resultEl  = document.getElementById('arm-result');
+  const btn       = document.getElementById('arm-confirm-btn');
+
+  const amount = amtInput ? parseInt(amtInput, 10) : null;
+  if (amount && (isNaN(amount) || amount <= 0 || amount > _armMaxAmt)) {
+    resultEl.innerHTML = '<div class="alert alert-danger py-2 mb-0 small">금액이 유효하지 않습니다.</div>';
+    resultEl.style.display = '';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+  resultEl.style.display = 'none';
+
+  try {
+    const csrf = document.querySelector('meta[name=csrf-token]')?.content || '';
+    const res  = await fetch('{{ url_for("admin.revenue_refund") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify({ payment_id: paymentId, reason, amount }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      const amt = (data.cancelled_amount || 0).toLocaleString();
+      let msg = `<div class="alert alert-success py-2 mb-0 small">
+        <i class="bi bi-check-circle-fill me-1"></i>환불 완료 — <strong>${amt}원</strong>`;
+      if (data.warning) msg += `<br><small class="text-warning">${data.warning}</small>`;
+      msg += `</div>`;
+      resultEl.innerHTML = msg;
+      resultEl.style.display = '';
+      btn.innerHTML = '<i class="bi bi-check me-1"></i>완료';
+      setTimeout(() => location.reload(), 2500);
     } else {
-      alert('환불 실패: ' + (d.error || '알 수 없음'));
+      resultEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">
+        <i class="bi bi-x-circle-fill me-1"></i>${data.error || '환불 실패'}</div>`;
+      resultEl.style.display = '';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행';
     }
-  });
+  } catch (e) {
+    resultEl.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">네트워크 오류: ${e.message}</div>`;
+    resultEl.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i>환불 실행';
+  }
 }
 </script>
 {% endblock %}

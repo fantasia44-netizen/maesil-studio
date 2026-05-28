@@ -57,7 +57,7 @@ def _fetch_payments(supabase, start_iso: str, end_iso: str) -> list:
 
 def _aggregate(rows: list) -> dict:
     total = supply = tax = refund = 0
-    by_pg = {'card': 0, 'kakaopay': 0}
+    by_pg = {'card': 0, 'kakaopay': 0, 'other': 0}
     paid_count = refund_count = 0
 
     for r in rows or []:
@@ -68,10 +68,13 @@ def _aggregate(rows: list) -> dict:
             tax        += int(r.get('tax_amount') or 0)
             paid_count += 1
             pg = (r.get('pg_provider') or '').lower()
-            if 'kakao' in pg:
+            if 'kakao' in pg or pg == 'kakaopay':
                 by_pg['kakaopay'] += amt
-            else:
+            elif ('card' in pg or 'kpn' in pg or 'tosspayments' in pg
+                  or pg in ('', 'unknown')):
                 by_pg['card'] += amt
+            else:
+                by_pg['other'] += amt
         if r.get('refund_status') == 'completed':
             refund        += int(r.get('refund_amount') or 0)
             refund_count  += 1
@@ -194,8 +197,8 @@ def revenue_payments():
     try:
         q = sb.table('payments') \
             .select('id,user_id,operator_id,payment_id,amount,supply_amount,tax_amount,'
-                    'status,refund_status,refund_amount,pg_provider,'
-                    'order_name,payment_type,paid_at,refunded_at') \
+                    'status,refund_status,refund_amount,refund_reason,refund_requested_at,'
+                    'pg_provider,order_name,payment_type,paid_at,refunded_at') \
             .gte('paid_at', start).lt('paid_at', end)
         if status:
             q = q.eq('status', status)
