@@ -727,7 +727,7 @@ def studio_generate_images(product_id):
 
     total_cost = IMG_GEN_COST * len(prompt_items)
     try:
-        use_points(current_user.id, 'image_generation', str(uuid.uuid4()),
+        use_points(current_user, 'image_generation', str(uuid.uuid4()),
                    cost_override=total_cost,
                    note_override=f'스튜디오 이미지 {len(prompt_items)}장')
     except InsufficientPoints as ip:

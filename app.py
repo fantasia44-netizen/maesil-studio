@@ -27,8 +27,10 @@ def create_app(config_class=None):
     _init_csrf(app)
     _init_login(app)
     _register_blueprints(app)
+    _exempt_webhook_csrf(app)
     _register_hooks(app)
     _init_redis(app)
+    _init_scheduler(app)
 
     return app
 
@@ -89,6 +91,7 @@ def _init_jinja_filters(app):
 
 def _init_csrf(app):
     csrf = CSRFProtect(app)
+    app.extensions['csrf'] = csrf  # 블루프린트에서 개별 면제 시 사용
 
     @app.errorhandler(400)
     def csrf_error(e):
@@ -356,6 +359,26 @@ def _register_hooks(app):
         )
         response.headers['Content-Security-Policy'] = csp
         return response
+
+
+def _exempt_webhook_csrf(app):
+    """PortOne 웹훅 엔드포인트만 CSRF 면제 — 블루프린트 등록 후 호출."""
+    try:
+        from blueprints.billing import payment_webhook
+        csrf = app.extensions.get('csrf')
+        if csrf:
+            csrf.exempt(payment_webhook)
+    except Exception as e:
+        app.logger.warning(f'[CSRF] webhook 면제 실패: {e}')
+
+
+def _init_scheduler(app):
+    """구독 자동갱신 스케줄러 초기화."""
+    try:
+        from services.subscription_scheduler import init_scheduler
+        init_scheduler(app)
+    except Exception as e:
+        app.logger.warning(f'[Scheduler] 초기화 실패: {e}')
 
 
 def _init_redis(app):

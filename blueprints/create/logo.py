@@ -25,7 +25,7 @@ def logo():
 @create_bp.route('/logo/generate', methods=['POST'])
 @login_required
 def logo_generate():
-    """Ideogram V3으로 로고 시안 3개 생성 (800P)"""
+    """Ideogram V3으로 로고 시안 3개 생성 시작 → creation_id 즉시 반환 (800P, 비동기)"""
     supabase = current_app.supabase
     data     = request.get_json(force=True) or {}
 
@@ -43,7 +43,7 @@ def logo_generate():
 
     cost = POINT_COSTS.get('logo', 800)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -57,7 +57,7 @@ def logo_generate():
             'brand_id': brand['id'] if brand else None,
             'creation_type': 'logo',
             'input_data': data,
-            'output_data': {},
+            'output_data': {'progress': 0, 'step': '로고 생성 준비 중'},
             'points_used': cost,
             'status': 'generating',
             'model_used': 'ideogram-v3',
@@ -70,15 +70,80 @@ def logo_generate():
         logger.warning('[logo] creation insert: %s', e)
 
     try:
-        from services.config_service import get_config
-        from services.claude_service import generate_text
-        import requests as _req
+        use_points(current_user, 'logo', creation_id)
+    except InsufficientPoints:
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        return jsonify(ok=False, message='포인트가 부족합니다.')
 
+    from tasks.logo_task import generate_logo
+    supabase_url = current_app.config.get('SUPABASE_URL', '')
+    supabase_key = (current_app.config.get('SUPABASE_SERVICE_KEY')
+                    or current_app.config.get('SUPABASE_KEY', ''))
+
+    generate_logo.delay(
+        creation_id=creation_id,
+        user_id=current_user.id,
+        brand_name=brand_name,
+        brand_name_ko=brand_name_ko,
+        tagline=tagline,
+        logo_style=logo_style,
+        vibe=vibe,
+        primary_color=primary_color,
+        extra=extra,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+    )
+    return jsonify(ok=True, creation_id=creation_id, cost=cost)
+
+
+@create_bp.route('/logo/status/<creation_id>', methods=['GET'])
+@login_required
+def logo_status(creation_id: str):
+    supabase = current_app.supabase
+    r = supabase.table('creations').select('status,output_data').eq(
+        'id', creation_id
+    ).eq('user_id', current_user.id).execute()
+    if not r.data:
+        return jsonify(ok=False, message='없는 작업입니다.')
+    row = r.data[0]
+    return jsonify(ok=True, status=row['status'], output_data=row.get('output_data') or {})
+
+
+# ─────────────────────────────────────────────────────────────
+# Celery 태스크에서 직접 호출하는 파이프라인 함수
+# ─────────────────────────────────────────────────────────────
+
+def run_logo_pipeline(
+    creation_id: str,
+    brand_name: str,
+    brand_name_ko: str,
+    tagline: str,
+    logo_style: str,
+    vibe: str,
+    primary_color: str,
+    extra: str,
+    supabase,
+) -> None:
+    """Ideogram V3으로 로고 시안 3개 생성 후 creation 갱신."""
+    import json, re
+    import requests as _req
+    from services.config_service import get_config
+    from services.claude_service import generate_text
+
+    def _update(status, extra_data=None):
+        row = {'status': status}
+        if extra_data:
+            row['output_data'] = extra_data
+        try:
+            supabase.table('creations').update(row).eq('id', creation_id).execute()
+        except Exception as e:
+            logger.error('[logo_pipeline] supabase update: %s', e)
+
+    try:
         api_key = get_config('ideogram_api_key')
         if not api_key:
             raise ValueError('Ideogram API Key가 설정되지 않았습니다. 어드민 → 시스템 설정에서 등록하세요.')
 
-        # ── Claude Haiku로 최적화된 Ideogram 프롬프트 생성 ──
         STYLE_DESC = {
             'wordmark':    'wordmark logo — brand name as stylized typography only, no icon',
             'lettermark':  'lettermark logo — initials only, bold geometric lettering',
@@ -87,25 +152,26 @@ def logo_generate():
             'mascot':      'mascot logo — friendly character representing the brand',
         }
         VIBE_DESC = {
-            'modern_minimal': 'modern minimalist, clean lines, flat design, sans-serif',
+            'modern_minimal':  'modern minimalist, clean lines, flat design, sans-serif',
             'vintage_classic': 'vintage classic, retro serif typography, distressed texture',
-            'cute_friendly':  'cute friendly, rounded shapes, soft colors, approachable',
-            'tech_bold':      'tech bold, geometric sharp shapes, futuristic, high contrast',
-            'natural_warm':   'natural warm, organic shapes, earth tones, handcrafted feel',
-            'luxury_premium': 'luxury premium, elegant thin lines, gold accent, sophisticated',
+            'cute_friendly':   'cute friendly, rounded shapes, soft colors, approachable',
+            'tech_bold':       'tech bold, geometric sharp shapes, futuristic, high contrast',
+            'natural_warm':    'natural warm, organic shapes, earth tones, handcrafted feel',
+            'luxury_premium':  'luxury premium, elegant thin lines, gold accent, sophisticated',
         }
 
         name_display = f'"{brand_name_ko}"' if brand_name_ko else f'"{brand_name}"'
         eng_name     = f'"{brand_name}"' if brand_name else ''
 
-        color_hint = f', color palette: {primary_color}' if primary_color else ''
+        color_hint   = f', color palette: {primary_color}' if primary_color else ''
         tagline_hint = f', tagline: "{tagline}"' if tagline else ''
         extra_hint   = f', {extra}' if extra else ''
 
         style_str = STYLE_DESC.get(logo_style, STYLE_DESC['combination'])
         vibe_str  = VIBE_DESC.get(vibe, VIBE_DESC['modern_minimal'])
 
-        # 3가지 변형 프롬프트를 Claude가 생성
+        _update('generating', {'progress': 1, 'step': '프롬프트 생성 중'})
+
         system = '당신은 Ideogram 로고 프롬프트 전문가입니다. 순수 JSON만 출력하세요.'
         prompt = f"""브랜드 {name_display}{f' ({eng_name})' if eng_name else ''}의 로고 시안 3가지를 위한 Ideogram V3 프롬프트를 생성하세요.
 
@@ -121,15 +187,14 @@ def logo_generate():
 [출력]
 ["프롬프트1 (영문, 50~80자)", "프롬프트2", "프롬프트3"]"""
 
-        import re, json
         raw   = generate_text(system, prompt, max_tokens=600, model='claude-haiku-4-5-20251001')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         prompts = json.loads(clean[s:e]) if s >= 0 and e > s else [clean]
 
-        # ── Ideogram API — 시안 3개 생성 ──
         logo_urls = []
-        for p in prompts[:3]:
+        for idx, p in enumerate(prompts[:3]):
+            _update('generating', {'progress': idx + 2, 'step': f'로고 시안 {idx+1}/3 생성 중'})
             full_prompt = (
                 f'{p}, brand name text: {name_display}'
                 f'{tagline_hint}, transparent background, '
@@ -154,19 +219,9 @@ def logo_generate():
             url = resp.json()['data'][0]['url']
             logo_urls.append(url)
 
-        use_points(current_user.id, 'logo', creation_id)
+        _update('done', {'logo_urls': logo_urls, 'progress': 5})
+        logger.info('[logo_pipeline] 완료: %s → %d개', creation_id, len(logo_urls))
 
-        supabase.table('creations').update({
-            'output_data': {'logo_urls': logo_urls},
-            'status': 'done',
-        }).eq('id', creation_id).execute()
-
-        return jsonify(ok=True, logo_urls=logo_urls, creation_id=creation_id, cost=cost)
-
-    except InsufficientPoints:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message='포인트가 부족합니다.')
     except Exception as e:
-        logger.error('[logo] generate error: %s', e)
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message=f'로고 생성 실패: {e}')
+        logger.error('[logo_pipeline] 오류 (%s): %s', creation_id, e)
+        _update('failed', {'error': str(e)})

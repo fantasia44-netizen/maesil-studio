@@ -347,6 +347,37 @@ def _draw_gradient_rect(img, x0, y0, x1, y1, color_top, color_bot):
         draw.line([(x0, y0+dy), (x1, y0+dy)], fill=(r, g, b, a))
 
 
+def _fit_lines(font_path: str, text: str, base_size: int,
+               max_w: int, max_lines: int):
+    """Wrap text; shrink font 15% per step (max 4×) before truncating.
+
+    Returns (lines, font) where font may be smaller than base_size.
+    """
+    for shrink in range(5):
+        size = max(16, int(base_size * (0.85 ** shrink)))
+        try:
+            f = ImageFont.truetype(font_path, size=size)
+        except Exception:
+            f = ImageFont.load_default()
+        lines, line = [], ''
+        for ch in text:
+            test = line + ch
+            try:
+                w = f.getbbox(test)[2] - f.getbbox(test)[0]
+            except Exception:
+                w = len(test) * size
+            if w > max_w and line:
+                lines.append(line)
+                line = ch
+            else:
+                line = test
+        if line:
+            lines.append(line)
+        if len(lines) <= max_lines:
+            return lines, f
+    return lines[:max_lines], f
+
+
 def _find_korean_font() -> str:
     candidates = [
         '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
@@ -728,30 +759,28 @@ def generate_text_emphasis(
 
     try:
         fp = _find_korean_font()
-        font_main = ImageFont.truetype(fp, size=46)
-        font_sub  = ImageFont.truetype(fp, size=22)
+        font_sub = ImageFont.truetype(fp, size=22)
     except Exception:
-        font_main = font_sub = ImageFont.load_default()
+        fp = None
+        font_sub = ImageFont.load_default()
 
-    # 메인 텍스트 (중앙 정렬, 드롭섀도)
-    lines, line = [], ''
-    for ch in main_text:
-        test = line + ch
-        bbox = draw.textbbox((0,0), test, font=font_main)
-        if bbox[2]-bbox[0] > W-160 and line:
-            lines.append(line); line = ch
-        else:
-            line = test
-    if line: lines.append(line)
-    lines = lines[:3]
+    # 메인 텍스트 — 적응형 폰트: 3줄 이내에 맞을 때까지 15%씩 축소
+    if fp:
+        lines, font_main = _fit_lines(fp, main_text, 46, W - 160, 3)
+        lh = max(1, font_main.getbbox('가')[3] - font_main.getbbox('가')[1])
+        line_gap = int(lh * 1.38)
+    else:
+        font_main = ImageFont.load_default()
+        lines = [main_text]
+        line_gap = 60
 
-    total_h = len(lines) * 60
+    total_h = len(lines) * line_gap
     start_y = (H - total_h) // 2 - (18 if sub_text else 0)
     for i, l in enumerate(lines):
-        bbox = draw.textbbox((0,0), l, font=font_main)
-        tw = bbox[2]-bbox[0]
-        _shadow_text(draw, ((W-tw)//2, start_y + i*60), l, font_main,
-                     fill=white, shadow_color=(0,0,0,160), offset=3)
+        bbox = draw.textbbox((0, 0), l, font=font_main)
+        tw = bbox[2] - bbox[0]
+        _shadow_text(draw, ((W - tw) // 2, start_y + i * line_gap), l, font_main,
+                     fill=white, shadow_color=(0, 0, 0, 160), offset=3)
 
     # 서브텍스트
     if sub_text:
@@ -808,31 +837,29 @@ def generate_cta_section(
 
     try:
         fp = _find_korean_font()
-        font_cta = ImageFont.truetype(fp, size=50)
         font_sub = ImageFont.truetype(fp, size=22)
         font_btn = ImageFont.truetype(fp, size=24)
     except Exception:
-        font_cta = font_sub = font_btn = ImageFont.load_default()
+        fp = None
+        font_sub = font_btn = ImageFont.load_default()
 
-    # CTA 텍스트 (중앙, 드롭섀도)
-    lines, line = [], ''
-    for ch in cta_text:
-        test = line + ch
-        bbox = draw.textbbox((0,0), test, font=font_cta)
-        if bbox[2]-bbox[0] > W-160 and line:
-            lines.append(line); line = ch
-        else:
-            line = test
-    if line: lines.append(line)
-    lines = lines[:2]
+    # CTA 텍스트 — 적응형 폰트: 2줄 이내에 맞을 때까지 15%씩 축소
+    if fp:
+        lines, font_cta = _fit_lines(fp, cta_text, 50, W - 160, 2)
+        lh = max(1, font_cta.getbbox('가')[3] - font_cta.getbbox('가')[1])
+        line_gap = int(lh * 1.38)
+    else:
+        font_cta = ImageFont.load_default()
+        lines = [cta_text]
+        line_gap = 66
 
-    total_h = len(lines) * 66
-    start_y = H//2 - total_h//2 - 30
+    total_h = len(lines) * line_gap
+    start_y = H // 2 - total_h // 2 - 30
     for i, l in enumerate(lines):
-        bbox = draw.textbbox((0,0), l, font=font_cta)
-        tw = bbox[2]-bbox[0]
-        _shadow_text(draw, ((W-tw)//2, start_y+i*66), l, font_cta,
-                     fill=white, shadow_color=(0,0,0,180), offset=3)
+        bbox = draw.textbbox((0, 0), l, font=font_cta)
+        tw = bbox[2] - bbox[0]
+        _shadow_text(draw, ((W - tw) // 2, start_y + i * line_gap), l, font_cta,
+                     fill=white, shadow_color=(0, 0, 0, 180), offset=3)
 
     if sub_text:
         bbox = draw.textbbox((0,0), sub_text, font=font_sub)

@@ -41,9 +41,9 @@ def image_generate():
     cost_key = ENGINE_COST_MAP.get(engine, 'img_preview')
     cost = POINT_COSTS.get(cost_key, 50)
 
-    # 포인트 확인
+    # 포인트 확인 (User 객체 전달 — operator 풀 자동 라우팅)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -68,6 +68,13 @@ def image_generate():
     except Exception as e:
         logger.error(f'[IMAGE] creation insert error: {e}')
 
+    # 포인트 선차감 — 생성 전 차감하여 동시 요청 race condition 방지
+    try:
+        use_points(current_user, cost_key, creation_id)
+    except InsufficientPoints:
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        return jsonify(ok=False, message='포인트가 부족합니다.')
+
     import time
     start = time.time()
     try:
@@ -79,6 +86,7 @@ def image_generate():
         elif engine == 'bg_replace':
             # Bria 배경 교체 — reference_image_url = 누끼컷, prompt = 배경 설명
             if not reference_image_url:
+                supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
                 return jsonify(ok=False, message='배경 교체는 원본 이미지 URL이 필요합니다.')
             from services.imagen_service import replace_background
             image_url = replace_background(reference_image_url, prompt)
@@ -90,13 +98,6 @@ def image_generate():
         public_url = upload_to_supabase(image_url, current_user.id, filename)
 
         gen_ms = int((time.time() - start) * 1000)
-
-        # 포인트 차감
-        try:
-            use_points(current_user.id, cost_key, creation_id)
-        except InsufficientPoints:
-            supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-            return jsonify(ok=False, message='포인트가 부족합니다.')
 
         supabase.table('creations').update({
             'output_data': {'image_url': public_url},
@@ -137,15 +138,19 @@ def remove_bg():
         )
 
         if mode == 'advanced':
-            # 포인트 차감
             from services.point_service import get_balance, use_points, InsufficientPoints
             cost = POINT_COSTS.get('bg_remove_adv', 20)
-            balance = get_balance(current_user.id)
+            balance = get_balance(current_user)
             if balance < cost:
                 return jsonify(ok=False, message=f'포인트 부족 (필요: {cost}P, 잔액: {balance}P)')
-            result_bytes = remove_bg_advanced(image_bytes)
             import uuid
-            use_points(current_user.id, 'bg_remove_adv', str(uuid.uuid4()))
+            ref_id = str(uuid.uuid4())
+            # 포인트 선차감 후 처리
+            try:
+                use_points(current_user, 'bg_remove_adv', ref_id)
+            except InsufficientPoints:
+                return jsonify(ok=False, message=f'포인트 부족 (필요: {cost}P, 잔액: {balance}P)')
+            result_bytes = remove_bg_advanced(image_bytes)
         else:
             result_bytes = remove_bg_basic(image_bytes)
 

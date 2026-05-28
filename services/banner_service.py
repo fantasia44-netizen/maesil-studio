@@ -84,6 +84,18 @@ def _wrap(text: str, font, max_px: int) -> list[str]:
     return lines
 
 
+def _fit_wrap(text: str, bold: bool, base_size: int,
+              max_px: int, max_lines: int) -> tuple[list[str], object]:
+    """Wrap text; reduce font up to 4× (15% each) before truncating."""
+    for shrink in range(5):
+        size = max(18, int(base_size * (0.85 ** shrink)))
+        f = _font(bold=bold, size=size)
+        lines = _wrap(text, f, max_px)
+        if len(lines) <= max_lines:
+            return lines, f
+    return lines[:max_lines], f
+
+
 # ════════════════════════════════════════════════════════
 # 이미지 유틸
 # ════════════════════════════════════════════════════════
@@ -238,21 +250,19 @@ def _composite_overlay(
 
     d = ImageDraw.Draw(canvas)
     font_scale = min(W, H)
-    hf  = _font(bold=True,  size=max(38, min(76, int(font_scale * 0.058))))
-    sf_ = _font(bold=False, size=max(26, min(50, int(font_scale * 0.036))))
-    cf  = _font(bold=True,  size=max(22, min(44, int(font_scale * 0.032))))
+    cf = _font(bold=True, size=max(22, min(44, int(font_scale * 0.032))))
 
     text_w = int(W * 0.86)
     margin = int(W * 0.07)
     ty = int(H * 0.63)
 
-    h_lines = _wrap(headline, hf, text_w)[:2]
+    h_lines, hf = _fit_wrap(headline, True,  max(38, min(76, int(font_scale * 0.058))), text_w, 2)
     ty = _draw_text_lines(d, h_lines, hf, margin, ty,
                           (255, 255, 255, 255), (0, 0, 0, 140))
     ty += int(font_scale * 0.012)
 
     if subline:
-        s_lines = _wrap(subline, sf_, text_w)[:2]
+        s_lines, sf_ = _fit_wrap(subline, False, max(26, min(50, int(font_scale * 0.036))), text_w, 2)
         ty = _draw_text_lines(d, s_lines, sf_, margin, ty,
                               (230, 230, 230, 220), (0, 0, 0, 100))
         ty += int(font_scale * 0.015)
@@ -312,21 +322,19 @@ def _composite_panel(
     d = ImageDraw.Draw(canvas_rgba)
 
     font_scale = min(W, panel_h * 1.5)
-    hf  = _font(bold=True,  size=max(32, min(72, int(font_scale * 0.055))))
-    sf_ = _font(bold=False, size=max(22, min(46, int(font_scale * 0.034))))
-    cf  = _font(bold=True,  size=max(20, min(40, int(font_scale * 0.030))))
+    cf = _font(bold=True, size=max(20, min(40, int(font_scale * 0.030))))
 
     margin = int(W * 0.07)
     text_w = int(W * 0.86)
     ty = img_h + int(panel_h * 0.12)
 
-    h_lines = _wrap(headline, hf, text_w)[:2]
+    h_lines, hf = _fit_wrap(headline, True,  max(32, min(72, int(font_scale * 0.055))), text_w, 2)
     ty = _draw_text_lines(d, h_lines, hf, margin, ty,
                           (255, 255, 255, 255), (0, 0, 0, 100))
     ty += int(font_scale * 0.010)
 
     if subline:
-        s_lines = _wrap(subline, sf_, text_w)[:2]
+        s_lines, sf_ = _fit_wrap(subline, False, max(22, min(46, int(font_scale * 0.034))), text_w, 2)
         ty = _draw_text_lines(d, s_lines, sf_, margin, ty,
                               (240, 240, 240, 210), (0, 0, 0, 80))
         ty += int(font_scale * 0.012)
@@ -378,18 +386,16 @@ def _composite_split_lr(
     margin = int(split_x * 0.10)
     font_scale = min(split_x, H)
 
-    hf  = _font(bold=True,  size=max(30, min(70, int(font_scale * 0.058))))
-    sf_ = _font(bold=False, size=max(20, min(44, int(font_scale * 0.036))))
-    cf  = _font(bold=True,  size=max(18, min(38, int(font_scale * 0.030))))
+    cf = _font(bold=True, size=max(18, min(38, int(font_scale * 0.030))))
 
     ty = int(H * 0.25)
-    h_lines = _wrap(headline, hf, text_w)[:3]
+    h_lines, hf = _fit_wrap(headline, True,  max(30, min(70, int(font_scale * 0.058))), text_w, 3)
     ty = _draw_text_lines(d, h_lines, hf, margin, ty,
                           (255, 255, 255, 255), (0, 0, 0, 120))
     ty += int(font_scale * 0.015)
 
     if subline:
-        s_lines = _wrap(subline, sf_, text_w)[:2]
+        s_lines, sf_ = _fit_wrap(subline, False, max(20, min(44, int(font_scale * 0.036))), text_w, 2)
         ty = _draw_text_lines(d, s_lines, sf_, margin, ty,
                               (230, 230, 230, 220), (0, 0, 0, 100))
         ty += int(font_scale * 0.018)
@@ -746,9 +752,7 @@ def generate_text_banner(
     sc = tuple(max(0, int(c * 0.78)) for c in tc[:3]) + (200,)
 
     font_scale = min(W, H)
-    hf = _font(bold=True,  size=max(36, min(82, int(font_scale * 0.066))))
-    sf = _font(bold=False, size=max(24, min(54, int(font_scale * 0.040))))
-    cf = _font(bold=True,  size=max(20, min(42, int(font_scale * 0.031))))
+    cf = _font(bold=True, size=max(20, min(42, int(font_scale * 0.031))))
 
     margin = int(W * 0.08)
 
@@ -773,7 +777,8 @@ def generate_text_banner(
         text_max_w = int(text_zone * 0.84)
         ty = int(H * 0.18)
 
-        for ln in _wrap(headline, hf, text_max_w)[:3]:
+        h_lines, hf = _fit_wrap(headline, True, max(36, min(82, int(font_scale * 0.066))), text_max_w, 3)
+        for ln in h_lines:
             bb = hf.getbbox(ln)
             lh = bb[3] - bb[1]
             d.text((margin + 2, ty + 2), ln, font=hf, fill=(0, 0, 0, 70))
@@ -781,12 +786,13 @@ def generate_text_banner(
             ty += int(lh * 1.38)
         ty += int(font_scale * 0.014)
 
-        for ln in (_wrap(subline, sf, text_max_w)[:2] if subline else []):
-            bb = sf.getbbox(ln)
-            lh = bb[3] - bb[1]
-            d.text((margin, ty), ln, font=sf, fill=sc)
-            ty += int(lh * 1.38)
         if subline:
+            s_lines, sf = _fit_wrap(subline, False, max(24, min(54, int(font_scale * 0.040))), text_max_w, 2)
+            for ln in s_lines:
+                bb = sf.getbbox(ln)
+                lh = bb[3] - bb[1]
+                d.text((margin, ty), ln, font=sf, fill=sc)
+                ty += int(lh * 1.38)
             ty += int(font_scale * 0.014)
 
         if cta:
@@ -804,10 +810,13 @@ def generate_text_banner(
         if product_img:
             prod_h = int(H * 0.28)
 
-        h_lines = _wrap(headline, hf, text_max_w)[:3]
-        h_lh    = max(1, hf.getbbox('가')[3] - hf.getbbox('가')[1])
-        s_lines = _wrap(subline, sf, text_max_w)[:2] if subline else []
-        s_lh    = max(1, sf.getbbox('가')[3] - sf.getbbox('가')[1]) if s_lines else 0
+        h_lines, hf = _fit_wrap(headline, True, max(36, min(82, int(font_scale * 0.066))), text_max_w, 3)
+        h_lh = max(1, hf.getbbox('가')[3] - hf.getbbox('가')[1])
+        if subline:
+            s_lines, sf = _fit_wrap(subline, False, max(24, min(54, int(font_scale * 0.040))), text_max_w, 2)
+            s_lh = max(1, sf.getbbox('가')[3] - sf.getbbox('가')[1])
+        else:
+            s_lines, s_lh = [], 0
 
         total_h  = prod_h + (int(H * 0.04) if prod_h else 0)
         total_h += len(h_lines) * int(h_lh * 1.38) + int(font_scale * 0.014)

@@ -549,7 +549,7 @@ def shorts_generate():
     cost = POINT_COSTS.get(creation_type, 300)
 
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -576,7 +576,7 @@ def shorts_generate():
         logger.warning('[shorts/generate] creation insert: %s', e)
 
     try:
-        use_points(current_user.id, creation_type, creation_id)
+        use_points(current_user, creation_type, creation_id)
     except InsufficientPoints:
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')

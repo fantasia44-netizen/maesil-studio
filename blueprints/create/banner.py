@@ -194,7 +194,7 @@ def banner_generate():
 
     cost = POINT_COSTS.get('banner', 80)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -229,7 +229,7 @@ def banner_generate():
         logger.warning('[banner/generate] creation insert: %s', e)
 
     try:
-        use_points(current_user.id, 'banner', creation_id)
+        use_points(current_user, 'banner', creation_id)
     except InsufficientPoints:
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')
@@ -303,7 +303,7 @@ def banner_text_generate():
 
     cost = POINT_COSTS.get('banner_text', 20)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    if get_balance(current_user.id) < cost:
+    if get_balance(current_user) < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P)')
 
     product_url: str | None = None
@@ -311,7 +311,15 @@ def banner_text_generate():
         product = _get_product(supabase, product_id)
         product_url = _first_product_image(product)
 
-    # 1) PIL 생성 (빠름 — 실패해도 포인트 차감 없음)
+    creation_id = str(uuid.uuid4())
+
+    # 1) 포인트 선차감 (생성 전 차감 — race condition 방지)
+    try:
+        use_points(current_user, 'banner_text', creation_id)
+    except InsufficientPoints:
+        return jsonify(ok=False, message='포인트가 부족합니다.')
+
+    # 2) PIL 생성
     try:
         b64_uri = generate_text_banner(
             bg_type=bg_type, bg_color1=bg_color1, bg_color2=bg_color2,
@@ -323,8 +331,7 @@ def banner_text_generate():
         logger.error('[banner/text-generate] PIL 실패: %s', e)
         return jsonify(ok=False, message=f'배너 생성 실패: {e}')
 
-    # 2) Supabase Storage 업로드
-    creation_id = str(uuid.uuid4())
+    # 3) Supabase Storage 업로드
     try:
         _, b64data = b64_uri.split(',', 1)
         img_bytes  = _b64.b64decode(b64data)
@@ -337,7 +344,7 @@ def banner_text_generate():
         logger.error('[banner/text-generate] 업로드 실패: %s', e)
         return jsonify(ok=False, message=f'업로드 실패: {e}')
 
-    # 3) 포인트 차감 (생성·업로드 성공 후)
+    # 4) creation 행 기록
     try:
         _row = {
             'id': creation_id, 'user_id': current_user.id,
@@ -356,13 +363,6 @@ def banner_text_generate():
         supabase.table('creations').insert(_row).execute()
     except Exception as e:
         logger.warning('[banner/text-generate] creation insert 실패: %s', e)
-
-    try:
-        use_points(current_user.id, 'banner_text', creation_id)
-    except InsufficientPoints:
-        return jsonify(ok=False, message='포인트가 부족합니다.')
-    except Exception as e:
-        logger.warning('[banner/text-generate] 포인트 차감 실패: %s', e)
 
     return jsonify(ok=True, image_url=image_url, creation_id=creation_id, W=W, H=H, size_key=size_key)
 
@@ -413,7 +413,7 @@ def banner_product_generate():
 
     cost = POINT_COSTS.get('banner_product', 80)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -442,7 +442,7 @@ def banner_product_generate():
         logger.warning('[banner/product-generate] creation insert: %s', e)
 
     try:
-        use_points(current_user.id, 'banner_product', creation_id)
+        use_points(current_user, 'banner_product', creation_id)
     except InsufficientPoints:
         supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         return jsonify(ok=False, message='포인트가 부족합니다.')

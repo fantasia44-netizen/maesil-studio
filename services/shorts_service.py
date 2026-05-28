@@ -670,6 +670,40 @@ def _wrap_text(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
     return lines
 
 
+def _fit_text(
+    text: str,
+    bold: bool,
+    base_size: int,
+    max_px: int,
+    max_lines: int,
+) -> tuple[list[str], 'ImageFont.ImageFont']:
+    """폰트 크기를 줄여가며 max_lines 이내에 텍스트가 들어오게 조정.
+
+    최대 4회 축소(각 18%). 그래도 초과하면 마지막 크기로 잘라냄.
+    """
+    size = base_size
+    for _ in range(4):
+        font = _font(bold=bold, size=size)
+        lines = _wrap_text(text, font, max_px)
+        if len(lines) <= max_lines:
+            return lines, font
+        size = max(20, int(size * 0.82))
+    font = _font(bold=bold, size=size)
+    return _wrap_text(text, font, max_px)[:max_lines], font
+
+
+def _estimate_tts_seconds(narration: str, speed: float = 1.1) -> float:
+    """한국어 나레이션의 TTS 발화 시간 추정 (한글 기준 휴리스틱).
+
+    한국어 평균 발화: ~4.0자/초 (기본 속도 1.0 기준). speed 배율 적용.
+    구두점·공백 제거 후 순수 음절 수 기준.
+    실측: '아침마다 피부가 당기고 칙칙해서 고민이셨나요' (18자) ≈ 4.1초 @ speed=1.1
+    """
+    pure = len(re.sub(r'[\s\.,!?~…·]', '', narration))
+    base_cps = 4.0 * speed
+    return max(1.5, min(14.0, pure / base_cps))
+
+
 def composite_shorts_frame(
     bg_url_or_b64: str,
     overlay_title: str,
@@ -715,7 +749,6 @@ def composite_shorts_frame(
     # ── 하단 자막 배너 (78%~100%) ───────────────────────────
     if overlay_body:
         bot_start = int(H * 0.78)
-        # 브랜드 컬러 tint 그라디언트
         for y in range(bot_start, H):
             ratio = (y - bot_start) / (H - bot_start)
             r = int(max(0, br * 0.25))
@@ -724,18 +757,17 @@ def composite_shorts_frame(
             a = int(230 * ratio)
             d.line([(0, y), (W, y)], fill=(r, g, b_c, a))
 
-        # 하단 자막 카드 배경
         card_top = int(H * 0.795)
         card_bot = H - 52
-        d.rectangle([(0, card_top), (W, card_bot)], fill=(0, 0, 0, 160))
-
-        # 브랜드 컬러 바
+        d.rectangle([(0, card_top), (W, card_bot)], fill=(0, 0, 0, 110))
         d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
 
-        bf = _font(bold=True, size=int(H * 0.048))
+        # 적응형 폰트 — 나레이션 길이가 길어도 잘리지 않게 자동 축소 (최대 4줄)
         max_w = int(W * 0.88)
-        lines = _wrap_text(overlay_body, bf, max_w)[:3]
-        ty = card_top + int(H * 0.012)
+        lines, bf = _fit_text(overlay_body, bold=True,
+                              base_size=int(H * 0.042), max_px=max_w, max_lines=4)
+        ty = card_top + int(H * 0.010)
+        pad = int(W * 0.055)
         for ln in lines:
             bb_box = bf.getbbox(ln)
             lw = bb_box[2] - bb_box[0]
@@ -825,9 +857,9 @@ def composite_cta_product_frame(
         # 브랜드 컬러 바 (맨 아래 10px)
         d.rectangle([(0, H - 10), (W, H)], fill=(br, bg_, bb, 255))
 
-        bf  = _font(bold=False, size=int(H * 0.038))
         max_w = int(W * 0.88)
-        lines = _wrap_text(overlay_body, bf, max_w)[:3]
+        lines, bf = _fit_text(overlay_body, bold=False,
+                              base_size=int(H * 0.038), max_px=max_w, max_lines=3)
         ty = int(H * 0.836)
         for ln in lines:
             d.text((int(W * 0.06) + 2, ty + 2), ln, font=bf, fill=(0, 0, 0, 150))
@@ -1192,13 +1224,18 @@ def run_shorts_pipeline(
 
 
 def _cleanup_stale_tmp_dirs(max_age_hours: int = 24) -> None:
-    """24시간 이상 된 maesil_shorts_* tmp 디렉토리 정리."""
+    """24시간 이상 된 maesil_shorts_* / maesil_kling_* tmp 디렉토리 정리."""
     try:
-        pattern = os.path.join(tempfile.gettempdir(), 'maesil_shorts_*')
+        import glob as _glob
+        import shutil as _shutil
         cutoff = time.time() - max_age_hours * 3600
-        for d in _glob.glob(pattern):
-            if os.path.isdir(d) and os.path.getmtime(d) < cutoff:
-                shutil.rmtree(d, ignore_errors=True)
+        for pattern in (
+            os.path.join(tempfile.gettempdir(), 'maesil_shorts_*'),
+            os.path.join(tempfile.gettempdir(), 'maesil_kling_*'),
+        ):
+            for d in _glob.glob(pattern):
+                if os.path.isdir(d) and os.path.getmtime(d) < cutoff:
+                    _shutil.rmtree(d, ignore_errors=True)
     except Exception:
         pass
 
@@ -1283,14 +1320,16 @@ def _make_text_overlay_png(
             ratio = (y - bot_start) / (H - bot_start)
             a = int(220 * ratio)
             d.line([(0, y), (W, y)], fill=(0, 0, 0, a))
-        # 브랜드 컬러 바 (맨 아래)
         d.rectangle([(0, H - 50), (W, H)], fill=(br, bg_, bb, 255))
 
         card_top = int(H * 0.795)
-        d.rectangle([(0, card_top), (W, H - 52)], fill=(0, 0, 0, 160))
-        bf   = _font(bold=True, size=int(H * 0.044))
-        lines = _wrap_text(overlay_body, bf, int(W * 0.88))[:3]
-        ty   = card_top + int(H * 0.012)
+        d.rectangle([(0, card_top), (W, H - 52)], fill=(0, 0, 0, 100))
+        # 적응형 폰트 — 나레이션이 길어도 잘리지 않게 자동 축소 (최대 4줄)
+        max_w = int(W * 0.88)
+        lines, bf = _fit_text(overlay_body, bold=True,
+                              base_size=int(H * 0.040), max_px=max_w, max_lines=4)
+        ty   = card_top + int(H * 0.010)
+        pad  = int(W * 0.055)
         for ln in lines:
             bb_box = bf.getbbox(ln)
             lw = bb_box[2] - bb_box[0]
@@ -1473,13 +1512,23 @@ def run_kling_shorts_pipeline(
             if i > 0:
                 time.sleep(3)  # rate limit 회피
 
+            # 나레이션 길이 추정 → Kling 클립 duration 결정 (5 or 10초)
+            # TTS가 클립보다 길면 음성이 잘리고, 짧으면 영상이 음소거로 남음
+            narration_est = scene.get('narration', '')
+            est_secs = _estimate_tts_seconds(narration_est, tts_speed)
+            kling_duration = 10 if est_secs > 4.5 else 5
+            logger.info(
+                '[kling_chain] 씬%d 나레이션 추정 %.1f초 → Kling %d초 클립',
+                i + 1, est_secs, kling_duration,
+            )
+
             task_id = submit_image2video(
                 image_url=scene_img_urls[i],
                 scene_role=role,
                 access_key=kling_access,
                 secret_key=kling_secret,
                 model=kling_model,
-                duration=5,
+                duration=kling_duration,
                 base_url=kling_url,
             )
             logger.info('[kling_chain] 씬%d 제출: task_id=%s role=%s', i + 1, task_id, role)

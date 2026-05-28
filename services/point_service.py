@@ -119,6 +119,16 @@ def _expire_stale_points(user_id: str, operator_id: str | None, supabase) -> Non
             if remaining <= 0:
                 continue
 
+            # 중복 만료 방지: remaining 을 0 으로 먼저 설정 후 실제 잔액 차감
+            # (동시 요청이 와도 두 번째 요청은 remaining=0 이므로 이미 위 필터에서 제외됨)
+            upd = supabase.table('point_ledger').update(
+                {'remaining': 0}
+            ).eq('id', row['id']).eq('remaining', remaining).execute()
+            # 업데이트된 행이 없으면 다른 요청이 먼저 처리한 것 — 스킵
+            if not (upd.data):
+                logger.debug(f'[POINT] 만료 경쟁 스킵: row_id={row["id"]}')
+                continue
+
             # 현재 잔액 직접 조회 (재귀 방지 — get_balance 미사용)
             bal_q = supabase.table('point_ledger').select('balance')
             bal_q = _scope_filter(bal_q, operator_id, user_id)
@@ -142,9 +152,6 @@ def _expire_stale_points(user_id: str, operator_id: str | None, supabase) -> Non
                 expire_row['operator_id'] = operator_id
 
             supabase.table('point_ledger').insert(expire_row).execute()
-            supabase.table('point_ledger').update(
-                {'remaining': 0}
-            ).eq('id', row['id']).execute()
 
             logger.info(f'[POINT] 만료 확정: user={user_id} row_id={row["id"]} -{remaining}P')
 

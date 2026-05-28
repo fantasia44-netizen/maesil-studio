@@ -161,8 +161,8 @@
   <!-- 로딩 -->
   <div id="loadingArea" class="d-none text-center py-5">
     <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem"></div>
-    <div class="fw-semibold">로고 시안 생성 중...</div>
-    <div class="text-muted small mt-1">Ideogram V3으로 3가지 시안을 만들고 있습니다 (약 20~40초)</div>
+    <div class="fw-semibold" id="loadingLabel">로고 시안 생성 중...</div>
+    <div class="text-muted small mt-1" id="loadingStep">Ideogram V3으로 3가지 시안을 만들고 있습니다 (약 30~90초)</div>
   </div>
 
   <!-- 에러 -->
@@ -204,54 +204,85 @@ function fillFromBrand(sel) {
   if (opt.dataset.color) pickColor(opt.dataset.color, null);
 }
 
+let _pollTimer = null;
+
+function _stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
+
+function _setLoading(on) {
+  document.getElementById('loadingArea').classList.toggle('d-none', !on);
+  document.getElementById('generateBtn').disabled = on;
+}
+
+function _showError(msg) {
+  _setLoading(false);
+  document.getElementById('errorMsg').textContent = msg;
+  document.getElementById('errorArea').classList.remove('d-none');
+}
+
+async function _pollStatus(creationId) {
+  try {
+    const r    = await fetch(`/create/logo/status/${creationId}`);
+    const data = await r.json();
+    if (!data.ok) { _stopPolling(); _showError(data.message || '상태 조회 실패'); return; }
+
+    const od   = data.output_data || {};
+    const step = od.step || '생성 중...';
+    document.getElementById('loadingStep').textContent = step;
+
+    if (data.status === 'done') {
+      _stopPolling();
+      _setLoading(false);
+      renderLogos(od.logo_urls || []);
+      document.getElementById('resultArea').classList.remove('d-none');
+      document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (data.status === 'failed') {
+      _stopPolling();
+      _showError(od.error || '로고 생성에 실패했습니다.');
+    }
+  } catch (e) {
+    _stopPolling();
+    _showError('상태 조회 중 오류: ' + e.message);
+  }
+}
+
 async function generateLogo() {
   const brandNameKo = document.getElementById('brandNameKo').value.trim();
   const brandNameEn = document.getElementById('brandNameEn').value.trim();
-  if (!brandNameKo && !brandNameEn) {
-    alert('브랜드명을 입력해주세요.');
-    return;
-  }
+  if (!brandNameKo && !brandNameEn) { alert('브랜드명을 입력해주세요.'); return; }
 
+  _stopPolling();
   document.getElementById('resultArea').classList.add('d-none');
   document.getElementById('errorArea').classList.add('d-none');
-  document.getElementById('loadingArea').classList.remove('d-none');
-  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('loadingStep').textContent = 'Ideogram V3으로 3가지 시안을 만들고 있습니다 (약 30~90초)';
+  _setLoading(true);
 
   try {
     const res  = await fetch('/create/logo/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({
-        brand_id:     document.getElementById('brandSelect').value,
-        brand_name:   brandNameEn,
+        brand_id:      document.getElementById('brandSelect').value,
+        brand_name:    brandNameEn,
         brand_name_ko: brandNameKo,
-        tagline:      document.getElementById('tagline').value.trim(),
-        logo_style:   selectedValues.logoType,
-        vibe:         selectedValues.vibe,
+        tagline:       document.getElementById('tagline').value.trim(),
+        logo_style:    selectedValues.logoType,
+        vibe:          selectedValues.vibe,
         primary_color: document.getElementById('primaryColor').value,
-        extra:        document.getElementById('extraRequest').value.trim(),
+        extra:         document.getElementById('extraRequest').value.trim(),
       }),
     });
     const data = await res.json();
 
-    document.getElementById('loadingArea').classList.add('d-none');
-    document.getElementById('generateBtn').disabled = false;
+    if (!data.ok) { _showError(data.message); return; }
 
-    if (!data.ok) {
-      document.getElementById('errorMsg').textContent = data.message;
-      document.getElementById('errorArea').classList.remove('d-none');
-      return;
-    }
-
-    renderLogos(data.logo_urls);
-    document.getElementById('resultArea').classList.remove('d-none');
-    document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 폴링 시작 (5초 간격)
+    _pollTimer = setInterval(() => _pollStatus(data.creation_id), 5000);
+    _pollStatus(data.creation_id);  // 즉시 1회 확인
 
   } catch (e) {
-    document.getElementById('loadingArea').classList.add('d-none');
-    document.getElementById('generateBtn').disabled = false;
-    document.getElementById('errorMsg').textContent = '오류가 발생했습니다: ' + e.message;
-    document.getElementById('errorArea').classList.remove('d-none');
+    _showError('오류가 발생했습니다: ' + e.message);
   }
 }
 

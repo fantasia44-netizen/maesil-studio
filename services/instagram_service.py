@@ -120,6 +120,35 @@ def _wrap(text: str, font: ImageFont.ImageFont, max_px: int) -> list[str]:
     return lines
 
 
+def _fit_body_text(
+    text: str,
+    font_path: str,
+    base_size: int,
+    max_px: int,
+    max_lines: int = 5,
+) -> tuple[list[str], 'ImageFont.ImageFont']:
+    """폰트 크기를 줄여가며 max_lines 이내에 텍스트가 들어오게 조정.
+
+    최대 4회 18% 축소. 그래도 초과하면 마지막 크기로 잘라냄.
+    """
+    size = base_size
+    for _ in range(4):
+        try:
+            font = ImageFont.truetype(font_path, size)
+        except Exception:
+            font = ImageFont.load_default()
+            return [text], font
+        lines = _wrap(text, font, max_px)
+        if len(lines) <= max_lines:
+            return lines, font
+        size = max(18, int(size * 0.82))
+    try:
+        font = ImageFont.truetype(font_path, size)
+    except Exception:
+        font = ImageFont.load_default()
+    return _wrap(text, font, max_px)[:max_lines], font
+
+
 # ════════════════════════════════════════════════════════
 # Style 1 — 실사 배너
 # ════════════════════════════════════════════════════════
@@ -241,13 +270,21 @@ def create_banner_image(bg_url: str,
     x = int(W * x_start)
     max_w = int(W * 0.88)
 
+    font_path = _font(bold=True)
+
     for i, text in enumerate(texts[:2]):
         if not text:
             continue
-        font      = f1 if i == 0 else f2
-        max_lines = 2 if i == 0 else 6
-        stroke_w  = 4 if i == 0 else 3
-        lines = _wrap(text, font, max_w)[:max_lines]
+        stroke_w = 4 if i == 0 else 3
+        if i == 0:
+            # 헤드라인: 고정 크기, 2줄 제한
+            font   = f1
+            lines  = _wrap(text, font, max_w)[:2]
+        else:
+            # 본문: 적응형 — 텍스트가 길어도 5줄 이내에 들어오게 자동 축소
+            base_size = int(H * 0.038 * text_scale)
+            lines, font = _fit_body_text(text, font_path, base_size, max_w, max_lines=5)
+
         for ln in lines:
             _draw_stroked(d, (x, y), ln, font, fill=(*tc, 255), stroke_w=stroke_w)
             bb = font.getbbox(ln)

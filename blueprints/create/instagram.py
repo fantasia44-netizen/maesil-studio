@@ -687,9 +687,9 @@ def instagram_image_generate():
     cost_key = 'img_ideogram' if style == 'typography' else 'img_preview'
     cost     = POINT_COSTS.get(cost_key, 50)
 
-    # 포인트 확인
+    # 포인트 확인 (User 객체 전달 — operator 풀 자동 라우팅)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트 부족 (필요: {cost}P, 잔액: {balance}P)')
 
@@ -712,14 +712,18 @@ def instagram_image_generate():
     except Exception as e:
         logger.warning(f'[insta img] creation insert: {e}')
 
+    # 포인트 선차감 — API 호출 전 차감하여 race condition 방지
+    try:
+        use_points(current_user, cost_key, creation_id)
+    except InsufficientPoints:
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        return jsonify(ok=False, message='포인트가 부족합니다.')
+
     try:
         from services.imagen_service import upload_to_supabase
 
         translated_prompt = ''
         bg_url = None
-
-        _ILLUST_STYLES = {'ghibli', 'watercolor', 'pastel_cute', 'nordic',
-                          'flat_modern', 'disney', 'pencil_sketch', 'retro_pop'}
 
         from services.imagen_service import _generate_flux
         from services.instagram_service import create_banner_image, create_webtoon_image
@@ -746,9 +750,6 @@ def instagram_image_generate():
             else:
                 final_url = upload_to_supabase(img_url, current_user.id,
                                                f'insta_{style}_{creation_id[:8]}.jpg')
-
-        # 포인트 차감
-        use_points(current_user.id, cost_key, creation_id)
 
         supabase.table('creations').update({
             'output_data': {'image_url': final_url},
@@ -869,7 +870,7 @@ def instagram_product_slide():
 
     cost = POINT_COSTS.get('bg_replace', 80)
     from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user.id)
+    balance = get_balance(current_user)
     if balance < cost:
         return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
 
@@ -891,6 +892,13 @@ def instagram_product_slide():
         supabase.table('creations').insert(_row).execute()
     except Exception as e:
         logger.error(f'[product-slide] creation insert error: {e}')
+
+    # 포인트 선차감
+    try:
+        use_points(current_user, 'bg_replace', creation_id)
+    except InsufficientPoints:
+        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
+        return jsonify(ok=False, message='포인트가 부족합니다.')
 
     try:
         from services.imagen_service import (
@@ -922,12 +930,6 @@ def instagram_product_slide():
 
         filename = f'insta_pslide_{creation_id[:8]}.jpg'
         final_url = upload_to_supabase(data_url, current_user.id, filename)
-
-        try:
-            use_points(current_user.id, 'bg_replace', creation_id)
-        except InsufficientPoints:
-            supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-            return jsonify(ok=False, message='포인트가 부족합니다.')
 
         supabase.table('creations').update({
             'output_data': {'image_url': final_url},

@@ -11,3 +11,6 @@ instance/
 
 # BGM — 빌드 시 생성, git 추적 제외
 static/audio/bgm/*.mp3
+
+# Claude Code worktrees
+.claude/worktrees/

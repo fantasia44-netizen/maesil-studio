@@ -213,16 +213,19 @@ def dpb_gen_image():
     image_prompt    = data.get('image_prompt', '').strip()
     product_name    = data.get('product_name', '').strip()
     product_features= data.get('product_features', '').strip()
-    engine          = data.get('engine', 'flux_preview')   # flux_preview | flux_standard
+    engine          = data.get('engine', 'flux_preview')
+
+    # 허용 엔진 + 포인트 비용 (imagen_service.IMAGE_COSTS 기준)
+    _ENGINE_COSTS = {'flux_preview': 50, 'flux_standard': 300, 'flux_hq': 600}
+    if engine not in _ENGINE_COSTS:
+        engine = 'flux_preview'
+    cost = _ENGINE_COSTS[engine]
 
     # 이미지 프롬프트 자동 생성 (미입력 시)
     # FLUX는 순수 영문 단일 장면 묘사가 최적 — 한글 상품정보 혼합 시 번역 왜곡 발생
     if not image_prompt:
         image_prompt = _IMAGE_PROMPT_HINTS.get(block_role, 'commercial product photography, clean studio')
         image_prompt += ', photorealistic, high quality, 4k'
-
-    # 포인트 비용 결정
-    cost = 50 if engine == 'flux_preview' else 300
 
     # 포인트 차감
     from services.point_service import use_points, InsufficientPoints

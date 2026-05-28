@@ -716,36 +716,47 @@ def blog_compose():
         return jsonify(ok=True, placements=[], n_paragraphs=0)
 
     # ── Haiku 프롬프트 ─────────────────────────────────────────
+    # 단락 앞 200자 + 글자 수 — 내용 기반 의미 매칭을 위해 충분한 컨텍스트 전달
     para_list = '\n'.join(
-        f'[단락{i}] {p[:100]}{"…" if len(p) > 100 else ""}'
+        f'[단락{i}] ({len(p)}자) {p[:200]}{"…" if len(p) > 200 else ""}'
         for i, p in enumerate(paragraphs)
     )
-    img_list = '\n'.join(
-        f'[이미지{i}] {img.get("role", "이미지")}'
-        + (' ← 제품 메인컷' if img.get('is_product') else ' — 라이프스타일 씬')
-        for i, img in enumerate(images)
-    )
+    # 이미지 role + 영문 프롬프트 요약 + style_note 포함 — 의미적 매칭 근거 제공
+    img_lines = []
+    for i, img in enumerate(images):
+        tag  = ' ← 제품 메인컷' if img.get('is_product') else ' — 라이프스타일 씬'
+        role = img.get('role', '이미지')
+        prom = (img.get('prompt') or '')[:80]
+        note = img.get('style_note') or ''
+        line = f'[이미지{i}] {role}{tag}'
+        if prom:
+            line += f'\n  장면: {prom}'
+        if note:
+            line += f'\n  분위기: {note}'
+        img_lines.append(line)
+    img_list = '\n'.join(img_lines)
 
     system = (
         '당신은 한국 블로그 편집자입니다. '
-        '독자 이탈을 방지하고 몰입감을 높이도록 이미지 삽입 위치를 결정합니다. '
+        '각 이미지의 장면/분위기와 단락 내용을 의미적으로 매칭하여 '
+        '독자 몰입감이 가장 높아지는 위치에 이미지를 배치합니다. '
         '순수 JSON만 출력하세요 — 마크다운, 설명 텍스트 없이.'
     )
     user_prompt = f"""블로그에 단락 {n_para}개, 이미지 {n_img}개를 삽입합니다.
 각 이미지를 어느 단락 뒤에 배치할지 결정하세요 (단락 인덱스는 0부터).
 
-[단락 목록]
+[단락 목록 — 각 단락의 핵심 내용]
 {para_list}
 
-[이미지 목록]
+[이미지 목록 — 각 이미지의 장면/분위기]
 {img_list}
 
-배치 규칙:
-1. 제품 메인컷(is_product)은 초반(단락 0 또는 1) 바로 뒤에 배치 — 독자 신뢰 확보
-2. 라이프스타일 씬은 글 전체에 고르게 분산
-3. 이미지 두 장을 연속으로 붙이지 말 것 (단락 사이 최소 1개 단락 간격)
-4. 마지막 단락(인덱스 {n_para - 1}) 뒤 배치도 가능
-5. 내용과 가장 어울리는 단락 다음에 배치
+배치 규칙 (중요도 순):
+1. 의미 매칭 최우선 — 이미지 장면/분위기가 단락 내용과 가장 자연스럽게 어울리는 위치 선택
+2. 제품 메인컷(is_product)은 초반(단락 0 또는 1) 바로 뒤에 배치 — 독자 신뢰 확보
+3. 라이프스타일 씬은 글 전체에 고르게 분산 (특정 구간 몰림 금지)
+4. 이미지 두 장 연속 배치 금지 (단락 최소 1개 간격 필수)
+5. 마지막 단락(인덱스 {n_para - 1}) 뒤 배치도 허용
 
 응답 형식 (순수 JSON):
 {{"placements": [{{"after_para_idx": 0, "image_idx": 0}}, ...]}}"""

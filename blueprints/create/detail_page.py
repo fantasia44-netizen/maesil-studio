@@ -25,16 +25,17 @@ def detail_page():
 @login_required
 def detail_page_generate():
     supabase = current_app.supabase
-    brand_id = request.form.get('brand_id', '')
+    data = request.get_json(silent=True) or {}
+    brand_id = (data.get('brand_id') or '').strip()
     brand = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
     if not brand:
         return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
 
     input_data = {
-        'product_name': request.form.get('product_name', ''),
-        'features': request.form.get('features', ''),
-        'price_range': request.form.get('price_range', ''),
-        'differentiator': request.form.get('differentiator', ''),
+        'product_name':   (data.get('product_name')   or '').strip(),
+        'features':       (data.get('features')       or '').strip(),
+        'price_range':    (data.get('price_range')    or '').strip(),
+        'differentiator': (data.get('differentiator') or '').strip(),
     }
 
     from services.prompts.detail_page import build_prompt

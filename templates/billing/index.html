@@ -117,15 +117,30 @@
         <div class="table-responsive">
           <table class="table table-sm mb-0" style="font-size:.82rem">
             <thead class="table-light">
-              <tr><th class="ps-3">유형</th><th>금액</th><th>포인트</th><th>날짜</th></tr>
+              <tr><th class="ps-3">유형</th><th>금액</th><th>포인트</th><th>날짜</th><th>환불</th></tr>
             </thead>
             <tbody>
               {% for p in payments %}
               <tr>
-                <td class="ps-3">{{ '구독' if p.payment_type == 'subscription' else '포인트 충전' }}</td>
+                <td class="ps-3">
+                  {% if p.payment_type == 'subscription' %}구독
+                  {% elif p.payment_type == 'test_payment' %}<span class="badge bg-secondary">테스트</span>
+                  {% else %}포인트 충전{% endif %}
+                </td>
                 <td>{{ p.amount | number }}원</td>
-                <td class="text-success fw-semibold">+{{ p.points_granted | number }}P</td>
+                <td class="text-success fw-semibold">{{ ('+' + (p.points_granted | number) + 'P') if p.points_granted else '-' }}</td>
                 <td class="text-muted">{{ p.paid_at[:10] if p.paid_at else '-' }}</td>
+                <td>
+                  {% if not p.refund_status and p.status == 'paid' %}
+                  <button class="btn btn-outline-secondary btn-xs py-0 px-2"
+                          style="font-size:.75rem"
+                          onclick="openRefundModal('{{ p.payment_id }}', {{ p.amount }})">환불</button>
+                  {% elif p.refund_status == 'completed' %}
+                  <span class="text-muted small">환불완료</span>
+                  {% elif p.refund_status %}
+                  <span class="text-muted small">{{ p.refund_status }}</span>
+                  {% else %}-{% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -136,6 +151,23 @@
         {% endif %}
       </div>
     </div>
+
+    {% if is_superadmin %}
+    <!-- 어드민 전용: 결제 테스트 -->
+    <div class="card mt-3 border-warning">
+      <div class="card-header py-2 bg-warning bg-opacity-10">
+        <h6 class="mb-0 fw-bold text-warning-emphasis" style="font-size:.85rem">
+          <i class="bi bi-tools me-1"></i>결제 테스트 (어드민 전용)
+        </h6>
+      </div>
+      <div class="card-body py-3">
+        <p class="text-muted small mb-3">100원 실결제 후 즉시 환불하여 카드 채널 연동을 검증합니다.</p>
+        <button class="btn btn-sm btn-warning fw-semibold" onclick="startTestPayment()">
+          <i class="bi bi-credit-card me-1"></i>100원 테스트 결제
+        </button>
+      </div>
+    </div>
+    {% endif %}
 
   </div>
 
@@ -269,17 +301,44 @@
         <div class="d-grid gap-2">
           <button class="btn fw-semibold py-3" id="btnKakao"
                   style="background:#FEE500;color:#191919;font-size:.95rem"
-                  onclick="_pgPay('kakao')">
+                  onclick="_pgDispatch('kakao')">
             <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png"
                  style="height:20px;margin-right:6px;vertical-align:middle" onerror="this.style.display='none'">
             카카오페이로 결제
           </button>
           <button class="btn btn-dark fw-semibold py-3" id="btnCard"
                   style="font-size:.95rem"
-                  onclick="_pgPay('card')">
+                  onclick="_pgDispatch('card')">
             <i class="bi bi-credit-card me-2"></i>신용·체크카드로 결제
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 환불 요청 모달 -->
+<div class="modal fade" id="refundModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold">환불 요청</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2 pb-4">
+        <input type="hidden" id="refundPaymentId">
+        <p class="text-muted small mb-3">결제금액: <strong id="refundAmount"></strong></p>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">환불 사유 <span class="text-danger">*</span></label>
+          <textarea id="refundReason" class="form-control form-control-sm" rows="3"
+                    placeholder="환불 사유를 입력해주세요."></textarea>
+        </div>
+        <div class="rounded-3 p-3 mb-3" style="background:#fff8f0;font-size:.78rem;color:#92400e;border:1px solid #fed7aa">
+          <i class="bi bi-info-circle me-1"></i>
+          결제일로부터 7일 이내 결제는 즉시 자동 환불됩니다. 이후에는 영업일 5일 내 수동 처리됩니다.
+        </div>
+        <button id="refundSubmitBtn" class="btn btn-danger w-100 fw-semibold"
+                onclick="submitRefund()">환불 신청</button>
       </div>
     </div>
   </div>
@@ -324,6 +383,84 @@ function startSubscription(planType, amount, label) {
   new bootstrap.Modal(document.getElementById('pgSelectModal')).show();
 }
 
+async function _pgSubscribe(pg) {
+  // 구독: requestIssueBillingKey → 카드 등록 → 서버에서 첫 달 청구
+  bootstrap.Modal.getInstance(document.getElementById('pgSelectModal')).hide();
+
+  const isKakao    = pg === 'kakao';
+  const channelKey = isKakao ? CHANNEL_KAKAO : CHANNEL_CARD;
+  const ctx        = _pgCtx;
+
+  if (!STORE_ID || !channelKey) {
+    alert('결제 설정이 완료되지 않았습니다. 관리자에게 문의해주세요.');
+    return;
+  }
+  if (typeof PortOne === 'undefined') {
+    alert('결제 SDK 로드 실패. 광고 차단 확장 프로그램을 끄고 새로고침해주세요.');
+    return;
+  }
+
+  const params = {
+    storeId:    STORE_ID,
+    channelKey: channelKey,
+  };
+  if (isKakao) {
+    params.billingKeyMethod = 'EASY_PAY';
+    params.easyPay          = { easyPayProvider: 'KAKAOPAY' };
+  } else {
+    params.billingKeyMethod = 'CARD';
+  }
+
+  let billingKeyRes;
+  try {
+    billingKeyRes = await PortOne.requestIssueBillingKey(params);
+  } catch (e) {
+    alert('카드 등록 오류: ' + e.message);
+    return;
+  }
+  if (billingKeyRes.code) {
+    if (billingKeyRes.code !== 'USER_CANCEL') {
+      alert('카드 등록 실패: ' + billingKeyRes.message);
+    }
+    return;
+  }
+
+  const modal = new bootstrap.Modal(document.getElementById('payModal'));
+  document.getElementById('payModalMsg').textContent = '구독 처리 중...';
+  modal.show();
+
+  try {
+    const res  = await fetch('/billing/billing-key/subscribe', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body:    JSON.stringify({
+        billing_key: billingKeyRes.billingKey,
+        pg:          isKakao ? 'kakaopay' : 'card',
+        plan_type:   ctx.planType,
+      }),
+    });
+    const data = await res.json();
+    modal.hide();
+    if (data.ok) {
+      alert('✅ ' + data.message + (data.card_display ? '\n등록 카드: ' + data.card_display : ''));
+      location.reload();
+    } else {
+      alert('❌ ' + data.message);
+    }
+  } catch (e) {
+    modal.hide();
+    alert('처리 오류: ' + e.message);
+  }
+}
+
+function _pgDispatch(pg) {
+  if (_pgCtx.type === 'subscription') {
+    _pgSubscribe(pg);
+  } else {
+    _pgPay(pg);
+  }
+}
+
 async function _pgPay(pg) {
   // 선택 모달 닫기
   bootstrap.Modal.getInstance(document.getElementById('pgSelectModal')).hide();
@@ -343,16 +480,19 @@ async function _pgPay(pg) {
   const paymentId = _paymentId();
   const ctx = _pgCtx;
 
+  const isTest = ctx.type === 'test';
   const params = {
     storeId:     STORE_ID,
     channelKey:  channelKey,
     paymentId:   paymentId,
-    totalAmount: ctx.amount,
+    totalAmount: isTest ? 100 : ctx.amount,
     currency:    'KRW',
   };
 
   if (ctx.type === 'point') {
     params.orderName = '매실 스튜디오 포인트 충전 ' + ctx.label;
+  } else if (isTest) {
+    params.orderName = '매실 스튜디오 결제 테스트 (100원)';
   } else {
     params.orderName = '매실 스튜디오 ' + ctx.label + ' 구독';
   }
@@ -375,11 +515,61 @@ async function _pgPay(pg) {
 
     const extra = ctx.type === 'point'
       ? { payment_type: 'point_purchase', package_idx: ctx.pkgIdx }
-      : { payment_type: 'subscription',   plan_type: ctx.planType };
+      : isTest
+        ? { payment_type: 'test_payment' }
+        : { payment_type: 'subscription',   plan_type: ctx.planType };
 
     await _verify(response.paymentId, extra);
   } catch (e) {
     alert('오류: ' + e.message);
+  }
+}
+
+function startTestPayment() {
+  if (!STORE_ID || !CHANNEL_CARD) {
+    alert('결제 설정(Store ID / 카드 채널 키)이 등록되지 않았습니다.\n어드민 설정에서 먼저 입력해주세요.');
+    return;
+  }
+  if (typeof PortOne === 'undefined') {
+    alert('결제 SDK 로드 실패. 광고 차단 확장 프로그램을 끄고 새로고침해주세요.');
+    return;
+  }
+  if (!confirm('100원 실결제를 진행합니다.\n결제 후 즉시 환불이 가능합니다.\n계속하시겠습니까?')) return;
+  _pgCtx = { type: 'test' };
+  _pgPay('card');
+}
+
+function openRefundModal(paymentId, amount) {
+  document.getElementById('refundPaymentId').value = paymentId;
+  document.getElementById('refundAmount').textContent = amount.toLocaleString() + '원';
+  document.getElementById('refundReason').value = '';
+  new bootstrap.Modal(document.getElementById('refundModal')).show();
+}
+
+async function submitRefund() {
+  const paymentId = document.getElementById('refundPaymentId').value;
+  const reason    = document.getElementById('refundReason').value.trim();
+  if (!reason) { alert('환불 사유를 입력해주세요.'); return; }
+
+  const btn = document.getElementById('refundSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = '처리 중...';
+
+  try {
+    const res  = await fetch('/billing/refund/request', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body:    JSON.stringify({ payment_id: paymentId, reason, amount: 0 }),
+    });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('refundModal')).hide();
+    alert(data.ok ? '✅ ' + data.message : '❌ ' + data.message);
+    if (data.ok) location.reload();
+  } catch (e) {
+    alert('오류: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '환불 신청';
   }
 }
 
