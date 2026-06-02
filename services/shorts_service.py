@@ -303,6 +303,10 @@ def generate_shorts_script(
     """
     from services.claude_service import generate_text
 
+    # 브랜드 컨텍스트가 너무 길면 Claude 출력도 길어져 JSON 잘림 발생 → 600자로 제한
+    if len(brand_ctx) > 600:
+        brand_ctx = brand_ctx[:600] + '\n...(이하 생략)'
+
     angle_title    = angle.get('title',    '') if isinstance(angle, dict) else ''
     angle_vibe     = angle.get('image_vibe','') if isinstance(angle, dict) else ''
     angle_hook     = angle.get('hook',     '') if isinstance(angle, dict) else ''
@@ -385,7 +389,7 @@ def generate_shorts_script(
 
 순수 JSON 배열만 출력. 씬1·2 naration과 flux_prompt에 제품명·브랜드명 절대 포함 금지."""
 
-        raw   = generate_text(system, prompt, max_tokens=1800, model='claude-sonnet-4-6')
+        raw   = generate_text(system, prompt, max_tokens=2200, model='claude-sonnet-4-6')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:
@@ -473,7 +477,7 @@ def generate_shorts_script(
 
 순수 JSON 배열만 출력"""
 
-    raw = generate_text(system, prompt, max_tokens=2800, model='claude-sonnet-4-6')
+    raw = generate_text(system, prompt, max_tokens=3500, model='claude-sonnet-4-6')
     clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
     s, e = clean.find('['), clean.rfind(']') + 1
     if s >= 0 and e > s:

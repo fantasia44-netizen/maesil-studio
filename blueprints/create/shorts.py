@@ -68,6 +68,9 @@ def shorts_angles():
     import re as _re
 
     brand_ctx = build_brand_context(brand, product)
+    # 컨텍스트 과다 시 출력 토큰 폭발 방지 — 600자로 제한
+    if len(brand_ctx) > 600:
+        brand_ctx = brand_ctx[:600] + '\n...(이하 생략)'
 
     # 방향이 있을 때와 없을 때 프롬프트를 다르게 구성
     if direction:
