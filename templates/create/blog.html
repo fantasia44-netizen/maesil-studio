@@ -548,9 +548,19 @@ async function loadBlogDraft(id) {
       }
     }
     // 글 텍스트 복원
-    if (blogText) document.getElementById('blogTextArea').value = blogText;
-    // 이동할 스텝 결정 (완료 상태라면 4, 아니면 저장된 step 그대로)
-    const targetStep = d.status === 'done' ? 4 : Math.min(d.step_reached || 1, 4);
+    if (blogText) {
+      document.getElementById('blogTextArea').value = blogText;
+      // 글이 있으면 step3 스피너 숨기고 내용 표시 (스피너 무한로딩 방지)
+      document.getElementById('step3Loading').classList.add('d-none');
+      document.getElementById('step3Content').classList.remove('d-none');
+    }
+    // 이동할 스텝 결정
+    // - 글 텍스트 없는데 step 3이면 step 2로 되돌림 (재생성 유도)
+    const rawStep  = d.status === 'done' ? 4 : Math.min(d.step_reached || 1, 4);
+    const targetStep = (rawStep >= 3 && !blogText) ? 2 : rawStep;
+    if (rawStep >= 3 && !blogText) {
+      alert('이전 글 초안을 찾을 수 없습니다. 소구포인트에서 다시 생성해 주세요.');
+    }
     goStep(targetStep);
   } catch(e) { alert('불러오기 실패: ' + e.message); }
 }
