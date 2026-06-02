@@ -50,11 +50,11 @@ def _length_directive(length: str) -> tuple[str, int]:
     """분량 옵션 → (지시문, max_tokens)."""
     s = str(length or '1000')
     if s == '500':
-        return ('약 500자 — 짧고 핵심만. 서론 2줄 + 본문 3개 항목 + 결론 1줄.', 2048)
+        return ('약 500자 — 짧고 핵심만. 서론 2줄 + 본문 3개 항목 + 결론 1줄.', 1500)
     if s == '2000':
         return ('약 2,000자 — 롱폼 SEO. 서론 3~4줄 + 본문 H3 5~7개 + 결론 + Q&A 1~2개. '
-                '구체 수치/예시/단계별 가이드 포함하여 검색 1페이지 점유 가능 수준의 깊이.', 6000)
-    return ('약 1,000자 — 표준 SEO 블로그. 서론 + 본문 H3 4~5개 + 결론.', 4000)
+                '구체 수치/예시/단계별 가이드 포함하여 검색 1페이지 점유 가능 수준의 깊이.', 4000)
+    return ('약 1,000자 — 표준 SEO 블로그. 서론 + 본문 H3 4~5개 + 결론.', 2500)
 
 
 def _format_recent_titles(recent_creations: list[dict] | None) -> str:
@@ -150,6 +150,9 @@ def build_prompt(brand: dict, input_data: dict,
 
     brand_ctx = build_brand_context(brand, product=product,
                                     merged_avoid_words=merged_avoid_words)
+    # 프롬프트 과다 방지 — brand_ctx 800자 초과 시 잘라냄 (출력 속도 개선)
+    if len(brand_ctx) > 800:
+        brand_ctx = brand_ctx[:800] + '\n...(이하 생략)'
     angle_dir = _angle_directive(angle)
     purpose_dir = _purpose_directive(purpose)
     length_dir, max_tokens = _length_directive(length)

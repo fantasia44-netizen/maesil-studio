@@ -425,7 +425,7 @@ def blog_generate():
     recent = []
     related = None
     if relation_mode == 'new':
-        recent = _recent_blog_creations(supabase, current_user.id, brand['id'], limit=30)
+        recent = _recent_blog_creations(supabase, current_user.id, brand['id'], limit=10)
     elif relation_mode in ('series', 'variant') and relation_ref_id:
         related = _related_creation_payload(supabase, relation_ref_id)
 
