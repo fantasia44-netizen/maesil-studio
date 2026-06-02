@@ -385,7 +385,7 @@ def generate_shorts_script(
 
 순수 JSON 배열만 출력. 씬1·2 naration과 flux_prompt에 제품명·브랜드명 절대 포함 금지."""
 
-        raw   = generate_text(system, prompt, max_tokens=900, model='claude-sonnet-4-6')
+        raw   = generate_text(system, prompt, max_tokens=1800, model='claude-sonnet-4-6')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         s, e  = clean.find('['), clean.rfind(']') + 1
         if s >= 0 and e > s:
@@ -473,7 +473,7 @@ def generate_shorts_script(
 
 순수 JSON 배열만 출력"""
 
-    raw = generate_text(system, prompt, max_tokens=1500, model='claude-sonnet-4-6')
+    raw = generate_text(system, prompt, max_tokens=2800, model='claude-sonnet-4-6')
     clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
     s, e = clean.find('['), clean.rfind(']') + 1
     if s >= 0 and e > s:
