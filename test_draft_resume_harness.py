@@ -87,6 +87,10 @@ class _FakeTable:
         self._filters.append(('eq', col, val))
         return self
 
+    def in_(self, col, values):
+        self._filters.append(('in', col, list(values)))
+        return self
+
     def order(self, *a, **kw):
         return self
 
@@ -107,6 +111,8 @@ class _FakeTable:
             for kind, col, val in self._filters:
                 if kind == 'eq':
                     rows = [r for r in rows if r.get(col) == val]
+                elif kind == 'in':
+                    rows = [r for r in rows if r.get(col) in val]
             return MagicMock(data=rows)
 
         # INSERT / UPDATE
@@ -903,6 +909,298 @@ check("instagram.py: instagram_delete_draft 라우트 (DELETE)",
       "DELETE" in insta_src and "instagram/draft" in insta_src)
 check("instagram.py: 인스타 라우트에 insta_drafts= 전달",
       'insta_drafts=' in insta_src)
+
+
+# ──────────────────────────────────────────────────────────────
+# 13. shorts 라우트 등록 검증
+# ──────────────────────────────────────────────────────────────
+print('\n[13] blueprints.create.shorts — 라우트 등록')
+
+try:
+    check('POST /create/shorts/save-draft 등록',
+          _has_route('/create/shorts/save-draft', {'POST'}))
+    check('GET /create/shorts/draft/<id> 등록',
+          any(u.startswith('/create/shorts/draft/') for u in rule_urls))
+    check('DELETE /create/shorts/draft/<id> 등록',
+          any(u.startswith('/create/shorts/draft/') for u in rule_urls))
+    check('GET /create/shorts/recent-done 등록',
+          _has_route('/create/shorts/recent-done', {'GET'}))
+
+    shorts_draft_methods: set[str] = set()
+    for url, ms in rules:
+        if url.startswith('/create/shorts/draft/'):
+            shorts_draft_methods |= set(ms)
+    check('shorts/draft/<id> — GET+DELETE 모두 지원',
+          'GET' in shorts_draft_methods and 'DELETE' in shorts_draft_methods,
+          str(sorted(shorts_draft_methods)))
+
+    check('GET /create/detail-page/recent-done 등록',
+          _has_route('/create/detail-page/recent-done', {'GET'}))
+    check('GET /create/detail-page/result/<id> 등록',
+          any(u.startswith('/create/detail-page/result/') for u in rule_urls))
+
+except Exception as e:
+    check('shorts/detail-page 라우트 등록', False, repr(e)[:140])
+
+
+# ──────────────────────────────────────────────────────────────
+# 14. shorts.py — 헬퍼 로직
+# ──────────────────────────────────────────────────────────────
+print('\n[14] shorts.py — _get_shorts_drafts / _recent_shorts_creations 헬퍼')
+
+try:
+    shorts_mod = importlib.import_module('blueprints.create.shorts')
+    _get_shorts_drafts       = shorts_mod._get_shorts_drafts
+    _recent_shorts_creations = shorts_mod._recent_shorts_creations
+    _SHORTS_STEP_LABELS      = shorts_mod._SHORTS_STEP_LABELS
+
+    _SHORTS_ROWS = [
+        {
+            'id': 'shorts-draft-1', 'user_id': 'u-test', 'operator_id': None,
+            'creation_type': 'shorts_draft', 'status': 'draft',
+            'step_reached': 2,
+            'input_data': {'direction': '신제품 쇼츠'},
+            'step_data': {'direction': '신제품 쇼츠', 'angle': {'title': '피로 회복 포인트'}},
+            'output_data': {},
+            'created_at': '2026-05-10T09:00:00', 'updated_at': '2026-05-14T10:00:00',
+        },
+        {
+            'id': 'shorts-draft-2', 'user_id': 'u-test', 'operator_id': None,
+            'creation_type': 'shorts_draft', 'status': 'draft',
+            'step_reached': 4,
+            'input_data': {'direction': '브랜드 인지도'},
+            'step_data': {'direction': '브랜드 인지도', 'scenes': [{'narration': '테스트 씬'}]},
+            'output_data': {},
+            'created_at': '2026-05-11T09:00:00', 'updated_at': '2026-05-15T08:00:00',
+        },
+    ]
+
+    _SHORTS_DONE_ROWS = [
+        {
+            'id': 'shorts-done-1', 'user_id': 'u-test',
+            'creation_type': 'shorts_video', 'status': 'done',
+            'brand_id': 'brand-A',
+            'input_data': {'direction': '브랜드 영상'},
+            'step_data': {},
+            'output_data': {'video_url': 'https://example.com/vid.mp4'},
+            'created_at': '2026-05-12T10:00:00',
+        },
+        {
+            'id': 'shorts-done-2', 'user_id': 'u-test',
+            'creation_type': 'shorts_video_kling', 'status': 'done',
+            'brand_id': 'brand-B',
+            'input_data': {},
+            'step_data': {},
+            'output_data': {'video_url': 'https://example.com/vid2.mp4'},
+            'created_at': '2026-05-11T10:00:00',
+        },
+    ]
+
+    _s_mock = MagicMock()
+    _s_mock.id = 'u-test'
+    _s_mock.operator_id = None
+
+    db_s = _FakeDB({'creations': _SHORTS_ROWS + _SHORTS_DONE_ROWS})
+
+    with test_app.app_context():
+        with patch('blueprints.create.shorts.current_user', _s_mock):
+            sdrafts = _get_shorts_drafts(db_s, limit=5)
+
+    check('shorts draft 2개 반환', len(sdrafts) == 2)
+    check("step_reached=2 -> step_label='소구포인트 선택'",
+          any(d['step_label'] == '소구포인트 선택' and d['id'] == 'shorts-draft-1'
+              for d in sdrafts))
+    check("step_reached=4 -> step_label='스토리보드 확인'",
+          any(d['step_label'] == '스토리보드 확인' for d in sdrafts))
+    check('angle.title preview 사용',
+          any(d['preview'] == '피로 회복 포인트' for d in sdrafts))
+    check('updated_at 앞 10자 날짜',
+          any(d['updated_at'] == '2026-05-15' for d in sdrafts))
+
+    # _recent_shorts_creations — 브랜드 필터
+    recent_all = _recent_shorts_creations(db_s, 'u-test', brand_id=None, limit=5)
+    check('recent_shorts 브랜드 없음 → 2건', len(recent_all) == 2)
+    recent_a = _recent_shorts_creations(db_s, 'u-test', brand_id='brand-A', limit=5)
+    check('recent_shorts brand-A 필터 → 1건', len(recent_a) == 1)
+    check('brand-A 영상 id 확인', recent_a[0]['id'] == 'shorts-done-1')
+
+    # step labels 전체 확인
+    for n, label in [(1,'기본 설정'), (2,'소구포인트 선택'), (3,'스타일 선택'),
+                     (4,'스토리보드 확인'), (5,'이미지 확인'), (6,'음성·BGM 설정')]:
+        check(f'_SHORTS_STEP_LABELS[{n}]={label!r}',
+              _SHORTS_STEP_LABELS.get(n) == label)
+
+except Exception as e:
+    check('shorts 헬퍼 검증', False, repr(e)[:140])
+
+
+# ──────────────────────────────────────────────────────────────
+# 15. templates/create/shorts.html — 배너 & JS 검증
+# ──────────────────────────────────────────────────────────────
+print('\n[15] templates/create/shorts.html — 배너 & JS 검증')
+
+try:
+    shorts_tpl_path = os.path.join(ROOT, 'templates', 'create', 'shorts.html')
+    check('shorts.html 파일 존재', os.path.isfile(shorts_tpl_path))
+    stpl = open(shorts_tpl_path, encoding='utf-8').read()
+
+    check("배너: {% if shorts_drafts %} 조건 분기",
+          '{% if shorts_drafts' in stpl or '{% if shorts_drafts %}' in stpl)
+    check("배너: 이어서 작업하기 텍스트",
+          '이어서 작업하기' in stpl)
+    check("배너: shortsDraftCard_{{ d.id }} ID",
+          'shortsDraftCard_' in stpl)
+    check("배너: loadShortsDraft 호출",
+          'onclick="loadShortsDraft' in stpl or "onclick='loadShortsDraft" in stpl)
+    check("배너: deleteShortsDraft 호출",
+          'onclick="deleteShortsDraft' in stpl or "onclick='deleteShortsDraft" in stpl)
+
+    check("재작업 섹션: shortsRedoBrandSelect",
+          'shortsRedoBrandSelect' in stpl)
+    check("재작업 섹션: shortsRedoList",
+          'shortsRedoList' in stpl)
+    check("재작업 섹션: redoShortsVideo 호출",
+          'redoShortsVideo' in stpl)
+
+    check("JS: let draftId 선언",
+          'let draftId' in stpl)
+    check("JS: async function saveShortsDraft",
+          'async function saveShortsDraft' in stpl)
+    check("JS: async function loadShortsDraft",
+          'async function loadShortsDraft' in stpl)
+    check("JS: async function deleteShortsDraft",
+          'async function deleteShortsDraft' in stpl)
+    check("JS: async function redoShortsVideo",
+          'async function redoShortsVideo' in stpl)
+    check("JS: _renderShortsRedoList 함수 정의",
+          '_renderShortsRedoList' in stpl)
+    check("JS: loadShortsRecentDone 함수 정의",
+          'async function loadShortsRecentDone' in stpl)
+
+    check("Step 2: selectAngle 에서 saveShortsDraft(2) 호출",
+          'saveShortsDraft(2)' in stpl)
+    check("Step 4: 스토리보드 승인 시 saveShortsDraft(4) 호출",
+          'saveShortsDraft(4)' in stpl)
+
+    check("onBrandChange: shortsRedoBrandSelect 동기화",
+          'shortsRedoBrandSelect' in stpl and 'loadShortsRecentDone' in stpl)
+
+    check("save-draft CSRF 헤더 포함",
+          'X-CSRFToken' in stpl and 'saveShortsDraft' in stpl)
+    check("loadShortsDraft: goStep 호출",
+          'loadShortsDraft' in stpl and 'goStep(' in stpl)
+    check("loadShortsDraft: 각도 카드 renderStoryboard 복원",
+          'loadShortsDraft' in stpl and 'renderStoryboard' in stpl)
+
+except Exception as e:
+    check('shorts.html 템플릿 검증', False, repr(e)[:140])
+
+
+# ──────────────────────────────────────────────────────────────
+# 16. detail_page.py + templates/create/detail_page.html
+# ──────────────────────────────────────────────────────────────
+print('\n[16] detail_page.py + detail_page.html — 이력 섹션')
+
+try:
+    dp_mod = importlib.import_module('blueprints.create.detail_page')
+    _recent_dp = dp_mod._recent_detail_page_creations
+
+    _DP_ROWS = [
+        {
+            'id': 'dp-1', 'user_id': 'u-test',
+            'creation_type': 'detail_page', 'status': 'done',
+            'brand_id': 'brand-A',
+            'input_data': {'product_name': '비타민C 세럼'},
+            'output_data': {'text': '상세페이지 카피 내용입니다.'},
+            'created_at': '2026-05-13T10:00:00',
+        },
+        {
+            'id': 'dp-2', 'user_id': 'u-test',
+            'creation_type': 'detail_page', 'status': 'done',
+            'brand_id': 'brand-B',
+            'input_data': {'product_name': '콜라겐 크림'},
+            'output_data': {'text': '또 다른 상세페이지 카피.'},
+            'created_at': '2026-05-12T10:00:00',
+        },
+    ]
+
+    db_dp = _FakeDB({'creations': _DP_ROWS})
+
+    # brand_id 없이 전체 조회
+    all_dp = _recent_dp(db_dp, 'u-test', brand_id=None)
+    check('detail_page recent all -> 2건', len(all_dp) == 2)
+
+    # brand_id 필터
+    dp_a = _recent_dp(db_dp, 'u-test', brand_id='brand-A')
+    check('detail_page brand-A 필터 -> 1건', len(dp_a) == 1)
+    check('brand-A item id 확인', dp_a[0]['id'] == 'dp-1')
+
+    # 템플릿 검증
+    dp_tpl_path = os.path.join(ROOT, 'templates', 'create', 'detail_page.html')
+    check('detail_page.html 파일 존재', os.path.isfile(dp_tpl_path))
+    dptpl = open(dp_tpl_path, encoding='utf-8').read()
+
+    check("이력 섹션: {% if brands %} 조건 분기",
+          '{% if brands' in dptpl)
+    check("이력 섹션: dpRedoBrandSelect",
+          'dpRedoBrandSelect' in dptpl)
+    check("이력 섹션: dpRedoList",
+          'dpRedoList' in dptpl)
+    check("JS: loadDpRecentDone 함수",
+          'async function loadDpRecentDone' in dptpl)
+    check("JS: _renderDpRedoList 함수",
+          'function _renderDpRedoList' in dptpl)
+    check("JS: redoDpResult 함수",
+          'async function redoDpResult' in dptpl)
+    check("JS: DOMContentLoaded 기본 브랜드 자동 로드",
+          'DOMContentLoaded' in dptpl and 'loadDpRecentDone' in dptpl)
+    check("JS: detail_page_recent_done url_for",
+          "url_for('create.detail_page_recent_done')" in dptpl
+          or 'url_for("create.detail_page_recent_done")' in dptpl)
+    check("브랜드 select: onchange=loadDpRecentDone",
+          'onchange="loadDpRecentDone' in dptpl or "onchange='loadDpRecentDone" in dptpl)
+
+except Exception as e:
+    check('detail_page 검증', False, repr(e)[:140])
+
+
+# ──────────────────────────────────────────────────────────────
+# 17. 소스 코드 구조 — shorts.py / detail_page.py
+# ──────────────────────────────────────────────────────────────
+print('\n[17] 소스 코드 구조 — shorts.py / detail_page.py')
+
+shorts_src = open(os.path.join(ROOT, 'blueprints', 'create', 'shorts.py'), encoding='utf-8').read()
+dp_src     = open(os.path.join(ROOT, 'blueprints', 'create', 'detail_page.py'), encoding='utf-8').read()
+
+check("shorts.py: _get_shorts_drafts 함수 정의",
+      'def _get_shorts_drafts(' in shorts_src)
+check("shorts.py: _recent_shorts_creations 함수 정의",
+      'def _recent_shorts_creations(' in shorts_src)
+check("shorts.py: _SHORTS_STEP_LABELS 딕셔너리",
+      '_SHORTS_STEP_LABELS' in shorts_src)
+check("shorts.py: status='draft' 세팅",
+      "'status':        'draft'" in shorts_src or "'status': 'draft'" in shorts_src)
+check("shorts.py: shorts_save_draft 라우트",
+      "'/shorts/save-draft'" in shorts_src)
+check("shorts.py: shorts_get_draft 라우트 (GET)",
+      "'/shorts/draft/<draft_id>'" in shorts_src and 'GET' in shorts_src)
+check("shorts.py: shorts_delete_draft 라우트 (DELETE)",
+      "'/shorts/draft/<draft_id>'" in shorts_src and 'DELETE' in shorts_src)
+check("shorts.py: shorts_recent_done 라우트",
+      "'/shorts/recent-done'" in shorts_src)
+check("shorts.py: shorts() 에 shorts_drafts= 전달",
+      'shorts_drafts=' in shorts_src)
+check("shorts.py: creation_type='shorts_draft' 삽입",
+      "'shorts_draft'" in shorts_src)
+
+check("detail_page.py: _recent_detail_page_creations 함수 정의",
+      'def _recent_detail_page_creations(' in dp_src)
+check("detail_page.py: detail_page_recent_done 라우트",
+      "'/detail-page/recent-done'" in dp_src)
+check("detail_page.py: detail_page_result 라우트",
+      "'/detail-page/result/" in dp_src)
+check("detail_page.py: get_accessible_brands 사용",
+      'get_accessible_brands' in dp_src)
 
 
 # ──────────────────────────────────────────────────────────────

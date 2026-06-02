@@ -180,6 +180,17 @@
 </style>
 
 <script>
+// ── 다운로드 프록시 헬퍼 ──────────────────────────────────────
+function _dlProxy(url, filename) {
+  const a = document.createElement('a');
+  a.href = '/download-proxy?url=' + encodeURIComponent(url) +
+           '&filename=' + encodeURIComponent(filename || 'download');
+  a.download = filename || 'download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 const CSRF = document.getElementById('csrfToken').value;
 let selectedValues = { logoType: 'combination', vibe: 'modern_minimal' };
 
@@ -297,10 +308,10 @@ function renderLogos(urls) {
         </div>
         <div class="card-body p-2">
           <div class="small fw-semibold mb-2">시안 ${i+1}</div>
-          <a href="${url}" download="logo_${i+1}.png" target="_blank"
-             class="btn btn-sm btn-outline-primary w-100">
+          <button class="btn btn-sm btn-outline-primary w-100"
+                  onclick="_dlProxy('${url}','logo_${i+1}.png')">
             <i class="bi bi-download me-1"></i>다운로드
-          </a>
+          </button>
         </div>
       </div>
     </div>

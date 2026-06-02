@@ -465,6 +465,17 @@
 
 {% block extra_script %}
 <script>
+// ── 다운로드 프록시 헬퍼 ──────────────────────────────────────
+function _dlProxy(url, filename) {
+  const a = document.createElement('a');
+  a.href = '/download-proxy?url=' + encodeURIComponent(url) +
+           '&filename=' + encodeURIComponent(filename || 'download');
+  a.download = filename || 'download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 // ── 전역 상태 ────────────────────────────────────────────────
 const CSRF = document.getElementById('csrfToken').value;
 let currentStep  = 1;
@@ -1419,8 +1430,8 @@ function appendImageBlock(container, img, vidx) {
          style="max-width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.12)">
     <div class="text-muted small mt-2">${img.role}</div>
     <div class="d-flex justify-content-center gap-2 mt-2 flex-wrap">
-      <button class="btn btn-sm btn-outline-secondary" id="finalDl_${vidx}"
-              onclick="downloadImageBlob('${img.url}', 'blog_image_${vidx+1}.jpg', this)">
+      <button id="finalDl_${vidx}" class="btn btn-sm btn-outline-secondary"
+              onclick="_dlProxy('${img.url}','blog_img_${vidx+1}.jpg')">
         <i class="bi bi-download me-1"></i>이미지 저장
       </button>
       <button class="btn btn-sm btn-outline-primary"
@@ -1555,24 +1566,8 @@ function _updateTotalCostBadge() {
 }
 
 // ── 이미지 Blob 다운로드 (외부 URL은 download 속성이 무시되므로 fetch 사용) ──
-async function downloadImageBlob(url, filename, btn) {
-  const origHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
-  try {
-    const res  = await fetch(url);
-    const blob = await res.blob();
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = filename || 'image.jpg';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  } catch (e) {
-    alert('다운로드 실패: ' + e.message);
-  } finally {
-    btn.disabled  = false;
-    btn.innerHTML = origHtml;
-  }
+function downloadImageBlob(url, filename) {
+  _dlProxy(url, filename || 'image.jpg');
 }
 
 // ── Step 5: 이미지 교체 (삽입/수정) ─────────────────────────
@@ -1581,7 +1576,7 @@ function replaceFinalImg(vidx, url) {
   if (imgEl) imgEl.src = url;
   // 버튼으로 변경됐으므로 onclick 업데이트
   const dlEl = document.getElementById(`finalDl_${vidx}`);
-  if (dlEl) dlEl.setAttribute('onclick', `downloadImageBlob('${url}', 'blog_image_${vidx+1}.jpg', this)`);
+  if (dlEl) dlEl.setAttribute('onclick', `_dlProxy('${url}','blog_img_${vidx+1}.jpg')`);
   if (window._validImgs?.[vidx]) window._validImgs[vidx].url = url;
   document.getElementById(`insertPanel_${vidx}`)?.classList.add('d-none');
 }

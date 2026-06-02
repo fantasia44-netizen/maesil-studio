@@ -302,6 +302,59 @@ def settings():
     return redirect(url_for('main.settings'))
 
 
+@main_bp.route('/download-proxy')
+@login_required
+def download_proxy():
+    """크로스오리진 파일 다운로드 프록시.
+
+    브라우저가 크로스오리진 URL에서 download 속성을 무시하고 새 탭을 여는 문제를
+    서버에서 Content-Disposition: attachment 헤더를 붙여 전달함으로써 해결한다.
+    """
+    import requests as _req
+    import urllib.parse
+    from flask import Response, stream_with_context, abort
+
+    url      = request.args.get('url', '').strip()
+    filename = request.args.get('filename', 'download').strip()
+
+    if not url:
+        abort(400)
+
+    # 허용 도메인만 프록시 (임의 URL 프록시 보안 방지)
+    parsed = urllib.parse.urlparse(url)
+    host   = parsed.netloc.lower()
+    ALLOWED_SUFFIXES = ('.supabase.co', '.supabase.in', '.fal.media', '.fal.run',
+                        'storage.googleapis.com')
+    if not any(host == s.lstrip('.') or host.endswith(s)
+               for s in ALLOWED_SUFFIXES):
+        logger.warning('[download-proxy] 차단된 도메인: %s', host)
+        abort(403)
+
+    try:
+        r = _req.get(url, stream=True, timeout=60)
+        r.raise_for_status()
+        content_type = r.headers.get('Content-Type', 'application/octet-stream')
+        safe_name    = urllib.parse.quote(filename, safe='')
+        resp_headers = {
+            'Content-Disposition': f"attachment; filename*=UTF-8''{safe_name}",
+            'Content-Type': content_type,
+            'Cache-Control': 'no-store',
+        }
+        if 'Content-Length' in r.headers:
+            resp_headers['Content-Length'] = r.headers['Content-Length']
+        return Response(
+            stream_with_context(r.iter_content(chunk_size=65536)),
+            headers=resp_headers,
+            status=200,
+        )
+    except _req.HTTPError as e:
+        logger.error('[download-proxy] HTTP %s — %s', e.response.status_code, url)
+        abort(502)
+    except Exception as e:
+        logger.error('[download-proxy] %s — %s', type(e).__name__, url)
+        abort(502)
+
+
 @main_bp.route('/api/balance')
 @login_required
 def api_balance():

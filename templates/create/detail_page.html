@@ -14,7 +14,8 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
             <label class="form-label fw-semibold small">브랜드 선택</label>
-            <select name="brand_id" class="form-select form-select-sm">
+            <select name="brand_id" id="dpBrandSelect" class="form-select form-select-sm"
+                    onchange="loadDpRecentDone(this.value)">
               {% for b in brands %}<option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}{% if b.is_default %} (기본){% endif %}</option>{% endfor %}
             </select>
           </div>
@@ -54,6 +55,30 @@
     </div>
   </div>
 </div>
+{% if brands %}
+<div class="mt-4">
+  <div class="card">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <span class="fw-semibold small">
+        <i class="bi bi-clock-history me-1" style="color:#4b5cde"></i>최근 생성 이력
+      </span>
+      <select id="dpRedoBrandSelect" class="form-select form-select-sm"
+              style="width:auto;min-width:130px"
+              onchange="loadDpRecentDone(this.value)">
+        <option value="">브랜드 선택</option>
+        {% for b in brands %}
+        <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="card-body p-3">
+      <div id="dpRedoList">
+        <div class="text-muted small text-center py-3">브랜드를 선택하면 최근 생성 이력이 표시됩니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 {% block extra_script %}<script>
 document.getElementById('genForm').addEventListener('submit', async (e) => {
@@ -73,5 +98,67 @@ document.getElementById('copyBtn').addEventListener('click', () => {
   navigator.clipboard.writeText(document.getElementById('resultBox').textContent);
   document.getElementById('copyBtn').innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
   setTimeout(() => { document.getElementById('copyBtn').innerHTML = '<i class="bi bi-clipboard me-1"></i>복사'; }, 2000);
+});
+
+// ── 최근 이력 재사용 ──────────────────────────────────────
+function _renderDpRedoList(items) {
+  const box = document.getElementById('dpRedoList');
+  if (!box) return;
+  if (!items || items.length === 0) {
+    box.innerHTML = '<div class="text-muted small text-center py-3">생성 이력이 없습니다.</div>';
+    return;
+  }
+  box.innerHTML = items.map(it => `
+    <div class="d-flex align-items-start justify-content-between rounded px-3 py-2 mb-1"
+         style="background:#fafafa;border:1px solid #e5e7eb">
+      <div class="flex-fill min-w-0 me-2">
+        <div class="fw-semibold small text-truncate">${_escDp(it.product_name || '제목 없음')}</div>
+        ${it.text_preview ? `<div class="text-muted" style="font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px">${_escDp(it.text_preview)}…</div>` : ''}
+        <div class="text-muted" style="font-size:.7rem">${it.created_at || ''}</div>
+      </div>
+      <button class="btn btn-sm py-0 px-2 flex-shrink-0"
+              style="font-size:.75rem;background:#4b5cde;color:#fff;border:none"
+              onclick="redoDpResult('${it.id}')">불러오기</button>
+    </div>`).join('');
+}
+
+function _escDp(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadDpRecentDone(brandId) {
+  // 메인 폼 브랜드 선택과 동기화
+  const redoSel = document.getElementById('dpRedoBrandSelect');
+  if (redoSel && brandId) redoSel.value = brandId;
+
+  const url  = '{{ url_for("create.detail_page_recent_done") }}?brand_id=' +
+               encodeURIComponent(brandId || '');
+  try {
+    const data = await fetch(url).then(r => r.json());
+    if (data.ok) _renderDpRedoList(data.items);
+  } catch (e) { console.warn('[loadDpRecentDone]', e); }
+}
+
+async function redoDpResult(creationId) {
+  try {
+    const res  = await fetch(`/create/detail-page/result/${creationId}`);
+    const data = await res.json();
+    if (data.ok && data.text) {
+      const resultBox = document.getElementById('resultBox');
+      resultBox.textContent = data.text;
+      resultBox.style.color = '#1a2332';
+      document.getElementById('copyBtn').classList.remove('d-none');
+      resultBox.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    } else {
+      alert(data.message || '불러오기 실패');
+    }
+  } catch (e) {
+    alert('불러오기 실패: ' + e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const defaultBrandId = document.getElementById('dpBrandSelect')?.value;
+  if (defaultBrandId) loadDpRecentDone(defaultBrandId);
 });
 </script>{% endblock %}

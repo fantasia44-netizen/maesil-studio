@@ -3,21 +3,31 @@
     "allow": [
       "Bash(git log *)",
       "Bash(git add *)",
-      "Bash(git commit -m 'feat: 사업자 정보 푸터 추가 — 카드사 심사 필수 기재 *)",
       "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit -m 'feat: 사업자 정보 푸터 추가 — 카드사 심사 필수 기재 *)",
       "Bash(git commit -m 'fix: 사업자 정보 푸터 — 매실 스튜디오로 서비스명·이메일 수정 *)",
       "Bash(git commit -m 'fix: 랜딩 페이지 푸터에 사업자 정보 추가 *)",
       "Bash(git commit -m 'fix: 약관·개인정보처리방침 이메일 maesil-insight → maesil-studio 교체 *)",
       "Bash(git commit -m 'fix: 이메일 주소 maesil-insight.com으로 통합 *)",
-      "Bash(git commit -m ' *)",
       "Bash(git commit -m 'fix\\(shorts\\): 이어하기 복원 시 스토리보드 스피너 무한 표시 버그 수정 *)",
       "Bash(git commit -m 'feat\\(shorts\\): 스토리보드 이미지 프롬프트 직접 편집 추가 *)",
       "Bash(git commit -m 'feat\\(shorts\\): 한글 나레이션 → 영문 FLUX 프롬프트 자동 번역 기능 *)",
       "Bash(git commit -m 'fix\\(shorts\\): 워커 크래시 대응 + 드래프트 배너 노출 조건 수정 *)",
       "Bash(git commit -m 'fix\\(shorts\\): FFmpeg OOM 수정 — zoompan 540x960 처리 후 scale up *)",
       "Bash(git commit -m 'feat\\(landing\\): 브랜드 스토리 메인 카피 업데이트 *)",
-      "Bash(git pull *)",
-      "Bash(git stash *)"
+      "Bash(git -C \"C:/maesil-studio\" diff --name-only --diff-filter=U)",
+      "Bash(cd /d \"C:\\\\maesil-studio\")",
+      "Bash(py -3 -c ' *)",
+      "Bash(py -3 -c \"import ast,sys; [print\\('OK  '+f\\) if not ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) else None for f in ['C:/maesil-studio/blueprints/create/blog.py','C:/maesil-studio/blueprints/create/instagram.py']]\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('blueprints/create/shorts.py'\\).read\\(\\)\\); print\\('shorts.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('blueprints/create/detail_page.py'\\).read\\(\\)\\); print\\('detail_page.py OK'\\)\")",
+      "Bash(python \"C:\\\\maesil-studio\\\\blueprints\\\\create\\\\shorts.py\")",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/blueprints/create/shorts.py'\\).read\\(\\)\\); print\\('shorts.py OK'\\)\")",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/blueprints/create/detail_page.py'\\).read\\(\\)\\); print\\('detail_page.py OK'\\)\")",
+      "PowerShell(Set-Location C:\\\\maesil-studio; $env:PYTHONUTF8=\"1\"; py -3 test_draft_resume_harness.py 2>&1)"
     ]
   }
 }

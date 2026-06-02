@@ -571,41 +571,27 @@ function addGalleryItem(url, label, idx) {
   grid.appendChild(div);
 }
 
-async function downloadOne(url, name) {
-  try {
-    const resp = await fetch(url);
-    const blob = await resp.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = `상세페이지_${name}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
-  } catch { window.open(url, '_blank'); }
+function _dlProxy(url, filename) {
+  const a = document.createElement('a');
+  a.href = '/download-proxy?url=' + encodeURIComponent(url) +
+           '&filename=' + encodeURIComponent(filename || 'download');
+  a.download = filename || 'download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadOne(url, name) {
+  _dlProxy(url, `상세페이지_${name}.png`);
 }
 
 async function downloadAll() {
   if (!resultUrls.length) return;
   for (let i = 0; i < resultUrls.length; i++) {
     const item = resultUrls[i];
-    try {
-      const resp = await fetch(item.url);
-      const blob = await resp.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `상세페이지_${String(item.index+1).padStart(2,'0')}_${item.label}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch(e) {
-      // cross-origin fallback: open in new tab
-      window.open(item.url, '_blank');
-    }
-    await new Promise(r => setTimeout(r, 500));
+    const fname = `상세페이지_${String(item.index+1).padStart(2,'0')}_${item.label}.png`;
+    _dlProxy(item.url, fname);
+    await new Promise(r => setTimeout(r, 400));
   }
 }
 

@@ -22,6 +22,56 @@ def _get_product(supabase, product_id: str):
 
 
 # ─────────────────────────────────────────────────────────────
+# 임시저장 / 이력 헬퍼
+# ─────────────────────────────────────────────────────────────
+
+_SHORTS_STEP_LABELS = {
+    1: '기본 설정', 2: '소구포인트 선택', 3: '스타일 선택',
+    4: '스토리보드 확인', 5: '이미지 확인', 6: '음성·BGM 설정',
+}
+
+
+def _get_shorts_drafts(supabase, limit: int = 5):
+    try:
+        rows = supabase.table('creations').select(
+            'id, step_reached, step_data, input_data, created_at, updated_at'
+        ).eq('user_id', current_user.id).eq('creation_type', 'shorts_draft').eq(
+            'status', 'draft'
+        ).order('updated_at', desc=True).limit(limit).execute()
+    except Exception:
+        return []
+    result = []
+    for r in (rows.data or []):
+        step = r.get('step_reached') or 1
+        sd   = r.get('step_data') or {}
+        direction   = (sd.get('direction') or '')[:40]
+        angle_title = (((sd.get('angle') or {}).get('title')) or '')[:30]
+        preview = angle_title or direction or '방향 미지정'
+        result.append({
+            'id':          r['id'],
+            'step_reached': step,
+            'step_label':  _SHORTS_STEP_LABELS.get(step, f'Step {step}'),
+            'preview':     preview,
+            'updated_at':  (r.get('updated_at') or r.get('created_at') or '')[:10],
+        })
+    return result
+
+
+def _recent_shorts_creations(supabase, user_id: str, brand_id, limit: int = 5):
+    q = supabase.table('creations').select(
+        'id, creation_type, input_data, step_data, output_data, created_at, brand_id'
+    ).eq('user_id', user_id).eq('status', 'done').in_(
+        'creation_type', ['shorts_video', 'shorts_video_kling']
+    )
+    if brand_id:
+        q = q.eq('brand_id', brand_id)
+    try:
+        return q.order('created_at', desc=True).limit(limit).execute().data or []
+    except Exception:
+        return []
+
+
+# ─────────────────────────────────────────────────────────────
 # 페이지
 # ─────────────────────────────────────────────────────────────
 
@@ -39,10 +89,13 @@ def shorts():
         ).order('created_at', desc=True).limit(50).execute()
         products = r.data or []
 
+    shorts_drafts = _get_shorts_drafts(supabase)
+
     return render_template('create/shorts.html',
                            brands=brands,
                            default_brand=default,
-                           products=products)
+                           products=products,
+                           shorts_drafts=shorts_drafts)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -686,3 +739,112 @@ def shorts_products():
         'brand_id', brand_id
     ).order('created_at', desc=True).limit(50).execute()
     return jsonify(ok=True, products=r.data or [])
+
+
+# ─────────────────────────────────────────────────────────────
+# 임시저장 CRUD
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/save-draft', methods=['POST'])
+@login_required
+def shorts_save_draft():
+    supabase     = current_app.supabase
+    data         = request.get_json(force=True) or {}
+    draft_id     = (data.get('draft_id') or '').strip()
+    step_reached = int(data.get('step_reached') or 1)
+    step_data    = data.get('step_data') or {}
+    brand_id     = (data.get('brand_id') or '').strip() or None
+    now          = now_kst().isoformat()
+
+    if draft_id:
+        r = supabase.table('creations').select('id, user_id').eq('id', draft_id).execute()
+        if not r.data or r.data[0]['user_id'] != current_user.id:
+            return jsonify(ok=False, message='접근 권한 없음')
+        supabase.table('creations').update({
+            'step_reached': step_reached,
+            'step_data':    step_data,
+            'brand_id':     brand_id,
+            'updated_at':   now,
+        }).eq('id', draft_id).execute()
+        return jsonify(ok=True, draft_id=draft_id)
+
+    draft_id = str(uuid.uuid4())
+    row = {
+        'id':            draft_id,
+        'user_id':       current_user.id,
+        'brand_id':      brand_id,
+        'creation_type': 'shorts_draft',
+        'input_data':    {'direction': step_data.get('direction', '')},
+        'output_data':   {},
+        'points_used':   0,
+        'status':        'draft',
+        'step_reached':  step_reached,
+        'step_data':     step_data,
+        'model_used':    '',
+        'created_at':    now,
+        'updated_at':    now,
+    }
+    if getattr(current_user, 'operator_id', None):
+        row['operator_id'] = current_user.operator_id
+    supabase.table('creations').insert(row).execute()
+    return jsonify(ok=True, draft_id=draft_id)
+
+
+@create_bp.route('/shorts/draft/<draft_id>', methods=['GET'])
+@login_required
+def shorts_get_draft(draft_id: str):
+    supabase = current_app.supabase
+    r = supabase.table('creations').select('*').eq(
+        'id', draft_id
+    ).eq('status', 'draft').execute()
+    if not r.data:
+        return jsonify(ok=False, message='초안이 없습니다.')
+    row = r.data[0]
+    if row['user_id'] != current_user.id:
+        op = getattr(current_user, 'operator_id', None)
+        if not op or row.get('operator_id') != op:
+            return jsonify(ok=False, message='접근 권한 없음')
+    return jsonify(ok=True, draft=row)
+
+
+@create_bp.route('/shorts/draft/<draft_id>', methods=['DELETE'])
+@login_required
+def shorts_delete_draft(draft_id: str):
+    supabase = current_app.supabase
+    r = supabase.table('creations').select('id, user_id').eq('id', draft_id).execute()
+    if not r.data:
+        return jsonify(ok=False, message='없음')
+    if r.data[0]['user_id'] != current_user.id:
+        return jsonify(ok=False, message='권한 없음')
+    supabase.table('creations').delete().eq('id', draft_id).execute()
+    return jsonify(ok=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# 브랜드별 최근 완성 영상 조회
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/shorts/recent-done', methods=['GET'])
+@login_required
+def shorts_recent_done():
+    supabase = current_app.supabase
+    brand_id = request.args.get('brand_id', '').strip() or None
+    items    = _recent_shorts_creations(supabase, current_user.id, brand_id, limit=5)
+    result   = []
+    for r in items:
+        od  = r.get('output_data') or {}
+        inp = r.get('input_data')  or {}
+        sd  = r.get('step_data')   or {}
+        title = (
+            sd.get('direction') or inp.get('direction') or
+            ((inp.get('angle') or {}).get('title')) or '제목 없음'
+        )
+        engine_label = '슬라이드' if r.get('creation_type') == 'shorts_video' else 'Kling 모션'
+        result.append({
+            'id':           r['id'],
+            'title':        title[:40],
+            'engine_label': engine_label,
+            'video_url':    od.get('video_url', ''),
+            'created_at':   (r.get('created_at') or '')[:10],
+        })
+    return jsonify(ok=True, items=result)

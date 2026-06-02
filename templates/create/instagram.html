@@ -788,22 +788,20 @@
 
 {% block extra_script %}
 <script>
-// ── 이미지 강제 다운로드 (크로스-오리진 URL 새탭 방지) ────────────
-async function downloadImage(url, filename) {
+// ── 이미지 강제 다운로드 (서버 프록시 경유 — 크로스-오리진 새탭 방지) ──
+function downloadImage(url, filename) {
   if (!url) return;
-  try {
-    const res  = await fetch(url);
-    const blob = await res.blob();
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = filename || 'image.jpg';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  } catch (e) {
-    // fetch 실패 시 새탭 fallback
-    window.open(url, '_blank');
-  }
+  _dlProxy(url, filename || 'insta_image.jpg');
+}
+
+function _dlProxy(url, filename) {
+  const a = document.createElement('a');
+  a.href = '/download-proxy?url=' + encodeURIComponent(url) +
+           '&filename=' + encodeURIComponent(filename || 'download');
+  a.download = filename || 'download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ── 전역 상태 ────────────────────────────────────────────────
