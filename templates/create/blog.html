@@ -1173,7 +1173,11 @@ function renderPromptCards(prompts) {
           <div id="slotAI_${i}">
             <textarea class="form-control form-control-sm prompt-input" rows="3"
                       data-idx="${i}" data-aspect="${item.aspect || '16:9'}"
-                      style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical">${item.prompt || ''}</textarea>
+                      style="font-size:.78rem;line-height:1.6;font-family:monospace;resize:vertical"
+                      oninput="_checkPromptKo(this, ${i})">${item.prompt || ''}</textarea>
+            <div id="promptKoWarn_${i}" class="d-none text-danger mt-1" style="font-size:.72rem">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>한글이 포함되면 이미지가 깨집니다. <strong>영문(English)만</strong> 입력하세요.
+            </div>
           </div>
 
           <!-- 수동 삽입 모드 (기본 숨김) -->
@@ -1204,12 +1208,38 @@ function renderPromptCards(prompts) {
   });
 }
 
+// ── 한글 감지 경고 (이미지 프롬프트 textarea) ────────────────
+const _KO_RE = /[가-힣ᄀ-ᇿ㄰-㆏]/;
+
+function _checkPromptKo(textarea, idx) {
+  const warn = document.getElementById(`promptKoWarn_${idx}`);
+  if (!warn) return;
+  if (_KO_RE.test(textarea.value)) {
+    warn.classList.remove('d-none');
+    textarea.style.borderColor = '#dc3545';
+  } else {
+    warn.classList.add('d-none');
+    textarea.style.borderColor = '';
+  }
+}
+
 // ── Step 4: 이미지 생성 ──────────────────────────────────────
 const ASPECT_SIZE = { '1:1':'1024x1024', '16:9':'1920x1080', '4:5':'1080x1350', '9:16':'1080x1920', '4:3':'1024x768' };
 
 async function generateAllImages() {
   const inputs = document.querySelectorAll('.prompt-input');
   if (!inputs.length) { alert('이미지 프롬프트를 먼저 생성하세요.'); return; }
+
+  // 한글 포함 프롬프트 최종 경고
+  const koInputs = Array.from(inputs).filter(inp => _KO_RE.test(inp.value));
+  if (koInputs.length) {
+    const ok = confirm(
+      `이미지 프롬프트 ${koInputs.length}개에 한글이 포함되어 있습니다.\n` +
+      `한글이 포함된 프롬프트는 이미지가 깨지거나 이상하게 생성될 수 있습니다.\n\n` +
+      `계속 진행하시겠습니까? (서버에서 자동 영문 번환을 시도합니다)`
+    );
+    if (!ok) return;
+  }
 
   generatedImages = [];
   document.getElementById('promptSection').style.display = 'none';

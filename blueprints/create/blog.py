@@ -554,6 +554,22 @@ JSON 배열 형식 예시:
 # Step 4 — 이미지 프롬프트 3개 AI 생성
 # ─────────────────────────────────────────────────────────────
 
+def _translate_prompts_to_english(prompts: list, indices: list) -> None:
+    """한글이 포함된 이미지 prompt 필드를 영문 번역 (in-place).
+
+    imagen_service의 _has_korean / _translate_prompt 재사용.
+    FLUX 계열 이미지 모델은 한글을 이해하지 못해 이미지가 깨지므로
+    서버 사이드에서 강제 영문 변환한다.
+    """
+    from services.imagen_service import _has_korean, _translate_prompt
+    for i in indices:
+        original = prompts[i].get('prompt', '')
+        if _has_korean(original):
+            translated = _translate_prompt(original)
+            prompts[i]['prompt'] = translated
+            logger.info('[blog/image-prompts] 슬롯%d 한글→영문 번역: %.60s…', i, translated)
+
+
 _STYLE_CONTEXT = {
     'realistic':    '실사 사진 스타일 — 프로페셔널 제품 사진, 자연광 또는 스튜디오 조명, DSLR 고해상도',
     'illustration': '한국 일러스트 스타일 — 부드러운 파스텔 색감, 따뜻하고 귀여운 디지털 아트',
@@ -591,10 +607,14 @@ def blog_image_prompts():
     content_excerpt = content[:600] if content else ''
 
     system_prompt = (
-        '당신은 AI 이미지 생성 전문 프롬프트 엔지니어입니다. '
-        '블로그 포스트의 소구포인트와 이미지 스타일에 맞는 영문 이미지 프롬프트를 작성합니다. '
-        '인물이 등장하는 이미지는 특별한 지시가 없는 한 기본적으로 East Asian/Korean appearance으로 묘사하세요. '
-        '결과는 반드시 JSON 배열만 출력하세요. 마크다운이나 설명 텍스트 없이 순수 JSON만 출력합니다.'
+        'You are an expert AI image generation prompt engineer for Korean blog posts. '
+        '━━ ABSOLUTE RULE ━━ '
+        'The "prompt" JSON field MUST contain English words ONLY. '
+        'NEVER write Korean (한글), Japanese, or Chinese characters in the "prompt" field. '
+        'Korean text in image prompts causes severe image corruption. '
+        'You MAY use Korean only in the "role" and "style_note" fields. '
+        'When depicting people, default to East Asian / Korean appearance unless otherwise specified. '
+        'Output ONLY a pure JSON array — no markdown code blocks, no explanatory text.'
     )
 
     has_product_image = bool(data.get('has_product_image'))
@@ -647,7 +667,7 @@ def blog_image_prompts():
 
 각 프롬프트는 아래 필드를 가져야 합니다:
 - role: 이미지 역할 (인트로/본문/아웃트로 등 한국어)
-- prompt: 영문 이미지 생성 프롬프트 (구체적이고 상세하게, 50~80 단어)
+- prompt: [ENGLISH ONLY] AI image generation prompt in English, 50-80 words. ⚠ NEVER use Korean/Japanese/Chinese here — it corrupts the image.
 - aspect: 이미지 비율 ("16:9" 또는 "1:1" 또는 "4:3")
 - style_note: 이 이미지에 특별히 강조할 스타일 요소 (한국어, 1문장)
 
@@ -664,8 +684,11 @@ JSON 배열 형식:
 
 순수 JSON만 출력하세요."""
 
+    # 이미지 수에 비례한 동적 max_tokens (슬롯당 ~260 토큰 + 기본 오버헤드)
+    img_max_tokens = max(1800, ai_count * 260 + 600)
+
     try:
-        raw = generate_text(system_prompt, user_prompt, max_tokens=1400,
+        raw = generate_text(system_prompt, user_prompt, max_tokens=img_max_tokens,
                             model='claude-sonnet-4-6')
         clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
         arr_start = clean.find('[')
@@ -675,6 +698,16 @@ JSON 배열 형식:
         prompts = json.loads(clean)
         if not isinstance(prompts, list) or not prompts:
             raise ValueError('prompts 배열이 비어있음')
+
+        # ── 한글 감지 → Haiku로 영문 변환 ─────────────────────────
+        # FLUX 계열 이미지 모델은 한글을 처리하지 못해 이미지가 깨짐
+        from services.imagen_service import _has_korean
+        ko_indices = [i for i, p in enumerate(prompts)
+                      if _has_korean(p.get('prompt', ''))]
+        if ko_indices:
+            logger.warning('[blog/image-prompts] 한글 감지 슬롯: %s → 영문 번역 시작', ko_indices)
+            _translate_prompts_to_english(prompts, ko_indices)
+
         return jsonify(ok=True, prompts=prompts[:ai_count])
     except Exception as e:
         logger.error(f'[blog/image-prompts] 이미지 프롬프트 생성 실패: {e}')

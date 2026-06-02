@@ -1204,6 +1204,63 @@ check("detail_page.py: get_accessible_brands 사용",
 
 
 # ──────────────────────────────────────────────────────────────
+# [18] blog.py — 이미지 프롬프트 토큰 동적화 + 한글 감지 로직
+# ──────────────────────────────────────────────────────────────
+print('\n[18] blog.py — 이미지 프롬프트 max_tokens 동적화 + 한글 감지')
+
+blog_src = open(os.path.join(ROOT, 'blueprints', 'create', 'blog.py'), encoding='utf-8').read()
+blog_tpl2 = open(os.path.join(ROOT, 'templates', 'create', 'blog.html'), encoding='utf-8').read()
+
+# ── max_tokens 동적 계산 ──────────────────────────────────────
+check('[18] blog.py: img_max_tokens 변수 선언',
+      'img_max_tokens' in blog_src)
+check('[18] blog.py: max(1800, ai_count * 260 + 600) 공식',
+      'max(1800, ai_count * 260 + 600)' in blog_src)
+check('[18] blog.py: generate_text에 img_max_tokens 전달',
+      'max_tokens=img_max_tokens' in blog_src)
+check('[18] blog.py: 이전 고정값 max_tokens=1400 제거됨',
+      'max_tokens=1400' not in blog_src)
+
+# ── 시스템 프롬프트 영문 강제 ────────────────────────────────
+check('[18] blog.py: 시스템 프롬프트에 ENGLISH ONLY 명시',
+      'ENGLISH ONLY' in blog_src or 'English words ONLY' in blog_src)
+check('[18] blog.py: 시스템 프롬프트에 Korean 사용 금지 경고',
+      'Korean text in image prompts' in blog_src or 'NEVER' in blog_src)
+
+# ── user_prompt 필드 설명에 영문 강제 ───────────────────────
+check('[18] blog.py: prompt 필드 설명에 ENGLISH ONLY 경고',
+      '[ENGLISH ONLY]' in blog_src)
+
+# ── 한글 감지 + 번역 함수 ────────────────────────────────────
+check('[18] blog.py: _translate_prompts_to_english 함수 정의',
+      'def _translate_prompts_to_english(' in blog_src)
+check('[18] blog.py: imagen_service._has_korean 임포트',
+      '_has_korean' in blog_src)
+check('[18] blog.py: imagen_service._translate_prompt 임포트',
+      '_translate_prompt' in blog_src)
+check('[18] blog.py: ko_indices 리스트 생성',
+      'ko_indices' in blog_src)
+check('[18] blog.py: ko_indices 감지 시 번역 호출',
+      'if ko_indices:' in blog_src and '_translate_prompts_to_english' in blog_src)
+
+# ── blog.html 클라이언트 한글 경고 ───────────────────────────
+check('[18] blog.html: _KO_RE 한글 정규식 정의',
+      '_KO_RE' in blog_tpl2 and '가-힣' in blog_tpl2)
+check('[18] blog.html: _checkPromptKo 함수 정의',
+      'function _checkPromptKo(' in blog_tpl2)
+check('[18] blog.html: promptKoWarn_${i} 경고 div',
+      'promptKoWarn_${i}' in blog_tpl2)
+check('[18] blog.html: textarea에 oninput="_checkPromptKo" 바인딩',
+      'oninput="_checkPromptKo(this,' in blog_tpl2)
+check('[18] blog.html: 한글 경고 텍스트 존재',
+      '영문(English)만' in blog_tpl2 or '영문만' in blog_tpl2)
+check('[18] blog.html: generateAllImages에서 한글 confirm 다이얼로그',
+      'koInputs' in blog_tpl2 and 'confirm(' in blog_tpl2)
+check('[18] blog.html: 한글 포함 시 borderColor red 처리',
+      "borderColor = '#dc3545'" in blog_tpl2 or "borderColor='#dc3545'" in blog_tpl2)
+
+
+# ──────────────────────────────────────────────────────────────
 # 결과 요약
 # ──────────────────────────────────────────────────────────────
 print('\n' + '═' * 65)
