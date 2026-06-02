@@ -1419,10 +1419,10 @@ function appendImageBlock(container, img, vidx) {
          style="max-width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.12)">
     <div class="text-muted small mt-2">${img.role}</div>
     <div class="d-flex justify-content-center gap-2 mt-2 flex-wrap">
-      <a href="${img.url}" target="_blank" download id="finalDl_${vidx}"
-         class="btn btn-sm btn-outline-secondary">
+      <button class="btn btn-sm btn-outline-secondary" id="finalDl_${vidx}"
+              onclick="downloadImageBlob('${img.url}', 'blog_image_${vidx+1}.jpg', this)">
         <i class="bi bi-download me-1"></i>이미지 저장
-      </a>
+      </button>
       <button class="btn btn-sm btn-outline-primary"
               onclick="openBlogRegenModal(${vidx})">
         <i class="bi bi-arrow-repeat me-1"></i>수정 새로생성
@@ -1554,12 +1554,34 @@ function _updateTotalCostBadge() {
   el.textContent = parts.join(' + ');
 }
 
+// ── 이미지 Blob 다운로드 (외부 URL은 download 속성이 무시되므로 fetch 사용) ──
+async function downloadImageBlob(url, filename, btn) {
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
+  try {
+    const res  = await fetch(url);
+    const blob = await res.blob();
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = filename || 'image.jpg';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    alert('다운로드 실패: ' + e.message);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = origHtml;
+  }
+}
+
 // ── Step 5: 이미지 교체 (삽입/수정) ─────────────────────────
 function replaceFinalImg(vidx, url) {
   const imgEl = document.getElementById(`finalImg_${vidx}`);
   if (imgEl) imgEl.src = url;
+  // 버튼으로 변경됐으므로 onclick 업데이트
   const dlEl = document.getElementById(`finalDl_${vidx}`);
-  if (dlEl) dlEl.href = url;
+  if (dlEl) dlEl.setAttribute('onclick', `downloadImageBlob('${url}', 'blog_image_${vidx+1}.jpg', this)`);
   if (window._validImgs?.[vidx]) window._validImgs[vidx].url = url;
   document.getElementById(`insertPanel_${vidx}`)?.classList.add('d-none');
 }
