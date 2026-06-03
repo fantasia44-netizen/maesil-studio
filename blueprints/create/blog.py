@@ -785,52 +785,63 @@ def blog_thumbnail():
         from services.imagen_service import _generate_flux
         from services.claude_service import generate_text as _gen_text
 
-        # 썸네일 배경 전용 Sonnet 변환
-        # 비즈니스 용어 → 물리적 장면(구체적 사물·공간·조명) 으로 변환
+        # 썸네일 배경 — 블로그 이미지 프롬프트 수준(50~70단어)의 상세 FLUX 프롬프트 생성
+        # 짧은 프롬프트는 FLUX의 학습 편향(야시장·도시야경)이 채워버림
         if bg_topic:
             try:
-                scene = _gen_text(
+                bg_prompt = _gen_text(
                     system=(
-                        'Convert a Korean or English blog topic keyword into a SPECIFIC '
-                        'physical background scene for a FLUX image generation prompt.\n'
+                        'You are an expert FLUX image generation prompt writer for blog thumbnail backgrounds.\n'
+                        'Write a detailed 50-70 word English FLUX prompt describing a PHYSICAL BACKGROUND SCENE.\n'
                         '\n'
                         'RULES:\n'
-                        '- Output ONLY English, 10-20 words\n'
-                        '- Describe SPECIFIC physical objects, space, and lighting\n'
-                        '- NEVER output: charts, graphs, screens, streets, night market, '
-                        'city lights, rain, abstract concepts, data\n'
+                        '- Write 50-70 words, detailed and specific\n'
+                        '- Describe exact physical objects, materials, textures, lighting angles\n'
+                        '- Always end with: "photorealistic, high quality DSLR, dark moody tones, '
+                        'no people, suitable as text overlay background"\n'
+                        '- NEVER include: charts, graphs, screens, city streets, night markets, '
+                        'rain, neon signs, traffic, abstract concepts\n'
+                        '- If input is Korean, translate and describe the scene in English\n'
                         '\n'
                         'EXAMPLES:\n'
-                        '물류센터 창고 → rows of tall metal shelves in large dark warehouse '
-                        'with industrial overhead lights concrete floor\n'
-                        '3pl물류센터 → fulfillment warehouse interior high metal racks '
-                        'cardboard boxes stacked dramatic side lighting\n'
-                        '사람아니고 3pl물류센터 창고분위기 → large empty warehouse interior '
-                        'tall steel shelving aisles dim industrial lighting no people\n'
-                        'ETF 투자 → gold coins stacked on dark wooden surface '
-                        'shallow depth of field warm bokeh\n'
-                        '부동산 → modern glass building exterior dusk blue hour\n'
-                        '건강기능식품 → green herbs capsules on wooden table natural light\n'
-                        '다이어트 → fresh vegetables fruits cutting board natural kitchen light\n'
-                        '마케팅 → clean desk with notebook pen coffee cup top view\n'
-                        'tax documents → paper files stacked on clean office desk lamp'
+                        '물류센터 창고 / warehouse →\n'
+                        'Interior of a large commercial warehouse with tall metal shelving racks '
+                        'stretching to high ceiling, rows of cardboard boxes neatly stacked, '
+                        'concrete floor, dramatic industrial overhead fluorescent lighting casting '
+                        'deep shadows between aisles, wide angle perspective, '
+                        'photorealistic, high quality DSLR, dark moody tones, no people, '
+                        'suitable as text overlay background\n'
+                        '\n'
+                        'ETF 투자 / investment finance →\n'
+                        'Close-up of stacked gold coins and paper currency on a dark wooden desk, '
+                        'selective focus with shallow depth of field, warm directional side lighting '
+                        'highlighting metallic texture of coins, dark background with subtle bokeh, '
+                        'still life photography style, '
+                        'photorealistic, high quality DSLR, dark moody tones, no people, '
+                        'suitable as text overlay background\n'
+                        '\n'
+                        '부동산 / real estate →\n'
+                        'Modern residential apartment building exterior at blue hour twilight, '
+                        'glass facade reflecting soft blue sky gradient, clean architectural lines, '
+                        'street level perspective looking upward, minimal urban surroundings, '
+                        'professional architectural photography, '
+                        'photorealistic, high quality DSLR, dark moody tones, no people, '
+                        'suitable as text overlay background'
                     ),
                     prompt=bg_topic,
-                    max_tokens=60,
+                    max_tokens=200,
                     model='claude-sonnet-4-6',
                 )
-                topic_en = scene.strip().strip('"\'').rstrip('.')
+                bg_prompt = bg_prompt.strip().strip('"\'')
             except Exception as e:
-                logger.warning(f'[thumbnail] 배경 장면 변환 실패: {e}')
-                topic_en = bg_topic
+                logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패: {e}')
+                bg_prompt = 'dark atmospheric interior space dramatic lighting photorealistic no people'
         else:
-            topic_en = 'dark atmospheric interior dramatic lighting'
-
-        bg_prompt = (
-            f'{topic_en}, '
-            'cinematic moody photography, dramatic lighting, '
-            'dark tones suitable for text overlay, high quality DSLR, bokeh'
-        )
+            bg_prompt = (
+                'abstract dark atmospheric background, dramatic directional lighting, '
+                'textured surface bokeh, photorealistic, high quality DSLR, '
+                'dark moody tones, suitable as text overlay background'
+            )
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_standard', '1080x1080')
         except Exception as e:
