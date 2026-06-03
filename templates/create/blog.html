@@ -387,17 +387,14 @@
                        style="cursor:pointer" id="thumbBgFluxLabel">
                   <input type="radio" name="thumbBgType" value="flux" id="thumbBgFlux"
                          class="mt-1 flex-shrink-0" checked onchange="updateThumbCostBadge()">
-                  <div>
-                    <div class="fw-semibold small">FLUX 자동 생성
-                      <span class="badge bg-secondary ms-1" style="font-size:.62rem">50P</span>
+                  <div class="flex-fill">
+                    <div class="fw-semibold small">배경 이미지 생성
+                      <span class="badge ms-1" style="background:#ede9fe;color:#5b21b6;font-size:.62rem">50P</span>
                     </div>
-                    <div class="text-muted" style="font-size:.72rem">주제 관련 실사 사진 자동 생성</div>
+                    <div class="text-muted" style="font-size:.72rem">주제에 맞는 사진 배경 자동 생성</div>
                     <input id="thumbBgTopic" class="form-control form-control-sm mt-1"
-                           placeholder="배경 주제 키워드 (예: 삼성전자 주식, ETF 투자)"
+                           placeholder="배경 주제 키워드 (예: 물류센터창고, ETF 투자)"
                            oninput="updateThumbPreview()">
-                    <div class="text-muted mt-1" style="font-size:.7rem">
-                      <i class="bi bi-translate me-1"></i>한글 입력 시 자동 영문 번역 후 FLUX 전송
-                    </div>
                   </div>
                 </label>
                 <label class="d-flex align-items-start gap-2 p-2 rounded border"

@@ -203,7 +203,11 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
                 'too many fingers, mutated hands, bad anatomy, extra limbs, '
                 'malformed limbs, missing arms, missing legs, extra arms, extra legs, '
                 'cloned face, disfigured, ugly, gross proportions, long neck, '
-                'bad proportions, watermark, signature, text, logo'
+                'bad proportions, watermark, signature, text, logo, '
+                'chart, bar chart, pie chart, line chart, graph, data visualization, '
+                'infographic, diagram, financial chart, stock chart, candlestick chart, '
+                'flowchart, screen with graphs, tablet with charts, monitor with data, '
+                'floating UI overlay, dashboard, spreadsheet'
             ),
             'image_size': {'width': int(w), 'height': int(h)},
             'num_images': 1,
