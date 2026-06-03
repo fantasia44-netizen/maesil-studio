@@ -787,11 +787,17 @@ def blog_thumbnail():
         if _has_korean(topic_en):
             topic_en = _translate_prompt(topic_en) or 'abstract dark cinematic'
         # 네이버 블로그 최상위 썸네일 스타일 — 주제 관련 실사 사진
+        # 그래프/차트/UI 요소가 이미지에 합성되는 문제 방지
         bg_prompt = (
             f'editorial news photography, {topic_en}, '
             'realistic photo, natural or studio lighting, sharp focus, '
             'high quality DSLR, slightly dark exposure for text overlay, '
-            'no text, no letters, no words, no watermarks'
+            'clean simple composition, '
+            'no text, no letters, no words, no watermarks, '
+            'no charts, no graphs, no bar charts, no diagrams, no data visualization, '
+            'no floating UI elements, no screen overlays, no tablet graphs, '
+            'no whiteboards, no infographics, no presentation slides, '
+            'no icons, no logos, no badges'
         )
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')

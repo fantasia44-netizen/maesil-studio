@@ -490,7 +490,7 @@
 
             <!-- 인용부호 -->
             <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="thumbUseQuotes" checked
+              <input class="form-check-input" type="checkbox" id="thumbUseQuotes"
                      onchange="updateThumbPreview()">
               <label class="form-check-label small" for="thumbUseQuotes">
                 인용부호 <code style="font-size:.75em">"텍스트"</code>
@@ -636,6 +636,13 @@
           <div id="thumbPreviewCaption" class="text-muted mt-2 text-center" style="font-size:.7rem">
             CSS 미리보기 — 버튼 클릭 시 실제 이미지 생성
           </div>
+
+          <!-- 다운로드 버튼 (생성 후 표시) -->
+          <button id="thumbDownloadBtn" class="btn btn-sm mt-2 d-none fw-semibold"
+                  style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac;border-radius:8px;font-size:.82rem"
+                  onclick="_dlProxy(_thumbPreviewUrl, '블로그썸네일.png')">
+            <i class="bi bi-download me-1"></i>썸네일 다운로드
+          </button>
         </div><!-- end 오른쪽 패널 -->
 
       </div>
@@ -867,10 +874,11 @@ function updateThumbPreview() {
     if (caption) caption.innerHTML = 'CSS 미리보기 — 설정이 변경되었습니다. 재생성하세요.';
     const btnText = document.getElementById('thumbGenBtnText');
     if (btnText) btnText.textContent = '썸네일 다시 생성';
+    document.getElementById('thumbDownloadBtn')?.classList.add('d-none');
   }
   const l1Raw    = document.getElementById('thumbLine1')?.value.trim() || '메인 텍스트';
   const l2Raw    = document.getElementById('thumbLine2')?.value.trim() || '서브 텍스트';
-  const useQuote = document.getElementById('thumbUseQuotes')?.checked ?? true;
+  const useQuote = document.getElementById('thumbUseQuotes')?.checked ?? false;
   const yPct     = parseInt(document.getElementById('thumbYPos')?.value  || 55);
   const fontSize = parseInt(document.getElementById('thumbFontSize')?.value || 100);
   const overlay  = parseInt(document.getElementById('thumbOverlay')?.value || 65);
@@ -1053,7 +1061,7 @@ async function generateThumbPreview() {
         brand_name:       watermark,
         accent_color:     thumbAccentColor,
         use_flux:         useFlux,
-        use_quotes:       document.getElementById('thumbUseQuotes')?.checked ?? true,
+        use_quotes:       document.getElementById('thumbUseQuotes')?.checked ?? false,
         bg_topic:         bgTopic,
         text_y_pct:       parseInt(document.getElementById('thumbYPos')?.value   || 55),
         font_size_pct:    parseInt(document.getElementById('thumbFontSize')?.value || 100),
@@ -1076,6 +1084,7 @@ async function generateThumbPreview() {
     if (caption) caption.innerHTML =
       `<i class="bi bi-check-circle-fill me-1" style="color:#22c55e"></i>실제 생성된 이미지` +
       (data.cost ? ` · ${data.cost}P 사용` : '');
+    document.getElementById('thumbDownloadBtn')?.classList.remove('d-none');
 
   } catch (e) {
     const errEl = document.getElementById('thumbGenError');
