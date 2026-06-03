@@ -912,12 +912,17 @@ def generate_blog_thumbnail(
     background_url: str | None = None,
     brand_name: str = '',
     accent_color: str = '#FFD700',
+    use_quotes: bool = True,
 ) -> bytes:
     """블로그 썸네일 카드 생성 (1080×1080 PNG).
 
-    네이버 블로그 앨범형: 첫 이미지 = 썸네일
-    line1 흰색 대형 / line2 강조색 대형 / @브랜드 워터마크
-    FLUX 배경 URL 없으면 PIL 다크 그라데이션 사용.
+    네이버 블로그 앨범형: 첫 이미지 = 썸네일 → CTR 핵심
+
+    레이아웃 (이안's 경제노트 스타일):
+    - 상단 40%: 배경 사진 선명하게 노출
+    - 하단 60%: 그라데이션 어두움 → 텍스트 가독성
+    - 텍스트: 하단 영역 배치 + 인용부호 "..." 스타일
+    - 워터마크: 최하단 중앙
     """
     W = H = 1080
     accent_rgb = _hex_to_rgb(accent_color)
@@ -933,18 +938,19 @@ def generate_blog_thumbnail(
     else:
         bg = _make_dark_gradient_bg(W, H, accent_rgb)
 
-    # ── 어두운 그라데이션 오버레이 (텍스트 가독성) ───────
+    # ── 오버레이: 상단 투명 → 하단 어두움 (사진 상단 노출) ─
     ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    _draw_gradient_rect(ov, 0, 0, W, H, (0, 0, 0, 70), (0, 0, 0, 190))
+    _draw_gradient_rect(ov, 0, 0,        W, int(H * 0.35), (0,0,0, 15), (0,0,0, 80))
+    _draw_gradient_rect(ov, 0, int(H*0.35), W, H,          (0,0,0, 80), (0,0,0,230))
     img = Image.alpha_composite(bg, ov)
     draw = ImageDraw.Draw(img)
 
     # ── 폰트 ─────────────────────────────────────────────
     try:
         fp = _find_korean_font()
-        sz1 = int(H * 0.115)   # ~124px 메인
-        sz2 = int(H * 0.100)   # ~108px 서브
-        szm = int(H * 0.038)   # ~41px  워터마크
+        sz1 = int(H * 0.108)   # ~116px 메인
+        sz2 = int(H * 0.094)   # ~101px 서브
+        szm = int(H * 0.036)   # ~39px  워터마크
         font_l1   = ImageFont.truetype(fp, size=sz1)
         font_l2   = ImageFont.truetype(fp, size=sz2)
         font_mark = ImageFont.truetype(fp, size=szm)
@@ -954,17 +960,8 @@ def generate_blog_thumbnail(
 
     white  = (255, 255, 255, 255)
     accent = (*accent_rgb, 255)
-    MAX_TW = W - 160   # 좌우 80px 여백
-
-    # ── 텍스트 블록 높이 계산 (수직 중앙 정렬용) ─────────
-    def _block(text, font, sz):
-        if not fp or not text:
-            return [], font, sz
-        lines_, f = _fit_lines(fp, text, sz, MAX_TW, 2)
-        return lines_, f, sz
-
-    l1_lines, font_l1, _ = _block(line1, font_l1, sz1 if fp else 80)
-    l2_lines, font_l2, _ = _block(line2, font_l2, sz2 if fp else 70) if line2 else ([], font_l2, 0)
+    # 텍스트 좌우 여백 80px
+    MAX_TW = W - 160
 
     def _lh(font):
         try:
@@ -972,48 +969,71 @@ def generate_blog_thumbnail(
         except Exception:
             return 80
 
-    gap_factor = 1.28
-    h1 = int(_lh(font_l1) * gap_factor) * max(len(l1_lines), 1)
-    h2 = int(_lh(font_l2) * gap_factor) * max(len(l2_lines), 1) if l2_lines else 0
+    # ── 인용부호 적용 ─────────────────────────────────────
+    # line1 앞에 여는 따옴표, line2(또는 line1) 끝에 닫는 따옴표
+    # 한국 블로그 스타일: "텍스트" → 텍스트에 붙여서 렌더
+    q_open  = '"'
+    q_close = '"'
 
-    DIVIDER   = int(H * 0.024)   # 두 줄 사이 여백
-    MARK_AREA = int(H * 0.12)    # 워터마크 확보 공간
-    total_h   = h1 + (DIVIDER + h2 if l2_lines else 0)
-    y = (H - total_h) // 2 - MARK_AREA // 2
+    if use_quotes:
+        render_l1 = q_open + line1
+        render_l2 = (line2 + q_close) if line2 else ''
+        if not line2:
+            render_l1 = q_open + line1 + q_close
+    else:
+        render_l1 = line1
+        render_l2 = line2
+
+    # ── 텍스트 블록 높이 계산 ─────────────────────────────
+    def _wrap(text, font, sz):
+        if not fp or not text:
+            return [], font
+        lines_, f = _fit_lines(fp, text, sz, MAX_TW, 2)
+        return lines_, f
+
+    l1_lines, font_l1 = _wrap(render_l1, font_l1, sz1 if fp else 80)
+    l2_lines, font_l2 = _wrap(render_l2, font_l2, sz2 if fp else 70) if render_l2 else ([], font_l2)
+
+    gap_factor = 1.30
+    dy1 = int(_lh(font_l1) * gap_factor)
+    dy2 = int(_lh(font_l2) * gap_factor)
+    h1  = dy1 * max(len(l1_lines), 1)
+    h2  = dy2 * max(len(l2_lines), 1) if l2_lines else 0
+
+    LINE_GAP  = int(H * 0.018)   # 두 줄 사이
+    MARK_PAD  = int(H * 0.11)    # 워터마크 영역
+    total_h   = h1 + (LINE_GAP + h2 if l2_lines else 0)
+
+    # 텍스트 시작점: 하단 40% 영역 내 수직 중앙
+    TEXT_ZONE_TOP = int(H * 0.52)
+    TEXT_ZONE_H   = H - MARK_PAD - TEXT_ZONE_TOP
+    y = TEXT_ZONE_TOP + max(0, (TEXT_ZONE_H - total_h) // 2)
 
     # ── Line 1 (흰색) ─────────────────────────────────────
-    dy1 = int(_lh(font_l1) * gap_factor)
     for l in l1_lines:
         bbox = draw.textbbox((0, 0), l, font=font_l1)
         tw = bbox[2] - bbox[0]
         _shadow_text(draw, ((W - tw) // 2, y), l, font_l1,
-                     fill=white, shadow_color=(0, 0, 0, 215), offset=5)
+                     fill=white, shadow_color=(0, 0, 0, 220), offset=5)
         y += dy1
 
-    # ── 구분선 ────────────────────────────────────────────
-    if l2_lines:
-        y += DIVIDER // 3
-        lw = 56
-        draw.rectangle([((W - lw) // 2, y), ((W + lw) // 2, y + 4)],
-                       fill=(*accent_rgb, 210))
-        y += DIVIDER * 2 // 3 + 4
-
     # ── Line 2 (강조색) ───────────────────────────────────
-    dy2 = int(_lh(font_l2) * gap_factor)
-    for l in l2_lines:
-        bbox = draw.textbbox((0, 0), l, font=font_l2)
-        tw = bbox[2] - bbox[0]
-        _shadow_text(draw, ((W - tw) // 2, y), l, font_l2,
-                     fill=accent, shadow_color=(0, 0, 0, 215), offset=5)
-        y += dy2
+    if l2_lines:
+        y += LINE_GAP
+        for l in l2_lines:
+            bbox = draw.textbbox((0, 0), l, font=font_l2)
+            tw = bbox[2] - bbox[0]
+            _shadow_text(draw, ((W - tw) // 2, y), l, font_l2,
+                         fill=accent, shadow_color=(0, 0, 0, 220), offset=5)
+            y += dy2
 
     # ── 브랜드 워터마크 ───────────────────────────────────
     if brand_name:
         mark = brand_name if brand_name.startswith('@') else f'@{brand_name}'
         bbox = draw.textbbox((0, 0), mark, font=font_mark)
         tw = bbox[2] - bbox[0]
-        draw.text(((W - tw) // 2, H - int(H * 0.10)),
-                  mark, font=font_mark, fill=(255, 255, 255, 145))
+        draw.text(((W - tw) // 2, H - int(H * 0.075)),
+                  mark, font=font_mark, fill=(255, 255, 255, 140))
 
     buf = BytesIO()
     img.convert('RGB').save(buf, format='PNG', optimize=True)

@@ -739,6 +739,7 @@ def blog_thumbnail():
     brand_name   = (data.get('brand_name') or '').strip()[:24]
     accent_color = (data.get('accent_color') or '#FFD700').strip()
     use_flux     = bool(data.get('use_flux', True))
+    use_quotes   = bool(data.get('use_quotes', True))
     bg_topic     = (data.get('bg_topic') or '').strip()[:120]
 
     if not line1:
@@ -779,11 +780,12 @@ def blog_thumbnail():
         topic_en = bg_topic or 'abstract dark cinematic'
         if _has_korean(topic_en):
             topic_en = _translate_prompt(topic_en) or 'abstract dark cinematic'
+        # 네이버 블로그 최상위 썸네일 스타일 — 주제 관련 실사 사진
         bg_prompt = (
-            f'dark atmospheric cinematic background, {topic_en}, '
-            'deep navy and charcoal tones, dramatic moody lighting, '
-            'abstract textural depth, no text, no people, no faces, no objects, '
-            'pure atmospheric background, high quality photorealistic'
+            f'editorial news photography, {topic_en}, '
+            'realistic photo, natural or studio lighting, sharp focus, '
+            'high quality DSLR, slightly dark exposure for text overlay, '
+            'no text, no letters, no words, no watermarks'
         )
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')
@@ -797,6 +799,7 @@ def blog_thumbnail():
         background_url=bg_url,
         brand_name=brand_name,
         accent_color=accent_color,
+        use_quotes=use_quotes,
     )
     b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
 

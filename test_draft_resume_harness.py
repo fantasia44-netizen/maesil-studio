@@ -1283,7 +1283,7 @@ check('[19] imagen_service: line2 강조색 렌더링',
 check('[19] imagen_service: 워터마크 @brand_name',
       'brand_name' in img_src and 'startswith' in img_src)
 check('[19] imagen_service: _shadow_text 재사용',
-      '_shadow_text' in img_src.split('def generate_blog_thumbnail')[1][:3000])
+      '_shadow_text' in img_src.split('def generate_blog_thumbnail')[1][:6000])
 check('[19] imagen_service: PNG bytes 반환',
       "format='PNG'" in img_src.split('def generate_blog_thumbnail')[1][:5000])
 

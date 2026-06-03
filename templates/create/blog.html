@@ -383,14 +383,24 @@
             </div>
           </div>
 
-          <!-- FLUX 배경 토글 -->
-          <div class="form-check form-switch mb-0">
-            <input class="form-check-input" type="checkbox" id="thumbUseFlux" checked
-                   onchange="updateThumbCostBadge()">
-            <label class="form-check-label small" for="thumbUseFlux">
-              FLUX 배경 생성 <span class="badge bg-secondary" style="font-size:.62rem">50P</span>
-              <span class="text-muted"> — 끄면 다크 그라데이션 사용 (무료)</span>
-            </label>
+          <!-- 인용부호 / FLUX 토글 -->
+          <div class="d-flex flex-column gap-2 mt-1">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="thumbUseQuotes" checked
+                     onchange="updateThumbPreview()">
+              <label class="form-check-label small" for="thumbUseQuotes">
+                인용부호 스타일 <span class="text-muted">"텍스트"</span>
+                <span class="text-muted fw-normal"> — 상위 블로거 공통 패턴</span>
+              </label>
+            </div>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="thumbUseFlux" checked
+                     onchange="updateThumbCostBadge()">
+              <label class="form-check-label small" for="thumbUseFlux">
+                FLUX 배경 생성 <span class="badge bg-secondary" style="font-size:.62rem">50P</span>
+                <span class="text-muted"> — 주제 관련 실사 사진, 끄면 그라데이션</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -610,12 +620,16 @@ function setThumbAccent(color, el) {
 }
 
 function updateThumbPreview() {
-  const l1 = document.getElementById('thumbLine1').value.trim() || '메인 텍스트';
-  const l2 = document.getElementById('thumbLine2').value.trim() || '서브 텍스트';
+  const l1       = document.getElementById('thumbLine1').value.trim() || '메인 텍스트';
+  const l2       = document.getElementById('thumbLine2').value.trim() || '서브 텍스트';
+  const useQuote = document.getElementById('thumbUseQuotes')?.checked ?? true;
   const el1 = document.getElementById('thumbPrevLine1');
   const el2 = document.getElementById('thumbPrevLine2');
-  if (el1) el1.textContent = l1;
-  if (el2) { el2.textContent = l2; el2.style.color = thumbAccentColor; }
+  if (el1) el1.textContent = useQuote ? ('“' + l1) : l1;       // 여는 따옴표
+  if (el2) {
+    el2.textContent = useQuote ? (l2 + '”') : l2;              // 닫는 따옴표
+    el2.style.color = thumbAccentColor;
+  }
 }
 
 function _populateThumbTitles() {
@@ -1488,6 +1502,7 @@ async function generateAllImages() {
       const bgTopic   = document.getElementById('keywordInput')?.value?.trim()
                      || document.querySelector('[name="keyword"]')?.value?.trim() || '';
       try {
+        const useQuotes = document.getElementById('thumbUseQuotes')?.checked ?? true;
         const res  = await fetch('{{ url_for("create.blog_thumbnail") }}', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
@@ -1496,6 +1511,7 @@ async function generateAllImages() {
             brand_name: brandName,
             accent_color: thumbAccentColor,
             use_flux: useFlux,
+            use_quotes: useQuotes,
             bg_topic: bgTopic,
           }),
         });
