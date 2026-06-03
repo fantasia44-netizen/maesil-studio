@@ -775,7 +775,7 @@ def blog_thumbnail():
                     'status': 'pending',
                     'created_at': now_s, 'updated_at': now_s,
                 }).execute()
-            use_points(current_user, cost, note='블로그 썸네일 카드', creation_id=cid)
+            use_points(current_user, 'blog_thumbnail', cid, cost_override=cost)
         except InsufficientPoints as e:
             return jsonify(ok=False, message=str(e))
         except Exception as e:
@@ -802,30 +802,32 @@ def blog_thumbnail():
 
         context_str = '\n\n'.join(context_parts) if context_parts else '배경 키워드 없음'
 
+        # generate_text(system_prompt, user_prompt, max_tokens, model) — 위치 인수
+        _THUMB_BG_SYSTEM = (
+            'You write a FLUX image generation prompt for a blog thumbnail background.\n'
+            '\n'
+            'PRIORITY ORDER (follow strictly):\n'
+            '1. [유저 배경 키워드] = USER\'S DIRECT INSTRUCTION — must be honored exactly.\n'
+            '   If user says "창고" → generate warehouse. No exceptions.\n'
+            '2. [이미지 프롬프트] = reference for visual style and mood.\n'
+            '3. [블로그 글 내용] = supplementary context only.\n'
+            '\n'
+            'If [유저 배경 키워드] is empty, infer the best background from '
+            'the image prompts and blog content.\n'
+            '\n'
+            'OUTPUT FORMAT: 50-70 word English FLUX prompt only.\n'
+            '- Describe exact physical objects, materials, lighting angles\n'
+            '- End with: "photorealistic DSLR photography, dark exposure, '
+            'no people, no text in image"\n'
+            '- NO: futuristic, sci-fi, cyberpunk, neon, glowing panels, '
+            'city streets, night market, rain, charts, graphs, screens\n'
+            '- Korean input → translate to English first\n'
+            '- Output the prompt only, no explanation, no quotes.'
+        )
         try:
             bg_prompt = _gen_text(
-                system=(
-                    'You write a FLUX image generation prompt for a blog thumbnail background.\n'
-                    '\n'
-                    'PRIORITY ORDER (follow strictly):\n'
-                    '1. [유저 배경 키워드] = USER\'S DIRECT INSTRUCTION — must be honored exactly.\n'
-                    '   If user says "창고" → generate warehouse. No exceptions.\n'
-                    '2. [이미지 프롬프트] = reference for visual style and mood.\n'
-                    '3. [블로그 글 내용] = supplementary context only.\n'
-                    '\n'
-                    'If [유저 배경 키워드] is empty, infer the best background from '
-                    'the image prompts and blog content.\n'
-                    '\n'
-                    'OUTPUT FORMAT: 50-70 word English FLUX prompt only.\n'
-                    '- Describe exact physical objects, materials, lighting angles\n'
-                    '- End with: "photorealistic DSLR photography, dark exposure, '
-                    'no people, no text in image"\n'
-                    '- NO: futuristic, sci-fi, cyberpunk, neon, glowing panels, '
-                    'city streets, night market, rain, charts, graphs, screens\n'
-                    '- Korean input → translate to English first\n'
-                    '- Output the prompt only, no explanation, no quotes.'
-                ),
-                prompt=context_str,
+                _THUMB_BG_SYSTEM,
+                context_str,
                 max_tokens=220,
                 model='claude-sonnet-4-6',
             )
