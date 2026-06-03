@@ -782,18 +782,19 @@ def blog_thumbnail():
     # ── FLUX 배경 생성 ────────────────────────────────────────
     bg_url = None
     if use_flux:
-        from services.imagen_service import _generate_flux, _has_korean, _topic_to_bg_scene
-        # 주제를 차트/UI 없는 물리적 배경 장면으로 변환
-        raw_topic = bg_topic or ''
-        if raw_topic:
-            scene_desc = _topic_to_bg_scene(raw_topic)
+        from services.imagen_service import _generate_flux, _has_korean, _translate_prompt
+        # 한글이면 영문 번역, 영문이면 그대로 — 창의적 재해석 없이 직역
+        if bg_topic:
+            if _has_korean(bg_topic):
+                topic_en = _translate_prompt(bg_topic) or bg_topic
+            else:
+                topic_en = bg_topic
         else:
-            scene_desc = 'dark atmospheric cinematic background bokeh'
-        # 배경 전용 프롬프트 — editorial news 제거 (차트 연상 원인)
+            topic_en = 'dark cinematic background'
         bg_prompt = (
-            f'cinematic moody photography, {scene_desc}, '
-            'dramatic atmospheric lighting, shallow depth of field, bokeh background, '
-            'dark tones suitable for text overlay, high quality DSLR photography'
+            f'cinematic moody photography, {topic_en}, '
+            'dramatic atmospheric lighting, shallow depth of field, bokeh, '
+            'dark tones suitable for text overlay, high quality DSLR'
         )
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')
