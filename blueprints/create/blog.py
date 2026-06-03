@@ -741,6 +741,8 @@ def blog_thumbnail():
     use_flux        = bool(data.get('use_flux', True))
     use_quotes      = bool(data.get('use_quotes', True))
     bg_topic        = (data.get('bg_topic') or '').strip()[:120]
+    blog_text       = (data.get('blog_text') or '').strip()[:800]
+    image_prompts   = (data.get('image_prompts') or '').strip()[:600]
     text_y_pct      = max(10, min(90, int(data.get('text_y_pct',  55))))
     font_size_pct   = max(50, min(150, int(data.get('font_size_pct', 100))))
     overlay_darkness = max(0, min(100, int(data.get('overlay_darkness', 65))))
@@ -785,56 +787,59 @@ def blog_thumbnail():
         from services.imagen_service import _generate_flux
         from services.claude_service import generate_text as _gen_text
 
-        # 썸네일 배경 — Sonnet이 50~70단어 FLUX 프롬프트 직접 생성
+        # 썸네일 배경 — 블로그 글 내용 + 이미지 프롬프트 맥락으로 Sonnet이 배경 생성
+        # 유저가 배경 키워드를 입력하지 않아도 글 내용에서 의도 파악 가능
+        context_parts = []
+        if blog_text:
+            context_parts.append(f'[블로그 글 내용 발췌]\n{blog_text[:600]}')
+        if image_prompts:
+            context_parts.append(
+                f'[이미 생성된 블로그 이미지 프롬프트 (영문)]\n{image_prompts}'
+            )
         if bg_topic:
-            try:
-                bg_prompt = _gen_text(
-                    system=(
-                        'You are an expert FLUX image generation prompt writer.\n'
-                        'Write a 50-70 word REALISTIC PHOTOGRAPHY prompt for a blog thumbnail background.\n'
-                        '\n'
-                        'ABSOLUTE RULES (violation = failure):\n'
-                        '- ONLY describe what a real camera would photograph in real life\n'
-                        '- NO: futuristic, sci-fi, cyberpunk, neon lights, glowing panels, '
-                        'holographic, digital, fantasy, CGI, rendered, animated\n'
-                        '- NO: city streets, night market, rain, traffic, outdoor signage\n'
-                        '- NO: charts, graphs, screens, monitors, data\n'
-                        '- YES: real physical spaces (warehouse, office, kitchen, etc.) with '
-                        'natural or industrial lighting\n'
-                        '- End every prompt with exactly: '
-                        '"photorealistic DSLR photography, dark exposure, no people, '
-                        'no text overlay"\n'
-                        '- Korean input: translate first, then describe scene\n'
-                        '\n'
-                        'EXAMPLE for 3PL logistics warehouse:\n'
-                        'Interior view of a conventional storage warehouse with rows of '
-                        'steel metal shelving units loaded with brown cardboard boxes, '
-                        'plain concrete floor, standard industrial fluorescent tube lights '
-                        'mounted on the ceiling, simple utilitarian space with no decoration, '
-                        'wide angle shot looking down the main aisle, '
-                        'photorealistic DSLR photography, dark exposure, no people, '
-                        'no text overlay\n'
-                        '\n'
-                        'EXAMPLE for investment/finance:\n'
-                        'Stack of gold coins and folded banknotes arranged on a plain dark '
-                        'wooden desk surface, single directional desk lamp casting warm light '
-                        'on the coins, shallow depth of field with dark background, '
-                        'simple still life composition, '
-                        'photorealistic DSLR photography, dark exposure, no people, '
-                        'no text overlay'
-                    ),
-                    prompt=bg_topic,
-                    max_tokens=200,
-                    model='claude-sonnet-4-6',
-                )
-                bg_prompt = bg_prompt.strip().strip('"\'')
-                logger.info(f'[thumbnail] bg_topic={bg_topic!r} → FLUX prompt: {bg_prompt[:120]}')
-            except Exception as e:
-                logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패: {e}')
-                bg_prompt = (
-                    'conventional storage warehouse interior with metal shelves and cardboard boxes, '
-                    'photorealistic DSLR photography, dark exposure, no people, no text overlay'
-                )
+            context_parts.append(f'[유저 배경 키워드]\n{bg_topic}')
+
+        context_str = '\n\n'.join(context_parts) if context_parts else '배경 키워드 없음'
+
+        try:
+            bg_prompt = _gen_text(
+                system=(
+                    'You are an expert FLUX image generation prompt writer for blog thumbnails.\n'
+                    'Analyze the provided blog content, image prompts, and background keyword '
+                    'to understand the user\'s intent, then write ONE 50-70 word FLUX background prompt.\n'
+                    '\n'
+                    'HOW TO USE CONTEXT:\n'
+                    '- Blog image prompts are already in English FLUX format — '
+                    'use their visual style and subject matter as reference\n'
+                    '- Blog text reveals the actual topic and tone\n'
+                    '- Background keyword is the user\'s specific request\n'
+                    '- Combine all three to generate the most relevant background\n'
+                    '\n'
+                    'ABSOLUTE RULES:\n'
+                    '- Describe ONLY what a real camera photographs in real life\n'
+                    '- NO: futuristic, sci-fi, cyberpunk, neon signs, glowing panels, '
+                    'city streets, night market, rain, charts, graphs, screens, monitors\n'
+                    '- End with: "photorealistic DSLR photography, dark exposure, '
+                    'no people, no text in image"\n'
+                    '- Korean → translate to English first\n'
+                    '\n'
+                    'OUTPUT: Only the FLUX prompt text, no explanation, no quotes.'
+                ),
+                prompt=context_str,
+                max_tokens=220,
+                model='claude-sonnet-4-6',
+            )
+            bg_prompt = bg_prompt.strip().strip('"\'')
+            logger.info(
+                f'[thumbnail] context_len={len(context_str)} '
+                f'→ FLUX prompt: {bg_prompt[:150]}'
+            )
+        except Exception as e:
+            logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패: {e}')
+            bg_prompt = (
+                'dark atmospheric interior space with dramatic directional lighting, '
+                'photorealistic DSLR photography, dark exposure, no people, no text in image'
+            )
         else:
             bg_prompt = (
                 'abstract dark atmospheric background, dramatic directional lighting, '
