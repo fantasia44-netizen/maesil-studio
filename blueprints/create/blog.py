@@ -785,57 +785,56 @@ def blog_thumbnail():
         from services.imagen_service import _generate_flux
         from services.claude_service import generate_text as _gen_text
 
-        # 썸네일 배경 — 블로그 이미지 프롬프트 수준(50~70단어)의 상세 FLUX 프롬프트 생성
-        # 짧은 프롬프트는 FLUX의 학습 편향(야시장·도시야경)이 채워버림
+        # 썸네일 배경 — Sonnet이 50~70단어 FLUX 프롬프트 직접 생성
         if bg_topic:
             try:
                 bg_prompt = _gen_text(
                     system=(
-                        'You are an expert FLUX image generation prompt writer for blog thumbnail backgrounds.\n'
-                        'Write a detailed 50-70 word English FLUX prompt describing a PHYSICAL BACKGROUND SCENE.\n'
+                        'You are an expert FLUX image generation prompt writer.\n'
+                        'Write a 50-70 word REALISTIC PHOTOGRAPHY prompt for a blog thumbnail background.\n'
                         '\n'
-                        'RULES:\n'
-                        '- Write 50-70 words, detailed and specific\n'
-                        '- Describe exact physical objects, materials, textures, lighting angles\n'
-                        '- Always end with: "photorealistic, high quality DSLR, dark moody tones, '
-                        'no people, suitable as text overlay background"\n'
-                        '- NEVER include: charts, graphs, screens, city streets, night markets, '
-                        'rain, neon signs, traffic, abstract concepts\n'
-                        '- If input is Korean, translate and describe the scene in English\n'
+                        'ABSOLUTE RULES (violation = failure):\n'
+                        '- ONLY describe what a real camera would photograph in real life\n'
+                        '- NO: futuristic, sci-fi, cyberpunk, neon lights, glowing panels, '
+                        'holographic, digital, fantasy, CGI, rendered, animated\n'
+                        '- NO: city streets, night market, rain, traffic, outdoor signage\n'
+                        '- NO: charts, graphs, screens, monitors, data\n'
+                        '- YES: real physical spaces (warehouse, office, kitchen, etc.) with '
+                        'natural or industrial lighting\n'
+                        '- End every prompt with exactly: '
+                        '"photorealistic DSLR photography, dark exposure, no people, '
+                        'no text overlay"\n'
+                        '- Korean input: translate first, then describe scene\n'
                         '\n'
-                        'EXAMPLES:\n'
-                        '물류센터 창고 / warehouse →\n'
-                        'Interior of a large commercial warehouse with tall metal shelving racks '
-                        'stretching to high ceiling, rows of cardboard boxes neatly stacked, '
-                        'concrete floor, dramatic industrial overhead fluorescent lighting casting '
-                        'deep shadows between aisles, wide angle perspective, '
-                        'photorealistic, high quality DSLR, dark moody tones, no people, '
-                        'suitable as text overlay background\n'
+                        'EXAMPLE for 3PL logistics warehouse:\n'
+                        'Interior view of a conventional storage warehouse with rows of '
+                        'steel metal shelving units loaded with brown cardboard boxes, '
+                        'plain concrete floor, standard industrial fluorescent tube lights '
+                        'mounted on the ceiling, simple utilitarian space with no decoration, '
+                        'wide angle shot looking down the main aisle, '
+                        'photorealistic DSLR photography, dark exposure, no people, '
+                        'no text overlay\n'
                         '\n'
-                        'ETF 투자 / investment finance →\n'
-                        'Close-up of stacked gold coins and paper currency on a dark wooden desk, '
-                        'selective focus with shallow depth of field, warm directional side lighting '
-                        'highlighting metallic texture of coins, dark background with subtle bokeh, '
-                        'still life photography style, '
-                        'photorealistic, high quality DSLR, dark moody tones, no people, '
-                        'suitable as text overlay background\n'
-                        '\n'
-                        '부동산 / real estate →\n'
-                        'Modern residential apartment building exterior at blue hour twilight, '
-                        'glass facade reflecting soft blue sky gradient, clean architectural lines, '
-                        'street level perspective looking upward, minimal urban surroundings, '
-                        'professional architectural photography, '
-                        'photorealistic, high quality DSLR, dark moody tones, no people, '
-                        'suitable as text overlay background'
+                        'EXAMPLE for investment/finance:\n'
+                        'Stack of gold coins and folded banknotes arranged on a plain dark '
+                        'wooden desk surface, single directional desk lamp casting warm light '
+                        'on the coins, shallow depth of field with dark background, '
+                        'simple still life composition, '
+                        'photorealistic DSLR photography, dark exposure, no people, '
+                        'no text overlay'
                     ),
                     prompt=bg_topic,
                     max_tokens=200,
                     model='claude-sonnet-4-6',
                 )
                 bg_prompt = bg_prompt.strip().strip('"\'')
+                logger.info(f'[thumbnail] bg_topic={bg_topic!r} → FLUX prompt: {bg_prompt[:120]}')
             except Exception as e:
                 logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패: {e}')
-                bg_prompt = 'dark atmospheric interior space dramatic lighting photorealistic no people'
+                bg_prompt = (
+                    'conventional storage warehouse interior with metal shelves and cardboard boxes, '
+                    'photorealistic DSLR photography, dark exposure, no people, no text overlay'
+                )
         else:
             bg_prompt = (
                 'abstract dark atmospheric background, dramatic directional lighting, '
