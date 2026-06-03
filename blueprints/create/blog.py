@@ -789,41 +789,41 @@ def blog_thumbnail():
 
         # 썸네일 배경 — 블로그 글 내용 + 이미지 프롬프트 맥락으로 Sonnet이 배경 생성
         # 유저가 배경 키워드를 입력하지 않아도 글 내용에서 의도 파악 가능
+        # bg_topic(유저 직접 지시)를 최우선으로 배치
         context_parts = []
-        if blog_text:
-            context_parts.append(f'[블로그 글 내용 발췌]\n{blog_text[:600]}')
+        if bg_topic:
+            context_parts.append(f'[유저 배경 키워드 — 최우선 지시]\n{bg_topic}')
         if image_prompts:
             context_parts.append(
-                f'[이미 생성된 블로그 이미지 프롬프트 (영문)]\n{image_prompts}'
+                f'[이미 생성된 블로그 이미지 프롬프트 (영문 FLUX 형식)]\n{image_prompts}'
             )
-        if bg_topic:
-            context_parts.append(f'[유저 배경 키워드]\n{bg_topic}')
+        if blog_text:
+            context_parts.append(f'[블로그 글 내용 발췌 — 보조 참고]\n{blog_text[:600]}')
 
         context_str = '\n\n'.join(context_parts) if context_parts else '배경 키워드 없음'
 
         try:
             bg_prompt = _gen_text(
                 system=(
-                    'You are an expert FLUX image generation prompt writer for blog thumbnails.\n'
-                    'Analyze the provided blog content, image prompts, and background keyword '
-                    'to understand the user\'s intent, then write ONE 50-70 word FLUX background prompt.\n'
+                    'You write a FLUX image generation prompt for a blog thumbnail background.\n'
                     '\n'
-                    'HOW TO USE CONTEXT:\n'
-                    '- Blog image prompts are already in English FLUX format — '
-                    'use their visual style and subject matter as reference\n'
-                    '- Blog text reveals the actual topic and tone\n'
-                    '- Background keyword is the user\'s specific request\n'
-                    '- Combine all three to generate the most relevant background\n'
+                    'PRIORITY ORDER (follow strictly):\n'
+                    '1. [유저 배경 키워드] = USER\'S DIRECT INSTRUCTION — must be honored exactly.\n'
+                    '   If user says "창고" → generate warehouse. No exceptions.\n'
+                    '2. [이미지 프롬프트] = reference for visual style and mood.\n'
+                    '3. [블로그 글 내용] = supplementary context only.\n'
                     '\n'
-                    'ABSOLUTE RULES:\n'
-                    '- Describe ONLY what a real camera photographs in real life\n'
-                    '- NO: futuristic, sci-fi, cyberpunk, neon signs, glowing panels, '
-                    'city streets, night market, rain, charts, graphs, screens, monitors\n'
+                    'If [유저 배경 키워드] is empty, infer the best background from '
+                    'the image prompts and blog content.\n'
+                    '\n'
+                    'OUTPUT FORMAT: 50-70 word English FLUX prompt only.\n'
+                    '- Describe exact physical objects, materials, lighting angles\n'
                     '- End with: "photorealistic DSLR photography, dark exposure, '
                     'no people, no text in image"\n'
-                    '- Korean → translate to English first\n'
-                    '\n'
-                    'OUTPUT: Only the FLUX prompt text, no explanation, no quotes.'
+                    '- NO: futuristic, sci-fi, cyberpunk, neon, glowing panels, '
+                    'city streets, night market, rain, charts, graphs, screens\n'
+                    '- Korean input → translate to English first\n'
+                    '- Output the prompt only, no explanation, no quotes.'
                 ),
                 prompt=context_str,
                 max_tokens=220,
