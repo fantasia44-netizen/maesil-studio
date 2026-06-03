@@ -335,7 +335,7 @@
     </div>
   </div>
 
-  <!-- ── 썸네일 카드 설정 ── -->
+  <!-- ── 썸네일 비주얼 에디터 ── -->
   <div class="card mb-3" id="thumbCardSection">
     <div class="card-header py-2 d-flex align-items-center gap-2" style="background:#fafafe">
       <div class="form-check form-switch mb-0 me-auto">
@@ -343,113 +343,265 @@
                onchange="toggleThumbCard(this.checked)">
         <label class="form-check-label fw-semibold small" for="enableThumb">
           <i class="bi bi-card-image me-1" style="color:#6366f1"></i>
-          블로그 썸네일 카드 자동 생성 <span class="text-muted fw-normal">— 첫 이미지로 삽입, 앨범형 CTR 향상</span>
+          블로그 썸네일 카드 에디터
+          <span class="text-muted fw-normal">— 첫 이미지 자동 생성, 앨범형 CTR 향상</span>
         </label>
       </div>
       <span id="thumbCostBadge" class="badge" style="background:#ede9fe;color:#5b21b6;font-size:.7rem">+50P</span>
     </div>
-    <div id="thumbCardBody" class="card-body p-3 d-none">
-      <div class="row g-3 align-items-start">
 
-        <!-- 왼쪽: 입력 영역 -->
-        <div class="col-lg-7">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1">
-              메인 텍스트 <span class="text-muted fw-normal">(흰색 대형 · 최대 14자)</span>
-            </label>
-            <input id="thumbLine1" class="form-control form-control-sm" maxlength="14"
-                   placeholder="예: 종합소득세" oninput="updateThumbPreview()">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-semibold mb-1">
-              서브 텍스트 <span class="text-muted fw-normal">(강조색 대형 · 최대 14자)</span>
-            </label>
-            <input id="thumbLine2" class="form-control form-control-sm" maxlength="14"
-                   placeholder="예: 종결!" oninput="updateThumbPreview()">
-          </div>
+    <div id="thumbCardBody" class="d-none">
+      <div class="row g-0" style="min-height:460px">
 
-          <!-- 강조 색상 -->
-          <div class="mb-3">
-            <label class="form-label small fw-semibold mb-2">서브 텍스트 색상</label>
-            <div class="d-flex gap-2 flex-wrap align-items-center">
-              {% for hc in ['#FFD700','#FF6B35','#4ADE80','#60A5FA','#F472B6','#E879F9','#FFFFFF'] %}
-              <div class="thumb-accent-dot"
-                   onclick="setThumbAccent('{{ hc }}', this)"
-                   style="width:26px;height:26px;background:{{ hc }};border-radius:50%;
-                          cursor:pointer;border:2px solid {{ 'black' if hc=='#FFFFFF' else 'transparent' }};
-                          transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.2)"
-                   title="{{ hc }}"></div>
-              {% endfor %}
+        <!-- ── 왼쪽 패널: 탭 에디터 ── -->
+        <div class="col-lg-7 border-end p-3">
+
+          <!-- 탭 네비 -->
+          <ul class="nav nav-tabs nav-fill mb-3" style="font-size:.8rem" id="thumbTabNav">
+            <li class="nav-item">
+              <a class="nav-link active py-1 px-2" id="thumbTabBgBtn"
+                 onclick="switchThumbTab('bg');return false" href="#">
+                <i class="bi bi-image me-1"></i>배경
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link py-1 px-2" id="thumbTabTextBtn"
+                 onclick="switchThumbTab('text');return false" href="#">
+                <i class="bi bi-type me-1"></i>텍스트
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link py-1 px-2" id="thumbTabStyleBtn"
+                 onclick="switchThumbTab('style');return false" href="#">
+                <i class="bi bi-palette me-1"></i>스타일
+              </a>
+            </li>
+          </ul>
+
+          <!-- ── 배경 탭 ── -->
+          <div id="thumbTabBg">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">배경 유형</label>
+              <div class="d-flex flex-column gap-2">
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer" id="thumbBgFluxLabel">
+                  <input type="radio" name="thumbBgType" value="flux" id="thumbBgFlux"
+                         class="mt-1 flex-shrink-0" checked onchange="updateThumbCostBadge()">
+                  <div>
+                    <div class="fw-semibold small">FLUX 자동 생성
+                      <span class="badge bg-secondary ms-1" style="font-size:.62rem">50P</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">주제 관련 실사 사진 자동 생성</div>
+                    <input id="thumbBgTopic" class="form-control form-control-sm mt-1"
+                           placeholder="배경 주제 키워드 (예: 삼성전자 주식, ETF 투자)"
+                           oninput="updateThumbPreview()">
+                  </div>
+                </label>
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer">
+                  <input type="radio" name="thumbBgType" value="gradient" id="thumbBgGradient"
+                         class="mt-1 flex-shrink-0" onchange="updateThumbCostBadge()">
+                  <div>
+                    <div class="fw-semibold small">다크 그라데이션
+                      <span class="badge bg-success ms-1" style="font-size:.62rem">무료</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">즉시 생성, 강조색 기반 배경</div>
+                  </div>
+                </label>
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer">
+                  <input type="radio" name="thumbBgType" value="upload" id="thumbBgUpload"
+                         class="mt-1 flex-shrink-0" onchange="updateThumbCostBadge()">
+                  <div class="flex-fill">
+                    <div class="fw-semibold small">직접 업로드
+                      <span class="badge bg-success ms-1" style="font-size:.62rem">무료</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">내 사진을 배경으로 사용</div>
+                    <input type="file" id="thumbBgFile" class="form-control form-control-sm mt-1"
+                           accept="image/*" onchange="previewBgUpload(this)">
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
-          <!-- 인용부호 / FLUX 토글 -->
-          <div class="d-flex flex-column gap-2 mt-1">
-            <div class="form-check form-switch mb-0">
+          <!-- ── 텍스트 탭 ── -->
+          <div id="thumbTabText" class="d-none">
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">
+                줄 1 · 흰색 <span class="text-muted fw-normal">(최대 16자)</span>
+              </label>
+              <input id="thumbLine1" class="form-control form-control-sm" maxlength="16"
+                     placeholder="예: 종합소득세" oninput="updateThumbPreview()">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1">
+                줄 2 · 강조색 <span class="text-muted fw-normal">(최대 16자)</span>
+              </label>
+              <input id="thumbLine2" class="form-control form-control-sm" maxlength="16"
+                     placeholder="예: 종결!" oninput="updateThumbPreview()">
+            </div>
+
+            <!-- 위치 슬라이더 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                세로 위치
+                <span id="thumbYLabel" class="text-muted fw-normal">55%</span>
+              </label>
+              <input type="range" class="form-range" id="thumbYPos"
+                     min="15" max="82" value="55"
+                     oninput="document.getElementById('thumbYLabel').textContent=this.value+'%'; updateThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>위쪽</span><span>아래쪽</span>
+              </div>
+            </div>
+
+            <!-- 폰트 크기 슬라이더 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                글자 크기
+                <span id="thumbSizeLabel" class="text-muted fw-normal">100%</span>
+              </label>
+              <input type="range" class="form-range" id="thumbFontSize"
+                     min="65" max="140" value="100"
+                     oninput="document.getElementById('thumbSizeLabel').textContent=this.value+'%'; updateThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>작게</span><span>크게</span>
+              </div>
+            </div>
+
+            <!-- 정렬 -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1">텍스트 정렬</label>
+              <div class="btn-group btn-group-sm w-100" id="thumbAlignBtns">
+                {% for a, ic in [('left','text-left'),('center','text-center'),('right','text-right')] %}
+                <button type="button" class="btn btn-outline-secondary thumb-align-btn
+                        {% if a=='center' %}active{% endif %}"
+                        data-align="{{ a }}"
+                        onclick="setThumbAlign('{{ a }}', this)">
+                  <i class="bi bi-{{ ic }}"></i>
+                </button>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- 인용부호 -->
+            <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="thumbUseQuotes" checked
                      onchange="updateThumbPreview()">
               <label class="form-check-label small" for="thumbUseQuotes">
-                인용부호 스타일 <span class="text-muted">"텍스트"</span>
-                <span class="text-muted fw-normal"> — 상위 블로거 공통 패턴</span>
+                인용부호 <code style="font-size:.75em">"텍스트"</code>
+                <span class="text-muted">— 상위 블로거 공통 패턴</span>
               </label>
             </div>
-            <div class="form-check form-switch mb-0">
-              <input class="form-check-input" type="checkbox" id="thumbUseFlux" checked
-                     onchange="updateThumbCostBadge()">
-              <label class="form-check-label small" for="thumbUseFlux">
-                FLUX 배경 생성 <span class="badge bg-secondary" style="font-size:.62rem">50P</span>
-                <span class="text-muted"> — 주제 관련 실사 사진, 끄면 그라데이션</span>
-              </label>
+
+            <!-- 제목 후보 자동 채우기 -->
+            <div id="thumbTitlePicker" class="mt-3 d-none">
+              <div class="small fw-semibold text-muted mb-1">
+                <i class="bi bi-magic me-1"></i>블로그 제목 후보에서 자동 채우기
+              </div>
+              <div id="thumbTitleList" class="d-flex flex-column gap-1"></div>
             </div>
           </div>
-        </div>
 
-        <!-- 오른쪽: CSS 미리보기 + 제목 자동 채우기 -->
-        <div class="col-lg-5 d-flex flex-column align-items-center">
-          <!-- CSS 미리보기 -->
+          <!-- ── 스타일 탭 ── -->
+          <div id="thumbTabStyle" class="d-none">
+            <!-- 강조 색상 -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">줄 2 강조 색상</label>
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                {% for hc, hn in [('#FFD700','골드'),('#FF6B35','오렌지'),
+                                   ('#4ADE80','그린'),('#60A5FA','블루'),
+                                   ('#F472B6','핑크'),('#E879F9','퍼플'),
+                                   ('#FF4444','레드'),('#FFFFFF','화이트')] %}
+                <div class="thumb-accent-dot" title="{{ hn }}"
+                     onclick="setThumbAccent('{{ hc }}', this)"
+                     style="width:28px;height:28px;background:{{ hc }};border-radius:50%;
+                            cursor:pointer;border:2px solid {{ 'rgba(0,0,0,.25)' if hc=='#FFFFFF' else 'transparent' }};
+                            transition:all .15s;box-shadow:0 1px 5px rgba(0,0,0,.2)">
+                </div>
+                {% endfor %}
+                <input type="color" id="thumbAccentCustom" value="#FFD700"
+                       oninput="setThumbAccent(this.value, null)"
+                       class="form-control form-control-color flex-shrink-0"
+                       style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
+                       title="직접 선택">
+              </div>
+            </div>
+
+            <!-- 오버레이 강도 -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                오버레이 강도 <span id="thumbOverlayLabel" class="text-muted fw-normal">65%</span>
+              </label>
+              <input type="range" class="form-range" id="thumbOverlay"
+                     min="20" max="95" value="65"
+                     oninput="document.getElementById('thumbOverlayLabel').textContent=this.value+'%'; updateThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>밝음 (배경 잘 보임)</span><span>어둠 (텍스트 선명)</span>
+              </div>
+            </div>
+
+            <!-- 워터마크 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">워터마크</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">@</span>
+                <input id="thumbWatermark" class="form-control" maxlength="20"
+                       placeholder="브랜드명" oninput="updateThumbPreview()">
+              </div>
+              <div class="text-muted mt-1" style="font-size:.72rem">비워두면 워터마크 없음</div>
+            </div>
+          </div>
+
+        </div><!-- end 왼쪽 패널 -->
+
+        <!-- ── 오른쪽 패널: 실시간 미리보기 ── -->
+        <div class="col-lg-5 p-3 d-flex flex-column align-items-center">
+          <div class="small fw-semibold text-muted mb-2 align-self-start">실시간 미리보기</div>
+
+          <!-- 미리보기 캔버스 -->
           <div id="thumbPreview" style="
-            width:190px;height:190px;border-radius:14px;overflow:hidden;
+            width:320px;height:320px;border-radius:14px;overflow:hidden;
             background:linear-gradient(135deg,#09102a 0%,#1c2e55 45%,#09102a 100%);
-            position:relative;display:flex;flex-direction:column;
-            align-items:center;justify-content:center;flex-shrink:0;
-            box-shadow:0 6px 24px rgba(0,0,0,.4)">
-            <!-- 대각 질감 -->
-            <div style="position:absolute;inset:0;opacity:.06;
+            position:relative;flex-shrink:0;
+            box-shadow:0 6px 28px rgba(0,0,0,.45)">
+            <!-- 배경 이미지 레이어 -->
+            <div id="thumbPrevBgImg" style="position:absolute;inset:0;background-size:cover;background-position:center"></div>
+            <!-- 배경 텍스처 (그라데이션일 때) -->
+            <div id="thumbPrevTexture" style="position:absolute;inset:0;opacity:.06;
                  background:repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 0,transparent 16px)"></div>
-            <!-- 오버레이 -->
-            <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.25),rgba(0,0,0,.55))"></div>
-            <!-- 텍스트 -->
-            <div style="position:relative;text-align:center;padding:18px;width:100%;z-index:1">
+            <!-- 오버레이 레이어 -->
+            <div id="thumbPrevOverlay" style="position:absolute;inset:0;
+                 background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.15) 38%,rgba(0,0,0,.65) 100%)"></div>
+            <!-- 텍스트 블록 (절대 위치) -->
+            <div id="thumbPrevTextBlock" style="
+              position:absolute;left:0;right:0;
+              top:55%;transform:translateY(-50%);
+              text-align:center;padding:0 20px;z-index:2">
               <div id="thumbPrevLine1"
-                   style="color:#fff;font-size:24px;font-weight:900;line-height:1.25;
-                          text-shadow:2px 3px 8px rgba(0,0,0,.9);word-break:keep-all;
-                          letter-spacing:-.5px">메인 텍스트</div>
-              <div id="thumbPrevDivider"
-                   style="margin:6px auto 6px;width:36px;height:3px;
-                          background:#FFD700;border-radius:2px;opacity:.85"></div>
+                   style="color:#fff;font-size:26px;font-weight:900;line-height:1.25;
+                          text-shadow:2px 3px 10px rgba(0,0,0,.95);word-break:keep-all;
+                          letter-spacing:-.3px">"메인 텍스트</div>
               <div id="thumbPrevLine2"
-                   style="color:#FFD700;font-size:21px;font-weight:900;line-height:1.25;
-                          text-shadow:2px 3px 8px rgba(0,0,0,.9);word-break:keep-all;
-                          letter-spacing:-.5px">서브 텍스트</div>
+                   style="color:#FFD700;font-size:23px;font-weight:900;line-height:1.25;
+                          text-shadow:2px 3px 10px rgba(0,0,0,.95);word-break:keep-all;
+                          letter-spacing:-.3px;margin-top:4px">서브 텍스트"</div>
             </div>
             <!-- 워터마크 -->
-            <div id="thumbPrevMark"
-                 style="position:absolute;bottom:10px;color:rgba(255,255,255,.5);
-                        font-size:10px;font-weight:500;z-index:1;letter-spacing:.3px"></div>
+            <div id="thumbPrevMark" style="
+              position:absolute;bottom:12px;left:0;right:0;
+              text-align:center;color:rgba(255,255,255,.5);
+              font-size:11px;font-weight:500;z-index:2;letter-spacing:.4px"></div>
           </div>
-          <div class="text-muted mt-2 text-center" style="font-size:.7rem">CSS 미리보기 (실제와 다를 수 있음)</div>
 
-          <!-- 제목 후보 자동 채우기 -->
-          <div id="thumbTitlePicker" class="mt-3 w-100 d-none">
-            <div class="small fw-semibold text-muted mb-1">
-              <i class="bi bi-magic me-1"></i>제목 후보에서 자동 채우기
-            </div>
-            <div id="thumbTitleList" class="d-flex flex-column gap-1"></div>
+          <div class="text-muted mt-2 text-center" style="font-size:.7rem">
+            CSS 미리보기 — 실제 이미지와 유사
           </div>
-        </div>
+        </div><!-- end 오른쪽 패널 -->
 
       </div>
-    </div>
+    </div><!-- end thumbCardBody -->
   </div>
 
   <!-- 이미지 구성 계획 -->
@@ -582,77 +734,195 @@
 
 {% block extra_script %}
 <script>
-// ── 블로그 썸네일 카드 ───────────────────────────────────────
-let thumbEnabled    = false;
+// ══════════════════════════════════════════════════════════════
+// 블로그 썸네일 비주얼 에디터
+// ══════════════════════════════════════════════════════════════
+let thumbEnabled     = false;
 let thumbAccentColor = '#FFD700';
+let thumbAlign       = 'center';
+let thumbUploadedBgUrl = null;   // 직접 업로드한 배경 URL
 
+// ── 카드 토글 ──────────────────────────────────────────────────
 function toggleThumbCard(on) {
   thumbEnabled = on;
   document.getElementById('thumbCardBody').classList.toggle('d-none', !on);
-  if (on) _populateThumbTitles();
+  if (on) {
+    _populateThumbTitles();
+    _syncThumbBrandMark();
+    switchThumbTab('bg');  // 항상 배경 탭부터 시작
+  }
   updateThumbCostBadge();
 }
 
+// ── 탭 전환 ───────────────────────────────────────────────────
+function switchThumbTab(tab) {
+  ['bg','text','style'].forEach(t => {
+    const panel = document.getElementById(`thumbTab${t.charAt(0).toUpperCase()+t.slice(1)}`);
+    const btn   = document.getElementById(`thumbTab${t.charAt(0).toUpperCase()+t.slice(1)}Btn`);
+    if (panel) panel.classList.toggle('d-none', t !== tab);
+    if (btn)   btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'text') _populateThumbTitles();
+}
+
+// ── 비용 배지 ─────────────────────────────────────────────────
 function updateThumbCostBadge() {
   const badge = document.getElementById('thumbCostBadge');
   if (!badge) return;
   if (!thumbEnabled) { badge.style.opacity = '.4'; badge.textContent = '+50P'; return; }
-  const useFlux = document.getElementById('thumbUseFlux')?.checked ?? true;
-  badge.textContent = useFlux ? '+50P' : '+0P';
+  const bgType = document.querySelector('input[name=”thumbBgType”]:checked')?.value || 'flux';
+  badge.textContent = bgType === 'flux' ? '+50P' : '+0P';
   badge.style.opacity = '1';
 }
 
+// ── 강조색 선택 ───────────────────────────────────────────────
 function setThumbAccent(color, el) {
   thumbAccentColor = color;
   document.querySelectorAll('.thumb-accent-dot').forEach(d => {
-    d.style.borderColor  = 'transparent';
-    d.style.transform    = '';
-    d.style.boxShadow    = '0 1px 4px rgba(0,0,0,.2)';
+    d.style.borderColor = 'transparent';
+    d.style.transform   = '';
+    d.style.boxShadow   = '0 1px 5px rgba(0,0,0,.2)';
   });
-  el.style.borderColor = '#333';
-  el.style.transform   = 'scale(1.25)';
-  el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
-  // 미리보기 업데이트
-  const l2 = document.getElementById('thumbPrevLine2');
-  const div = document.getElementById('thumbPrevDivider');
-  if (l2)  l2.style.color = color;
-  if (div) div.style.background = color;
+  if (el) {
+    el.style.borderColor = '#333';
+    el.style.transform   = 'scale(1.22)';
+    el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
+  }
+  const c2 = document.getElementById('thumbAccentCustom');
+  if (c2) c2.value = color;
+  updateThumbPreview();
 }
 
+// ── 정렬 선택 ─────────────────────────────────────────────────
+function setThumbAlign(align, el) {
+  thumbAlign = align;
+  document.querySelectorAll('.thumb-align-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  updateThumbPreview();
+}
+
+// ── 배경 업로드 미리보기 ──────────────────────────────────────
+function previewBgUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    thumbUploadedBgUrl = e.target.result;  // base64
+    const bgDiv = document.getElementById('thumbPrevBgImg');
+    if (bgDiv) {
+      bgDiv.style.backgroundImage = `url('${thumbUploadedBgUrl}')`;
+      bgDiv.style.backgroundSize  = 'cover';
+    }
+    document.getElementById('thumbPrevTexture').style.opacity = '0';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── 실시간 미리보기 업데이트 ─────────────────────────────────
 function updateThumbPreview() {
-  const l1       = document.getElementById('thumbLine1').value.trim() || '메인 텍스트';
-  const l2       = document.getElementById('thumbLine2').value.trim() || '서브 텍스트';
+  const l1Raw    = document.getElementById('thumbLine1')?.value.trim() || '메인 텍스트';
+  const l2Raw    = document.getElementById('thumbLine2')?.value.trim() || '서브 텍스트';
   const useQuote = document.getElementById('thumbUseQuotes')?.checked ?? true;
+  const yPct     = parseInt(document.getElementById('thumbYPos')?.value  || 55);
+  const fontSize = parseInt(document.getElementById('thumbFontSize')?.value || 100);
+  const overlay  = parseInt(document.getElementById('thumbOverlay')?.value || 65);
+  const watermark= document.getElementById('thumbWatermark')?.value.trim() || '';
+
+  // 인용부호 적용
+  const l1 = useQuote ? ('”' + l1Raw) : l1Raw;
+  const l2 = useQuote ? (l2Raw + '”') : l2Raw;
+
+  // 텍스트 업데이트
   const el1 = document.getElementById('thumbPrevLine1');
   const el2 = document.getElementById('thumbPrevLine2');
-  if (el1) el1.textContent = useQuote ? ('“' + l1) : l1;       // 여는 따옴표
+  if (el1) {
+    el1.textContent  = l1;
+    const sz = Math.round(26 * fontSize / 100);
+    el1.style.fontSize = sz + 'px';
+    el1.style.textAlign = thumbAlign;
+  }
   if (el2) {
-    el2.textContent = useQuote ? (l2 + '”') : l2;              // 닫는 따옴표
-    el2.style.color = thumbAccentColor;
+    el2.textContent  = l2;
+    const sz = Math.round(23 * fontSize / 100);
+    el2.style.fontSize = sz + 'px';
+    el2.style.color     = thumbAccentColor;
+    el2.style.textAlign = thumbAlign;
+  }
+
+  // 텍스트 정렬
+  const block = document.getElementById('thumbPrevTextBlock');
+  if (block) {
+    block.style.top      = yPct + '%';
+    block.style.textAlign = thumbAlign;
+    block.style.paddingLeft  = thumbAlign === 'right' ? '20px' : (thumbAlign === 'left' ? '20px' : '20px');
+    block.style.paddingRight = '20px';
+  }
+
+  // 오버레이 강도
+  const botA = (overlay / 100 * 0.88).toFixed(2);
+  const midA = (overlay / 100 * 0.25).toFixed(2);
+  const ovDiv = document.getElementById('thumbPrevOverlay');
+  if (ovDiv) {
+    ovDiv.style.background =
+      `linear-gradient(to bottom,rgba(0,0,0,.04) 0%,rgba(0,0,0,${midA}) 38%,rgba(0,0,0,${botA}) 100%)`;
+  }
+
+  // 배경 (그라데이션 시 강조색 반영)
+  const bgType = document.querySelector('input[name=”thumbBgType”]:checked')?.value || 'flux';
+  const bgDiv  = document.getElementById('thumbPrevBgImg');
+  const texDiv = document.getElementById('thumbPrevTexture');
+  if (bgType === 'gradient' && bgDiv) {
+    const [r,g,b] = _hexToRgb(thumbAccentColor);
+    bgDiv.style.backgroundImage =
+      `linear-gradient(135deg,rgb(8,12,25) 0%,rgba(${r},${g},${b},.18) 50%,rgb(8,12,25) 100%)`;
+    bgDiv.style.backgroundSize = '';
+    if (texDiv) texDiv.style.opacity = '.06';
+  } else if (bgType !== 'upload' && bgDiv) {
+    bgDiv.style.backgroundImage = '';
+    if (texDiv) texDiv.style.opacity = '.06';
+  }
+
+  // 워터마크
+  const markEl = document.getElementById('thumbPrevMark');
+  if (markEl) {
+    const name = watermark || _getDefaultBrandName();
+    markEl.textContent  = name ? `@${name.replace(/^@/,'')}` : '';
+    markEl.style.textAlign = thumbAlign === 'right' ? 'right' : (thumbAlign === 'left' ? 'left' : 'center');
+    markEl.style.paddingLeft  = '14px';
+    markEl.style.paddingRight = '14px';
   }
 }
 
+function _hexToRgb(hex) {
+  const h = hex.replace('#','');
+  if (h.length !== 6) return [200,180,50];
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+
+function _getDefaultBrandName() {
+  const sel = document.getElementById('brandSelect');
+  return sel?.options[sel.selectedIndex]?.getAttribute('data-name') || '';
+}
+
+// ── 제목 후보 자동 채우기 ─────────────────────────────────────
 function _populateThumbTitles() {
   const text   = document.getElementById('blogTextArea')?.value || '';
   const picker = document.getElementById('thumbTitlePicker');
   const list   = document.getElementById('thumbTitleList');
   if (!text || !picker || !list) return;
-
   const secIdx = text.indexOf('제목 후보');
   if (secIdx < 0) { picker.classList.add('d-none'); return; }
-
   const after   = text.slice(secIdx, secIdx + 900);
   const matches = [...after.matchAll(/^\d+\.\s*\[?([^\[\]\n]+?)\]?\s*(?:—[^\n]*)?\s*$/gm)];
   if (!matches.length) { picker.classList.add('d-none'); return; }
-
   list.innerHTML = matches.slice(0, 3).map(m => {
     const title = m[1].replace(/\*+/g, '').trim();
-    const esc   = title.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return `<button type="button" class="btn btn-sm text-start py-1"
-                    style="border:1px solid #e2e8f0;font-size:.75rem;line-height:1.35;
-                           color:#444;background:#fafafa;border-radius:7px"
-                    onclick="_applyThumbTitle('${esc}')">
-              <i class="bi bi-arrow-right-short me-1 text-muted"></i>${title.slice(0, 44)}${title.length > 44 ? '…' : ''}
+    const esc   = title.replace(/\\/g, '\\\\').replace(/'/g, “\\'”);
+    return `<button type=”button” class=”btn btn-sm text-start py-1”
+                    style=”border:1px solid #e2e8f0;font-size:.75rem;line-height:1.35;
+                           color:#444;background:#fafafa;border-radius:7px”
+                    onclick=”_applyThumbTitle('${esc}')”>
+              <i class=”bi bi-arrow-right-short me-1 text-muted”></i>${title.slice(0,44)}${title.length>44?'…':''}
             </button>`;
   }).join('');
   picker.classList.remove('d-none');
@@ -669,35 +939,31 @@ function _applyThumbTitle(title) {
 
 function _splitThumbTitle(title) {
   title = title.replace(/[\[\]「」『』（）()【】<>]/g, '').trim();
-  // 구분자 기준 분리
   for (const sep of [' - ', ' — ', ': ', '? ', '! ', ' · ']) {
     const idx = title.indexOf(sep);
     if (idx > 2 && idx < title.length - 2) {
       const hasP = sep.match(/[?!]/);
-      const l1 = title.slice(0, idx + (hasP ? 1 : 0)).trim().slice(0, 14);
-      const l2 = title.slice(idx + sep.length).trim().slice(0, 14);
+      const l1 = title.slice(0, idx + (hasP ? 1 : 0)).trim().slice(0, 15);
+      const l2 = title.slice(idx + sep.length).trim().slice(0, 15);
       if (l1 && l2) return [l1, l2];
     }
   }
-  // 공백 기준 절반
   const words = title.split(' ');
   if (words.length >= 2) {
     const half = Math.ceil(words.length / 2);
-    return [
-      words.slice(0, half).join(' ').slice(0, 14),
-      words.slice(half).join(' ').slice(0, 14),
-    ];
+    return [words.slice(0,half).join(' ').slice(0,15), words.slice(half).join(' ').slice(0,15)];
   }
   const mid = Math.ceil(title.length / 2);
-  return [title.slice(0, mid).slice(0, 14), title.slice(mid).slice(0, 14)];
+  return [title.slice(0, mid).slice(0,15), title.slice(mid).slice(0,15)];
 }
 
-// 브랜드 선택 변경 시 워터마크 미리보기 갱신
+// ── 브랜드 변경 시 워터마크 동기화 ───────────────────────────
 function _syncThumbBrandMark() {
-  const sel  = document.getElementById('brandSelect');
-  const name = sel?.options[sel.selectedIndex]?.getAttribute('data-name') || '';
-  const mark = document.getElementById('thumbPrevMark');
-  if (mark) mark.textContent = name ? `@${name}` : '';
+  const wm = document.getElementById('thumbWatermark');
+  if (wm && !wm.value) {
+    wm.placeholder = _getDefaultBrandName() || '브랜드명';
+  }
+  updateThumbPreview();
 }
 
 // ── 다운로드 프록시 헬퍼 ──────────────────────────────────────
@@ -1495,24 +1761,32 @@ async function generateAllImages() {
     const l2 = document.getElementById('thumbLine2').value.trim();
     if (l1) {
       document.getElementById('imgLoadingText').textContent = '썸네일 카드 생성 중...';
-      const useFlux = document.getElementById('thumbUseFlux')?.checked ?? true;
       const brandSel  = document.getElementById('brandSelect');
       const brandName = brandSel?.options[brandSel.selectedIndex]
                           ?.getAttribute('data-name') || '';
-      const bgTopic   = document.getElementById('keywordInput')?.value?.trim()
+      const bgTopic   = document.getElementById('thumbBgTopic')?.value?.trim()
+                     || document.getElementById('keywordInput')?.value?.trim()
                      || document.querySelector('[name="keyword"]')?.value?.trim() || '';
       try {
-        const useQuotes = document.getElementById('thumbUseQuotes')?.checked ?? true;
+        const useQuotes  = document.getElementById('thumbUseQuotes')?.checked ?? true;
+        const bgType     = document.querySelector('input[name="thumbBgType"]:checked')?.value || 'flux';
+        const useFluxNow = bgType === 'flux';
+        const watermark  = document.getElementById('thumbWatermark')?.value.trim()
+                        || _getDefaultBrandName();
         const res  = await fetch('{{ url_for("create.blog_thumbnail") }}', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
           body: JSON.stringify({
             line1: l1, line2: l2,
-            brand_name: brandName,
+            brand_name: watermark,
             accent_color: thumbAccentColor,
-            use_flux: useFlux,
-            use_quotes: useQuotes,
-            bg_topic: bgTopic,
+            use_flux:     useFluxNow,
+            use_quotes:   useQuotes,
+            bg_topic:     bgTopic,
+            text_y_pct:   parseInt(document.getElementById('thumbYPos')?.value   || 55),
+            font_size_pct: parseInt(document.getElementById('thumbFontSize')?.value || 100),
+            overlay_darkness: parseInt(document.getElementById('thumbOverlay')?.value || 65),
+            text_align:   thumbAlign,
           }),
         });
         const td = await res.json();

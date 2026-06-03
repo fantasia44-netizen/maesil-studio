@@ -738,9 +738,15 @@ def blog_thumbnail():
     line2        = (data.get('line2') or '').strip()[:18]
     brand_name   = (data.get('brand_name') or '').strip()[:24]
     accent_color = (data.get('accent_color') or '#FFD700').strip()
-    use_flux     = bool(data.get('use_flux', True))
-    use_quotes   = bool(data.get('use_quotes', True))
-    bg_topic     = (data.get('bg_topic') or '').strip()[:120]
+    use_flux        = bool(data.get('use_flux', True))
+    use_quotes      = bool(data.get('use_quotes', True))
+    bg_topic        = (data.get('bg_topic') or '').strip()[:120]
+    text_y_pct      = max(10, min(90, int(data.get('text_y_pct',  55))))
+    font_size_pct   = max(50, min(150, int(data.get('font_size_pct', 100))))
+    overlay_darkness = max(0, min(100, int(data.get('overlay_darkness', 65))))
+    text_align      = (data.get('text_align') or 'center').strip()
+    if text_align not in ('center', 'left', 'right'):
+        text_align = 'center'
 
     if not line1:
         return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
@@ -800,6 +806,10 @@ def blog_thumbnail():
         brand_name=brand_name,
         accent_color=accent_color,
         use_quotes=use_quotes,
+        text_y_pct=text_y_pct,
+        font_size_pct=font_size_pct,
+        overlay_darkness=overlay_darkness,
+        text_align=text_align,
     )
     b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
 

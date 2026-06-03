@@ -1320,8 +1320,8 @@ check('[19] blog.html: thumbPrevLine1 / thumbPrevLine2',
       'thumbPrevLine1' in blog_tpl3 and 'thumbPrevLine2' in blog_tpl3)
 check('[19] blog.html: 강조색 선택 컬러닷',
       'thumb-accent-dot' in blog_tpl3)
-check('[19] blog.html: thumbUseFlux FLUX 배경 토글',
-      'id="thumbUseFlux"' in blog_tpl3)
+check('[19] blog.html: thumbBgFlux FLUX 배경 라디오',
+      'thumbBgFlux' in blog_tpl3 or 'thumbBgType' in blog_tpl3)
 check('[19] blog.html: thumbEnabled JS 변수',
       'let thumbEnabled' in blog_tpl3)
 check('[19] blog.html: toggleThumbCard 함수',

@@ -913,19 +913,24 @@ def generate_blog_thumbnail(
     brand_name: str = '',
     accent_color: str = '#FFD700',
     use_quotes: bool = True,
+    text_y_pct: int = 55,        # 텍스트 블록 시작 Y 위치 (0-100%)
+    font_size_pct: int = 100,    # 폰트 크기 스케일 (50-150)
+    overlay_darkness: int = 65,  # 하단 오버레이 강도 (0-100)
+    text_align: str = 'center',  # 'center' | 'left' | 'right'
 ) -> bytes:
-    """블로그 썸네일 카드 생성 (1080×1080 PNG).
+    """블로그 썸네일 카드 생성 (1080×1080 PNG) — 비주얼 에디터 연동.
 
-    네이버 블로그 앨범형: 첫 이미지 = 썸네일 → CTR 핵심
-
-    레이아웃 (이안's 경제노트 스타일):
-    - 상단 40%: 배경 사진 선명하게 노출
-    - 하단 60%: 그라데이션 어두움 → 텍스트 가독성
-    - 텍스트: 하단 영역 배치 + 인용부호 "..." 스타일
-    - 워터마크: 최하단 중앙
+    Parameters
+    ----------
+    text_y_pct       : 텍스트 시작 Y 위치 % (0=최상단, 100=최하단)
+    font_size_pct    : 폰트 크기 배율 (100=기본, 80=작게, 120=크게)
+    overlay_darkness : 하단 어두운 정도 0-100 → alpha 0-250 매핑
+    text_align       : 텍스트 정렬 방향
     """
     W = H = 1080
     accent_rgb = _hex_to_rgb(accent_color)
+    scale = max(0.5, min(1.5, font_size_pct / 100))
+    bot_alpha = int(overlay_darkness * 2.5)  # 0-100 → 0-250
 
     # ── 배경 ─────────────────────────────────────────────
     if background_url:
@@ -938,83 +943,86 @@ def generate_blog_thumbnail(
     else:
         bg = _make_dark_gradient_bg(W, H, accent_rgb)
 
-    # ── 오버레이: 상단 투명 → 하단 어두움 (사진 상단 노출) ─
+    # ── 오버레이: 상단 얇게 → 하단 overlay_darkness 기반 ─
+    top_alpha = max(10, bot_alpha // 8)
+    mid_alpha = bot_alpha // 2
+    pivot = int(H * 0.38)
     ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    _draw_gradient_rect(ov, 0, 0,        W, int(H * 0.35), (0,0,0, 15), (0,0,0, 80))
-    _draw_gradient_rect(ov, 0, int(H*0.35), W, H,          (0,0,0, 80), (0,0,0,230))
+    _draw_gradient_rect(ov, 0, 0,      W, pivot, (0,0,0,top_alpha), (0,0,0,mid_alpha))
+    _draw_gradient_rect(ov, 0, pivot,  W, H,     (0,0,0,mid_alpha), (0,0,0,bot_alpha))
     img = Image.alpha_composite(bg, ov)
     draw = ImageDraw.Draw(img)
 
     # ── 폰트 ─────────────────────────────────────────────
     try:
         fp = _find_korean_font()
-        sz1 = int(H * 0.108)   # ~116px 메인
-        sz2 = int(H * 0.094)   # ~101px 서브
-        szm = int(H * 0.036)   # ~39px  워터마크
-        font_l1   = ImageFont.truetype(fp, size=sz1)
-        font_l2   = ImageFont.truetype(fp, size=sz2)
-        font_mark = ImageFont.truetype(fp, size=szm)
+        sz1 = int(H * 0.108 * scale)
+        sz2 = int(H * 0.094 * scale)
+        szm = int(H * 0.036)
+        font_l1   = ImageFont.truetype(fp, size=max(24, sz1))
+        font_l2   = ImageFont.truetype(fp, size=max(20, sz2))
+        font_mark = ImageFont.truetype(fp, size=max(16, szm))
     except Exception:
         fp = None
         font_l1 = font_l2 = font_mark = ImageFont.load_default()
 
     white  = (255, 255, 255, 255)
     accent = (*accent_rgb, 255)
-    # 텍스트 좌우 여백 80px
-    MAX_TW = W - 160
+
+    # 정렬에 따른 좌우 여백
+    MARGIN = 80
+    MAX_TW = W - MARGIN * 2
 
     def _lh(font):
         try:
             return font.getbbox('가')[3] - font.getbbox('가')[1]
         except Exception:
-            return 80
+            return int(sz1)
 
-    # ── 인용부호 적용 ─────────────────────────────────────
-    # line1 앞에 여는 따옴표, line2(또는 line1) 끝에 닫는 따옴표
-    # 한국 블로그 스타일: "텍스트" → 텍스트에 붙여서 렌더
-    q_open  = '"'
-    q_close = '"'
+    def _x(tw):
+        if text_align == 'left':   return MARGIN
+        if text_align == 'right':  return W - MARGIN - tw
+        return (W - tw) // 2  # center
 
+    # ── 인용부호 ─────────────────────────────────────────
     if use_quotes:
-        render_l1 = q_open + line1
-        render_l2 = (line2 + q_close) if line2 else ''
+        render_l1 = '“' + line1            # "
+        render_l2 = (line2 + '”') if line2 else ''
         if not line2:
-            render_l1 = q_open + line1 + q_close
+            render_l1 = '“' + line1 + '”'
     else:
         render_l1 = line1
         render_l2 = line2
 
-    # ── 텍스트 블록 높이 계산 ─────────────────────────────
+    # ── 텍스트 줄 계산 ────────────────────────────────────
     def _wrap(text, font, sz):
         if not fp or not text:
             return [], font
-        lines_, f = _fit_lines(fp, text, sz, MAX_TW, 2)
-        return lines_, f
+        return _fit_lines(fp, text, sz, MAX_TW, 2)
 
-    l1_lines, font_l1 = _wrap(render_l1, font_l1, sz1 if fp else 80)
-    l2_lines, font_l2 = _wrap(render_l2, font_l2, sz2 if fp else 70) if render_l2 else ([], font_l2)
+    l1_lines, font_l1 = _wrap(render_l1, font_l1, max(24, sz1 if fp else 80))
+    l2_lines, font_l2 = _wrap(render_l2, font_l2, max(20, sz2 if fp else 70)) if render_l2 else ([], font_l2)
 
-    gap_factor = 1.30
-    dy1 = int(_lh(font_l1) * gap_factor)
-    dy2 = int(_lh(font_l2) * gap_factor)
-    h1  = dy1 * max(len(l1_lines), 1)
-    h2  = dy2 * max(len(l2_lines), 1) if l2_lines else 0
+    gap = 1.30
+    dy1  = int(_lh(font_l1) * gap)
+    dy2  = int(_lh(font_l2) * gap)
+    h1   = dy1 * max(len(l1_lines), 1)
+    h2   = dy2 * max(len(l2_lines), 1) if l2_lines else 0
+    LINE_GAP = max(8, int(H * 0.016))
+    MARK_PAD = int(H * 0.11)
+    total_h  = h1 + (LINE_GAP + h2 if l2_lines else 0)
 
-    LINE_GAP  = int(H * 0.018)   # 두 줄 사이
-    MARK_PAD  = int(H * 0.11)    # 워터마크 영역
-    total_h   = h1 + (LINE_GAP + h2 if l2_lines else 0)
-
-    # 텍스트 시작점: 하단 40% 영역 내 수직 중앙
-    TEXT_ZONE_TOP = int(H * 0.52)
-    TEXT_ZONE_H   = H - MARK_PAD - TEXT_ZONE_TOP
-    y = TEXT_ZONE_TOP + max(0, (TEXT_ZONE_H - total_h) // 2)
+    # text_y_pct → 픽셀 Y 좌표
+    y_start_raw = int(H * text_y_pct / 100)
+    # 이미지 밖으로 나가지 않도록 클램프
+    y = max(int(H * 0.05), min(y_start_raw, H - MARK_PAD - total_h - 20))
 
     # ── Line 1 (흰색) ─────────────────────────────────────
     for l in l1_lines:
         bbox = draw.textbbox((0, 0), l, font=font_l1)
         tw = bbox[2] - bbox[0]
-        _shadow_text(draw, ((W - tw) // 2, y), l, font_l1,
-                     fill=white, shadow_color=(0, 0, 0, 220), offset=5)
+        _shadow_text(draw, (_x(tw), y), l, font_l1,
+                     fill=white, shadow_color=(0,0,0,225), offset=5)
         y += dy1
 
     # ── Line 2 (강조색) ───────────────────────────────────
@@ -1023,17 +1031,17 @@ def generate_blog_thumbnail(
         for l in l2_lines:
             bbox = draw.textbbox((0, 0), l, font=font_l2)
             tw = bbox[2] - bbox[0]
-            _shadow_text(draw, ((W - tw) // 2, y), l, font_l2,
-                         fill=accent, shadow_color=(0, 0, 0, 220), offset=5)
+            _shadow_text(draw, (_x(tw), y), l, font_l2,
+                         fill=accent, shadow_color=(0,0,0,225), offset=5)
             y += dy2
 
-    # ── 브랜드 워터마크 ───────────────────────────────────
+    # ── 워터마크 ──────────────────────────────────────────
     if brand_name:
         mark = brand_name if brand_name.startswith('@') else f'@{brand_name}'
         bbox = draw.textbbox((0, 0), mark, font=font_mark)
         tw = bbox[2] - bbox[0]
-        draw.text(((W - tw) // 2, H - int(H * 0.075)),
-                  mark, font=font_mark, fill=(255, 255, 255, 140))
+        draw.text((_x(tw), H - int(H * 0.075)),
+                  mark, font=font_mark, fill=(255,255,255,140))
 
     buf = BytesIO()
     img.convert('RGB').save(buf, format='PNG', optimize=True)
