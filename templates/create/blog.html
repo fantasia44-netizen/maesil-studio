@@ -770,7 +770,7 @@ function updateThumbCostBadge() {
   const badge = document.getElementById('thumbCostBadge');
   if (!badge) return;
   if (!thumbEnabled) { badge.style.opacity = '.4'; badge.textContent = '+50P'; return; }
-  const bgType = document.querySelector('input[name=”thumbBgType”]:checked')?.value || 'flux';
+  const bgType = document.querySelector('input[name="thumbBgType"]:checked')?.value || 'flux';
   badge.textContent = bgType === 'flux' ? '+50P' : '+0P';
   badge.style.opacity = '1';
 }
@@ -829,8 +829,8 @@ function updateThumbPreview() {
   const watermark= document.getElementById('thumbWatermark')?.value.trim() || '';
 
   // 인용부호 적용
-  const l1 = useQuote ? ('”' + l1Raw) : l1Raw;
-  const l2 = useQuote ? (l2Raw + '”') : l2Raw;
+  const l1 = useQuote ? ('"' + l1Raw) : l1Raw;
+  const l2 = useQuote ? (l2Raw + '"') : l2Raw;
 
   // 텍스트 업데이트
   const el1 = document.getElementById('thumbPrevLine1');
@@ -868,7 +868,7 @@ function updateThumbPreview() {
   }
 
   // 배경 (그라데이션 시 강조색 반영)
-  const bgType = document.querySelector('input[name=”thumbBgType”]:checked')?.value || 'flux';
+  const bgType = document.querySelector('input[name="thumbBgType"]:checked')?.value || 'flux';
   const bgDiv  = document.getElementById('thumbPrevBgImg');
   const texDiv = document.getElementById('thumbPrevTexture');
   if (bgType === 'gradient' && bgDiv) {
@@ -917,12 +917,12 @@ function _populateThumbTitles() {
   if (!matches.length) { picker.classList.add('d-none'); return; }
   list.innerHTML = matches.slice(0, 3).map(m => {
     const title = m[1].replace(/\*+/g, '').trim();
-    const esc   = title.replace(/\\/g, '\\\\').replace(/'/g, “\\'”);
-    return `<button type=”button” class=”btn btn-sm text-start py-1”
-                    style=”border:1px solid #e2e8f0;font-size:.75rem;line-height:1.35;
-                           color:#444;background:#fafafa;border-radius:7px”
-                    onclick=”_applyThumbTitle('${esc}')”>
-              <i class=”bi bi-arrow-right-short me-1 text-muted”></i>${title.slice(0,44)}${title.length>44?'…':''}
+    const esc   = title.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<button type="button" class="btn btn-sm text-start py-1"
+                    style="border:1px solid #e2e8f0;font-size:.75rem;line-height:1.35;
+                           color:#444;background:#fafafa;border-radius:7px"
+                    onclick="_applyThumbTitle('${esc}')">
+              <i class="bi bi-arrow-right-short me-1 text-muted"></i>${title.slice(0,44)}${title.length>44?'…':''}
             </button>`;
   }).join('');
   picker.classList.remove('d-none');
