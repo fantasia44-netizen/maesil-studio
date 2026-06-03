@@ -752,7 +752,7 @@ def blog_thumbnail():
         return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
 
     # ── 포인트 처리 (FLUX 사용 시 50P) ──────────────────────
-    cost = 50 if use_flux else 0
+    cost = 100 if use_flux else 0   # FLUX Pro 배경 생성
     if cost:
         from services.point_service import get_balance, use_points, InsufficientPoints
         from models import POINT_COSTS
@@ -832,7 +832,7 @@ def blog_thumbnail():
             'dark tones suitable for text overlay, high quality DSLR, bokeh'
         )
         try:
-            bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')
+            bg_url, _ = _generate_flux(bg_prompt, 'flux_standard', '1080x1080')
         except Exception as e:
             logger.warning(f'[blog/thumbnail] FLUX 배경 실패 → PIL 폴백: {e}')
 

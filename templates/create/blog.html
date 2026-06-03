@@ -347,7 +347,7 @@
           <span class="text-muted fw-normal">— 첫 이미지 자동 생성, 앨범형 CTR 향상</span>
         </label>
       </div>
-      <span id="thumbCostBadge" class="badge" style="background:#ede9fe;color:#5b21b6;font-size:.7rem">+50P</span>
+      <span id="thumbCostBadge" class="badge" style="background:#ede9fe;color:#5b21b6;font-size:.7rem">+100P</span>
     </div>
 
     <div id="thumbCardBody" class="d-none">
@@ -389,7 +389,7 @@
                          class="mt-1 flex-shrink-0" checked onchange="updateThumbCostBadge()">
                   <div class="flex-fill">
                     <div class="fw-semibold small">배경 이미지 생성
-                      <span class="badge ms-1" style="background:#ede9fe;color:#5b21b6;font-size:.62rem">50P</span>
+                      <span class="badge ms-1" style="background:#ede9fe;color:#5b21b6;font-size:.62rem">100P</span>
                     </div>
                     <div class="text-muted" style="font-size:.72rem">주제에 맞는 사진 배경 자동 생성</div>
                     <input id="thumbBgTopic" class="form-control form-control-sm mt-1"
@@ -817,9 +817,9 @@ function switchThumbTab(tab) {
 function updateThumbCostBadge() {
   const badge = document.getElementById('thumbCostBadge');
   if (!badge) return;
-  if (!thumbEnabled) { badge.style.opacity = '.4'; badge.textContent = '+50P'; return; }
+  if (!thumbEnabled) { badge.style.opacity = '.4'; badge.textContent = '+100P'; return; }
   const bgType = document.querySelector('input[name="thumbBgType"]:checked')?.value || 'flux';
-  badge.textContent = bgType === 'flux' ? '+50P' : '+0P';
+  badge.textContent = bgType === 'flux' ? '+100P' : '+0P';
   badge.style.opacity = '1';
 }
 
