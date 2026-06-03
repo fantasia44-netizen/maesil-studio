@@ -445,6 +445,71 @@ for label, cond in checks_l:
 
 
 # ════════════════════════════════════════════════════════
+# [M] JavaScript 구문 검사 — Node.js --check
+#     문자열 검색으로 잡히지 않는 스마트 따옴표 / 비ASCII 구분자 등
+# ════════════════════════════════════════════════════════
+print('\n[M] JavaScript 구문 검사 (node --check)')
+
+import subprocess, tempfile, re as _re
+
+JS_TEMPLATES = [
+    ('blog.html',         os.path.join(ROOT, 'templates', 'create', 'blog.html')),
+    ('instagram.html',    os.path.join(ROOT, 'templates', 'create', 'instagram.html')),
+    ('shorts.html',       os.path.join(ROOT, 'templates', 'create', 'shorts.html')),
+    ('logo.html',         os.path.join(ROOT, 'templates', 'create', 'logo.html')),
+    ('detail_page.html',  os.path.join(ROOT, 'templates', 'create', 'detail_page.html')),
+]
+
+SMART_QUOTES = (chr(0x201C), chr(0x201D), chr(0x2018), chr(0x2019))  # " " ' '
+
+node_ok = False
+try:
+    r = subprocess.run(['node', '--version'], capture_output=True, timeout=5)
+    node_ok = r.returncode == 0
+except Exception:
+    pass
+
+if not node_ok:
+    skip('[M] Node.js 미설치 — JS 구문 검사 SKIP', 'node not found')
+else:
+    for tpl_name, tpl_path in JS_TEMPLATES:
+        if not os.path.isfile(tpl_path):
+            skip(f'[M] {tpl_name} 파일 없음', 'not found')
+            continue
+        try:
+            with open(tpl_path, encoding='utf-8') as f:
+                tpl = f.read()
+
+            # ── 스마트 따옴표 직접 감지 (JS 구분자 오염) ─────
+            js_blocks = _re.findall(r'<script[^>]*>(.*?)</script>', tpl, _re.DOTALL)
+            sq_count  = sum(c in SMART_QUOTES for block in js_blocks for c in block)
+            check(f'[M] {tpl_name} — 스마트 따옴표 0개',
+                  sq_count == 0, f'{sq_count}개 발견' if sq_count else '')
+
+            # ── Node.js 구문 검사 ─────────────────────────────
+            js_all = '\n'.join(js_blocks)
+            # Jinja 태그 → 빈 문자열
+            js_clean = _re.sub(r'\{\{.*?\}\}', '"j"', js_all, flags=_re.DOTALL)
+            js_clean = _re.sub(r'\{%.*?%\}',   '',    js_clean, flags=_re.DOTALL)
+
+            with tempfile.NamedTemporaryFile(suffix='.js', mode='w',
+                                            encoding='utf-8', delete=False) as tf:
+                tf.write(js_clean)
+                tmp_path = tf.name
+
+            result = subprocess.run(
+                ['node', '--check', tmp_path],
+                capture_output=True, text=True, timeout=15
+            )
+            check(f'[M] {tpl_name} — Node.js 구문 OK',
+                  result.returncode == 0,
+                  result.stderr.strip()[:120] if result.returncode != 0 else '')
+            os.unlink(tmp_path)
+        except Exception as e:
+            check(f'[M] {tpl_name} — 구문 검사', False, repr(e)[:80])
+
+
+# ════════════════════════════════════════════════════════
 # 결과 요약
 # ════════════════════════════════════════════════════════
 print('\n' + '═' * 65)
