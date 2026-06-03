@@ -577,12 +577,17 @@
           <!-- 공통 래퍼 (CSS mock / 실제 이미지 전환) -->
           <div style="width:320px;height:320px;flex-shrink:0;position:relative">
 
-            <!-- CSS mock 미리보기 (생성 전) -->
+            <!-- CSS mock 미리보기 (생성 전)
+                 폰트·크기·비율을 PIL 1080px 기준에 맞게 스케일 (320/1080 = 0.296)
+                 PIL line1: H*0.108 = 116px → CSS: 116*0.296 ≈ 34px
+                 PIL line2: H*0.094 = 101px → CSS: 101*0.296 ≈ 30px
+            -->
             <div id="thumbPreview" style="
               width:320px;height:320px;border-radius:14px;overflow:hidden;
               background:linear-gradient(135deg,#09102a 0%,#1c2e55 45%,#09102a 100%);
               position:absolute;inset:0;
-              box-shadow:0 6px 28px rgba(0,0,0,.45)">
+              box-shadow:0 6px 28px rgba(0,0,0,.45);
+              font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
               <div id="thumbPrevBgImg" style="position:absolute;inset:0;background-size:cover;background-position:center"></div>
               <div id="thumbPrevTexture" style="position:absolute;inset:0;opacity:.06;
                    background:repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 0,transparent 16px)"></div>
@@ -590,20 +595,20 @@
                    background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.15) 38%,rgba(0,0,0,.65) 100%)"></div>
               <div id="thumbPrevTextBlock" style="
                 position:absolute;left:0;right:0;top:55%;transform:translateY(-50%);
-                text-align:center;padding:0 20px;z-index:2">
+                text-align:center;padding:0 24px;z-index:2;word-break:keep-all">
                 <div id="thumbPrevLine1"
-                     style="color:#fff;font-size:26px;font-weight:900;line-height:1.25;
-                            text-shadow:2px 3px 10px rgba(0,0,0,.95);word-break:keep-all;
-                            letter-spacing:-.3px">메인 텍스트</div>
+                     style="color:#fff;font-size:34px;font-weight:800;line-height:1.25;
+                            text-shadow:2px 3px 10px rgba(0,0,0,.95);
+                            letter-spacing:-.5px">메인 텍스트</div>
                 <div id="thumbPrevLine2"
-                     style="color:#FFD700;font-size:23px;font-weight:900;line-height:1.25;
-                            text-shadow:2px 3px 10px rgba(0,0,0,.95);word-break:keep-all;
-                            letter-spacing:-.3px;margin-top:4px">서브 텍스트</div>
+                     style="color:#FFD700;font-size:30px;font-weight:800;line-height:1.25;
+                            text-shadow:2px 3px 10px rgba(0,0,0,.95);
+                            letter-spacing:-.5px;margin-top:5px">서브 텍스트</div>
               </div>
               <div id="thumbPrevMark" style="
-                position:absolute;bottom:12px;left:0;right:0;
+                position:absolute;bottom:14px;left:0;right:0;
                 text-align:center;color:rgba(255,255,255,.5);
-                font-size:11px;font-weight:500;z-index:2;letter-spacing:.4px"></div>
+                font-size:12px;font-weight:500;z-index:2;letter-spacing:.4px"></div>
             </div>
 
             <!-- 실제 생성된 이미지 (생성 후 표시) -->
@@ -891,17 +896,18 @@ function updateThumbPreview() {
   // 텍스트 업데이트
   const el1 = document.getElementById('thumbPrevLine1');
   const el2 = document.getElementById('thumbPrevLine2');
+  // 320/1080 ≈ 0.296 스케일: PIL line1(116px)→34px, line2(101px)→30px
   if (el1) {
-    el1.textContent  = l1;
-    const sz = Math.round(26 * fontSize / 100);
+    el1.textContent    = l1;
+    const sz = Math.round(34 * fontSize / 100);
     el1.style.fontSize = sz + 'px';
     el1.style.textAlign = thumbAlign;
   }
   if (el2) {
-    el2.textContent  = l2;
-    const sz = Math.round(23 * fontSize / 100);
+    el2.textContent    = l2;
+    const sz = Math.round(30 * fontSize / 100);
     el2.style.fontSize = sz + 'px';
-    el2.style.color     = thumbAccentColor;
+    el2.style.color    = thumbAccentColor;
     el2.style.textAlign = thumbAlign;
   }
 
