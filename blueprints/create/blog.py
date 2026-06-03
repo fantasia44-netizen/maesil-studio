@@ -782,19 +782,54 @@ def blog_thumbnail():
     # ── FLUX 배경 생성 ────────────────────────────────────────
     bg_url = None
     if use_flux:
-        from services.imagen_service import _generate_flux, _has_korean, _translate_prompt
-        # 한글이면 영문 번역, 영문이면 그대로 — 창의적 재해석 없이 직역
+        from services.imagen_service import _generate_flux
+        from services.claude_service import generate_text as _gen_text
+
+        # 썸네일 배경 전용 Sonnet 변환
+        # 비즈니스 용어 → 물리적 장면(구체적 사물·공간·조명) 으로 변환
         if bg_topic:
-            if _has_korean(bg_topic):
-                topic_en = _translate_prompt(bg_topic) or bg_topic
-            else:
+            try:
+                scene = _gen_text(
+                    system=(
+                        'Convert a Korean or English blog topic keyword into a SPECIFIC '
+                        'physical background scene for a FLUX image generation prompt.\n'
+                        '\n'
+                        'RULES:\n'
+                        '- Output ONLY English, 10-20 words\n'
+                        '- Describe SPECIFIC physical objects, space, and lighting\n'
+                        '- NEVER output: charts, graphs, screens, streets, night market, '
+                        'city lights, rain, abstract concepts, data\n'
+                        '\n'
+                        'EXAMPLES:\n'
+                        '물류센터 창고 → rows of tall metal shelves in large dark warehouse '
+                        'with industrial overhead lights concrete floor\n'
+                        '3pl물류센터 → fulfillment warehouse interior high metal racks '
+                        'cardboard boxes stacked dramatic side lighting\n'
+                        '사람아니고 3pl물류센터 창고분위기 → large empty warehouse interior '
+                        'tall steel shelving aisles dim industrial lighting no people\n'
+                        'ETF 투자 → gold coins stacked on dark wooden surface '
+                        'shallow depth of field warm bokeh\n'
+                        '부동산 → modern glass building exterior dusk blue hour\n'
+                        '건강기능식품 → green herbs capsules on wooden table natural light\n'
+                        '다이어트 → fresh vegetables fruits cutting board natural kitchen light\n'
+                        '마케팅 → clean desk with notebook pen coffee cup top view\n'
+                        'tax documents → paper files stacked on clean office desk lamp'
+                    ),
+                    prompt=bg_topic,
+                    max_tokens=60,
+                    model='claude-sonnet-4-6',
+                )
+                topic_en = scene.strip().strip('"\'').rstrip('.')
+            except Exception as e:
+                logger.warning(f'[thumbnail] 배경 장면 변환 실패: {e}')
                 topic_en = bg_topic
         else:
-            topic_en = 'dark cinematic background'
+            topic_en = 'dark atmospheric interior dramatic lighting'
+
         bg_prompt = (
-            f'cinematic moody photography, {topic_en}, '
-            'dramatic atmospheric lighting, shallow depth of field, bokeh, '
-            'dark tones suitable for text overlay, high quality DSLR'
+            f'{topic_en}, '
+            'cinematic moody photography, dramatic lighting, '
+            'dark tones suitable for text overlay, high quality DSLR, bokeh'
         )
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')
