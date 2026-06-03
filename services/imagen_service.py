@@ -410,46 +410,54 @@ def _fit_lines(font_path: str, text: str, base_size: int,
 
 
 def _topic_to_bg_scene(topic: str) -> str:
-    """비즈니스 주제 → 물리적 배경 장면 설명 변환 (차트/UI 연상 완전 차단).
+    """블로그 주제(한글/영문) → FLUX 배경 장면 설명 변환.
 
-    예시:
-      '물류센터창고' → 'dark warehouse interior with high steel shelves and industrial lighting'
-      '주식 ETF 투자' → 'gold coins scattered on dark surface with dramatic bokeh'
-      '종합소득세'   → 'stack of documents on wooden desk with soft office lighting'
+    한글 예시를 시스템 프롬프트에 직접 포함해 번역 오류 방지.
+    차트·화면·데이터 묘사 완전 금지.
     """
     try:
         from services.claude_service import generate_text
         result = generate_text(
             system=(
-                'You convert a blog topic into a SHORT VISUAL BACKGROUND SCENE description '
-                'for a thumbnail image. The scene will be photographed and used as a blurred background.\n'
-                'STRICT RULES:\n'
-                '- Describe ONLY a physical location, objects, and lighting atmosphere\n'
-                '- NEVER mention: charts, graphs, screens, monitors, tablets, data, numbers, whiteboards, infographics, dashboards, spreadsheets, presentations\n'
-                '- Focus on: place, objects, textures, lighting mood, depth of field\n'
-                '- Output: 6-14 English words ONLY. No punctuation at start/end. No explanation.\n'
-                'EXAMPLES:\n'
-                'logistics warehouse → dark warehouse interior high steel shelves dramatic industrial lighting\n'
-                'stock investment → gold coins close-up on dark surface warm bokeh\n'
-                'food delivery → modern kitchen counter warm light bokeh\n'
-                'health supplement → green herbs on wooden surface natural light\n'
-                'real estate → modern building exterior dusk blue hour photography\n'
-                'tax filing → paper documents on clean desk soft office lighting'
+                'Convert a blog topic keyword into a SHORT physical background scene '
+                'for a FLUX image generation prompt.\n'
+                '\n'
+                'RULES:\n'
+                '- Describe ONLY a real physical place, objects, and lighting\n'
+                '- NEVER use: chart, graph, data, screen, monitor, tablet, computer, '
+                'whiteboard, dashboard, infographic, spreadsheet, presentation, statistics\n'
+                '- If input is Korean, translate it AND describe the scene\n'
+                '- Output: 6-12 English words ONLY. No quotes. No explanation.\n'
+                '\n'
+                'EXAMPLES (Korean → scene):\n'
+                '물류센터 창고 → large warehouse interior tall metal shelves industrial lighting\n'
+                '3pl물류센터 → fulfillment center aisle cardboard boxes industrial overhead light\n'
+                '쿠팡 물류 → large distribution center interior conveyor belt industrial\n'
+                '종합소득세 → paper tax documents on wooden desk lamp light close-up\n'
+                'ETF 투자 → gold coins stacked dark surface shallow depth bokeh\n'
+                '부동산 → modern apartment building exterior blue hour twilight\n'
+                '건강기능식품 → herbal capsules wooden surface natural light bokeh\n'
+                '다이어트 → fresh vegetables on cutting board natural kitchen light\n'
+                '육아 → colorful toys on soft carpet warm cozy room\n'
+                'EXAMPLES (English → scene):\n'
+                'logistics → warehouse aisle metal shelves cardboard boxes industrial\n'
+                'finance → coins and banknotes dark background bokeh\n'
+                'food → ingredients on kitchen counter natural light'
             ),
             prompt=topic,
-            max_tokens=60,
+            max_tokens=50,
             model='claude-haiku-4-5-20251001',
         )
-        scene = result.strip().strip('"\'').rstrip('.')
-        # 혹시 차트 관련 단어 남아있으면 제거
-        _bad = ['chart','graph','data','screen','monitor','tablet','dashboard',
-                'spreadsheet','whiteboard','presentation','infographic','diagram']
-        for word in _bad:
-            scene = scene.replace(word, '').strip()
-        return scene or 'cinematic dark atmospheric background bokeh'
+        scene = result.strip().strip('"\'').rstrip('.').strip()
+        # 차트 관련 단어 후처리 제거
+        for bad in ('chart','graph','data','screen','monitor','tablet','dashboard',
+                    'spreadsheet','whiteboard','presentation','infographic','diagram',
+                    'statistics','analytics','display'):
+            scene = scene.replace(bad, '').strip()
+        return scene if len(scene) > 5 else 'dark atmospheric industrial interior dramatic lighting'
     except Exception as e:
         logger.warning(f'[topic_to_bg] 변환 실패: {e}')
-        return topic  # 폴백: 원본 전달
+        return 'dark atmospheric cinematic background bokeh'
 
 
 def _find_korean_font() -> str:
