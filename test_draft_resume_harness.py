@@ -1261,6 +1261,90 @@ check('[18] blog.html: 한글 포함 시 borderColor red 처리',
 
 
 # ──────────────────────────────────────────────────────────────
+# [19] 블로그 썸네일 카드 기능
+# ──────────────────────────────────────────────────────────────
+print('\n[19] 블로그 썸네일 카드 (imagen_service + blog.py + blog.html)')
+
+img_src   = open(os.path.join(ROOT, 'services', 'imagen_service.py'), encoding='utf-8').read()
+blog_src2 = open(os.path.join(ROOT, 'blueprints', 'create', 'blog.py'), encoding='utf-8').read()
+blog_tpl3 = open(os.path.join(ROOT, 'templates', 'create', 'blog.html'), encoding='utf-8').read()
+
+# ── imagen_service.py ────────────────────────────────────────
+check('[19] imagen_service: generate_blog_thumbnail 함수 정의',
+      'def generate_blog_thumbnail(' in img_src)
+check('[19] imagen_service: _make_dark_gradient_bg 함수 정의',
+      'def _make_dark_gradient_bg(' in img_src)
+check('[19] imagen_service: 1080×1080 정사각형 캔버스',
+      'W = H = 1080' in img_src)
+check('[19] imagen_service: line1 흰색 렌더링',
+      'white  = (255, 255, 255, 255)' in img_src and 'line1' in img_src)
+check('[19] imagen_service: line2 강조색 렌더링',
+      'accent = (*accent_rgb, 255)' in img_src)
+check('[19] imagen_service: 워터마크 @brand_name',
+      'brand_name' in img_src and 'startswith' in img_src)
+check('[19] imagen_service: _shadow_text 재사용',
+      '_shadow_text' in img_src.split('def generate_blog_thumbnail')[1][:3000])
+check('[19] imagen_service: PNG bytes 반환',
+      "format='PNG'" in img_src.split('def generate_blog_thumbnail')[1][:5000])
+
+# ── blog.py ──────────────────────────────────────────────────
+check('[19] blog.py: /blog/thumbnail 라우트 등록',
+      "'/blog/thumbnail'" in blog_src2)
+check('[19] blog.py: blog_thumbnail 함수 정의',
+      'def blog_thumbnail(' in blog_src2)
+check('[19] blog.py: use_flux 분기 처리',
+      'use_flux' in blog_src2)
+check('[19] blog.py: FLUX 배경 생성 (_generate_flux 호출)',
+      '_generate_flux(bg_prompt' in blog_src2)
+check('[19] blog.py: PIL 폴백 (FLUX 실패 시)',
+      'PIL 폴백' in blog_src2)
+check('[19] blog.py: generate_blog_thumbnail 임포트 사용',
+      'generate_blog_thumbnail' in blog_src2)
+check('[19] blog.py: upload_to_supabase 호출',
+      'upload_to_supabase' in blog_src2.split('def blog_thumbnail')[1][:4000])
+check('[19] blog.py: 포인트 50P 처리 (FLUX 사용 시)',
+      'cost = 50 if use_flux' in blog_src2)
+
+# ── blog.html ────────────────────────────────────────────────
+check('[19] blog.html: thumbCardSection 토글 UI',
+      'thumbCardSection' in blog_tpl3)
+check('[19] blog.html: enableThumb 체크박스',
+      'id="enableThumb"' in blog_tpl3)
+check('[19] blog.html: thumbLine1 입력',
+      'id="thumbLine1"' in blog_tpl3)
+check('[19] blog.html: thumbLine2 입력',
+      'id="thumbLine2"' in blog_tpl3)
+check('[19] blog.html: CSS 미리보기 div (thumbPreview)',
+      'id="thumbPreview"' in blog_tpl3)
+check('[19] blog.html: thumbPrevLine1 / thumbPrevLine2',
+      'thumbPrevLine1' in blog_tpl3 and 'thumbPrevLine2' in blog_tpl3)
+check('[19] blog.html: 강조색 선택 컬러닷',
+      'thumb-accent-dot' in blog_tpl3)
+check('[19] blog.html: thumbUseFlux FLUX 배경 토글',
+      'id="thumbUseFlux"' in blog_tpl3)
+check('[19] blog.html: thumbEnabled JS 변수',
+      'let thumbEnabled' in blog_tpl3)
+check('[19] blog.html: toggleThumbCard 함수',
+      'function toggleThumbCard(' in blog_tpl3)
+check('[19] blog.html: setThumbAccent 함수',
+      'function setThumbAccent(' in blog_tpl3)
+check('[19] blog.html: updateThumbPreview 함수',
+      'function updateThumbPreview(' in blog_tpl3)
+check('[19] blog.html: _populateThumbTitles 함수',
+      'function _populateThumbTitles(' in blog_tpl3)
+check('[19] blog.html: _applyThumbTitle / _splitThumbTitle',
+      '_applyThumbTitle' in blog_tpl3 and '_splitThumbTitle' in blog_tpl3)
+check('[19] blog.html: generateAllImages에 썸네일 생성 삽입',
+      'thumbEnabled' in blog_tpl3 and 'blog_thumbnail' in blog_tpl3)
+check('[19] blog.html: 썸네일 비용 totalImgCost 반영',
+      'thumbCost' in blog_tpl3)
+check('[19] blog.html: _syncThumbBrandMark 워터마크 동기화',
+      '_syncThumbBrandMark' in blog_tpl3)
+check('[19] blog.html: 제목 후보 자동 채우기 thumbTitlePicker',
+      'thumbTitlePicker' in blog_tpl3)
+
+
+# ──────────────────────────────────────────────────────────────
 # 결과 요약
 # ──────────────────────────────────────────────────────────────
 print('\n' + '═' * 65)

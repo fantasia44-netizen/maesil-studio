@@ -715,6 +715,100 @@ JSON 배열 형식:
 
 
 # ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# Step 4-b — 블로그 썸네일 카드 생성
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/blog/thumbnail', methods=['POST'])
+@login_required
+def blog_thumbnail():
+    """블로그 썸네일 카드 생성 (FLUX 배경 + PIL 텍스트 합성 또는 PIL 단독).
+
+    Request JSON:
+      line1        str   메인 텍스트 (흰색 대형)
+      line2        str   서브 텍스트 (강조색 대형, 선택)
+      brand_name   str   @워터마크용 브랜드명
+      accent_color str   서브 텍스트 강조색 (기본 #FFD700)
+      use_flux     bool  True → FLUX 배경 생성 (50P), False → PIL 그라데이션 (0P)
+      bg_topic     str   FLUX 배경 프롬프트 힌트 (한글 가능, 자동 번역)
+    """
+    import base64 as _b64
+    data        = request.get_json(force=True) or {}
+    line1        = (data.get('line1') or '').strip()[:18]
+    line2        = (data.get('line2') or '').strip()[:18]
+    brand_name   = (data.get('brand_name') or '').strip()[:24]
+    accent_color = (data.get('accent_color') or '#FFD700').strip()
+    use_flux     = bool(data.get('use_flux', True))
+    bg_topic     = (data.get('bg_topic') or '').strip()[:120]
+
+    if not line1:
+        return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
+
+    # ── 포인트 처리 (FLUX 사용 시 50P) ──────────────────────
+    cost = 50 if use_flux else 0
+    if cost:
+        from services.point_service import get_balance, use_points, InsufficientPoints
+        from models import POINT_COSTS
+        balance = get_balance(current_user)
+        if balance < cost:
+            return jsonify(ok=False,
+                           message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
+        try:
+            import uuid as _uuid2
+            cid = str(_uuid2.uuid4())
+            now_s = now_kst().isoformat()
+            if current_app.supabase:
+                current_app.supabase.table('creations').insert({
+                    'id': cid, 'user_id': current_user.id,
+                    'creation_type': 'blog_thumbnail',
+                    'input_data': {'line1': line1, 'line2': line2, 'accent': accent_color},
+                    'output_data': {}, 'points_used': cost,
+                    'status': 'pending',
+                    'created_at': now_s, 'updated_at': now_s,
+                }).execute()
+            use_points(current_user, cost, note='블로그 썸네일 카드', creation_id=cid)
+        except InsufficientPoints as e:
+            return jsonify(ok=False, message=str(e))
+        except Exception as e:
+            logger.warning(f'[blog/thumbnail] 포인트 처리 오류: {e}')
+
+    # ── FLUX 배경 생성 ────────────────────────────────────────
+    bg_url = None
+    if use_flux:
+        from services.imagen_service import _generate_flux, _has_korean, _translate_prompt
+        topic_en = bg_topic or 'abstract dark cinematic'
+        if _has_korean(topic_en):
+            topic_en = _translate_prompt(topic_en) or 'abstract dark cinematic'
+        bg_prompt = (
+            f'dark atmospheric cinematic background, {topic_en}, '
+            'deep navy and charcoal tones, dramatic moody lighting, '
+            'abstract textural depth, no text, no people, no faces, no objects, '
+            'pure atmospheric background, high quality photorealistic'
+        )
+        try:
+            bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')
+        except Exception as e:
+            logger.warning(f'[blog/thumbnail] FLUX 배경 실패 → PIL 폴백: {e}')
+
+    # ── PIL 합성 ──────────────────────────────────────────────
+    from services.imagen_service import generate_blog_thumbnail, upload_to_supabase
+    img_bytes = generate_blog_thumbnail(
+        line1=line1, line2=line2,
+        background_url=bg_url,
+        brand_name=brand_name,
+        accent_color=accent_color,
+    )
+    b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
+
+    try:
+        public_url = upload_to_supabase(b64, current_user.id, 'blog_thumbnail.png')
+    except Exception:
+        public_url = b64   # 스토리지 실패 시 base64 직접
+
+    return jsonify(ok=True, url=public_url, cost=cost)
+
+
+# ─────────────────────────────────────────────────────────────
 # Step 5 — Haiku 이미지 배치 결정
 # ─────────────────────────────────────────────────────────────
 
