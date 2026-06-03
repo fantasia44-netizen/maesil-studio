@@ -27,7 +27,11 @@
       "Bash(python \"C:\\\\maesil-studio\\\\blueprints\\\\create\\\\shorts.py\")",
       "PowerShell(python -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/blueprints/create/shorts.py'\\).read\\(\\)\\); print\\('shorts.py OK'\\)\")",
       "PowerShell(python -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/blueprints/create/detail_page.py'\\).read\\(\\)\\); print\\('detail_page.py OK'\\)\")",
-      "PowerShell(Set-Location C:\\\\maesil-studio; $env:PYTHONUTF8=\"1\"; py -3 test_draft_resume_harness.py 2>&1)"
+      "PowerShell(Set-Location C:\\\\maesil-studio; $env:PYTHONUTF8=\"1\"; py -3 test_draft_resume_harness.py 2>&1)",
+      "Bash(py -3 -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/blueprints/create/blog.py', encoding='utf-8'\\).read\\(\\)\\); print\\('blog.py OK'\\)\")",
+      "Bash(py -3 -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/services/imagen_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('imagen_service.py OK'\\)\")",
+      "Bash(py -3 -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/blueprints/create/blog.py',encoding='utf-8'\\).read\\(\\)\\); print\\('blog.py OK'\\)\")",
+      "Bash(py -3 -c \"import ast; ast.parse\\(open\\('C:/maesil-studio/services/imagen_service.py',encoding='utf-8'\\).read\\(\\)\\); print\\('imagen_service.py OK'\\)\")"
     ]
   }
 }
