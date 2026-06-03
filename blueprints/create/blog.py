@@ -782,22 +782,18 @@ def blog_thumbnail():
     # ── FLUX 배경 생성 ────────────────────────────────────────
     bg_url = None
     if use_flux:
-        from services.imagen_service import _generate_flux, _has_korean, _translate_prompt
-        topic_en = bg_topic or 'abstract dark cinematic'
-        if _has_korean(topic_en):
-            topic_en = _translate_prompt(topic_en) or 'abstract dark cinematic'
-        # 네이버 블로그 최상위 썸네일 스타일 — 주제 관련 실사 사진
-        # 그래프/차트/UI 요소가 이미지에 합성되는 문제 방지
+        from services.imagen_service import _generate_flux, _has_korean, _topic_to_bg_scene
+        # 주제를 차트/UI 없는 물리적 배경 장면으로 변환
+        raw_topic = bg_topic or ''
+        if raw_topic:
+            scene_desc = _topic_to_bg_scene(raw_topic)
+        else:
+            scene_desc = 'dark atmospheric cinematic background bokeh'
+        # 배경 전용 프롬프트 — editorial news 제거 (차트 연상 원인)
         bg_prompt = (
-            f'editorial news photography, {topic_en}, '
-            'realistic photo, natural or studio lighting, sharp focus, '
-            'high quality DSLR, slightly dark exposure for text overlay, '
-            'clean simple composition, '
-            'no text, no letters, no words, no watermarks, '
-            'no charts, no graphs, no bar charts, no diagrams, no data visualization, '
-            'no floating UI elements, no screen overlays, no tablet graphs, '
-            'no whiteboards, no infographics, no presentation slides, '
-            'no icons, no logos, no badges'
+            f'cinematic moody photography, {scene_desc}, '
+            'dramatic atmospheric lighting, shallow depth of field, bokeh background, '
+            'dark tones suitable for text overlay, high quality DSLR photography'
         )
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_preview', '1080x1080')

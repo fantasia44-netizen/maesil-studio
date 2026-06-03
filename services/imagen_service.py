@@ -409,6 +409,49 @@ def _fit_lines(font_path: str, text: str, base_size: int,
     return lines[:max_lines], f
 
 
+def _topic_to_bg_scene(topic: str) -> str:
+    """비즈니스 주제 → 물리적 배경 장면 설명 변환 (차트/UI 연상 완전 차단).
+
+    예시:
+      '물류센터창고' → 'dark warehouse interior with high steel shelves and industrial lighting'
+      '주식 ETF 투자' → 'gold coins scattered on dark surface with dramatic bokeh'
+      '종합소득세'   → 'stack of documents on wooden desk with soft office lighting'
+    """
+    try:
+        from services.claude_service import generate_text
+        result = generate_text(
+            system=(
+                'You convert a blog topic into a SHORT VISUAL BACKGROUND SCENE description '
+                'for a thumbnail image. The scene will be photographed and used as a blurred background.\n'
+                'STRICT RULES:\n'
+                '- Describe ONLY a physical location, objects, and lighting atmosphere\n'
+                '- NEVER mention: charts, graphs, screens, monitors, tablets, data, numbers, whiteboards, infographics, dashboards, spreadsheets, presentations\n'
+                '- Focus on: place, objects, textures, lighting mood, depth of field\n'
+                '- Output: 6-14 English words ONLY. No punctuation at start/end. No explanation.\n'
+                'EXAMPLES:\n'
+                'logistics warehouse → dark warehouse interior high steel shelves dramatic industrial lighting\n'
+                'stock investment → gold coins close-up on dark surface warm bokeh\n'
+                'food delivery → modern kitchen counter warm light bokeh\n'
+                'health supplement → green herbs on wooden surface natural light\n'
+                'real estate → modern building exterior dusk blue hour photography\n'
+                'tax filing → paper documents on clean desk soft office lighting'
+            ),
+            prompt=topic,
+            max_tokens=60,
+            model='claude-haiku-4-5-20251001',
+        )
+        scene = result.strip().strip('"\'').rstrip('.')
+        # 혹시 차트 관련 단어 남아있으면 제거
+        _bad = ['chart','graph','data','screen','monitor','tablet','dashboard',
+                'spreadsheet','whiteboard','presentation','infographic','diagram']
+        for word in _bad:
+            scene = scene.replace(word, '').strip()
+        return scene or 'cinematic dark atmospheric background bokeh'
+    except Exception as e:
+        logger.warning(f'[topic_to_bg] 변환 실패: {e}')
+        return topic  # 폴백: 원본 전달
+
+
 def _find_korean_font() -> str:
     candidates = [
         '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
