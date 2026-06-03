@@ -353,32 +353,59 @@ def _draw_gradient_rect(img, x0, y0, x1, y1, color_top, color_bot):
 
 def _fit_lines(font_path: str, text: str, base_size: int,
                max_w: int, max_lines: int):
-    """Wrap text; shrink font 15% per step (max 4×) before truncating.
+    """단어(공백) 기준 줄바꿈 → 폰트 축소(15%씩 최대 4회) 순으로 시도.
 
+    기존 문자 단위 줄바꿈은 'vs' → 'v'/'s' 처럼 영단어 중간에서 잘리는 문제 발생.
+    공백 기준 단어 단위로 먼저 시도하고, 공백 없는 텍스트는 문자 단위 폴백 사용.
     Returns (lines, font) where font may be smaller than base_size.
     """
+    def _measure(f, s):
+        try:
+            return f.getbbox(s)[2] - f.getbbox(s)[0]
+        except Exception:
+            return len(s) * f.size if hasattr(f, 'size') else len(s) * 16
+
     for shrink in range(5):
         size = max(16, int(base_size * (0.85 ** shrink)))
         try:
             f = ImageFont.truetype(font_path, size=size)
         except Exception:
             f = ImageFont.load_default()
-        lines, line = [], ''
-        for ch in text:
-            test = line + ch
-            try:
-                w = f.getbbox(test)[2] - f.getbbox(test)[0]
-            except Exception:
-                w = len(test) * size
-            if w > max_w and line:
-                lines.append(line)
-                line = ch
+
+        # ── 단어(공백) 단위 줄바꿈 ──────────────────────────────
+        tokens  = text.split(' ')
+        lines   = []
+        current = ''
+        for tok in tokens:
+            candidate = (current + ' ' + tok).lstrip()
+            if _measure(f, candidate) > max_w and current:
+                lines.append(current)
+                current = tok
             else:
-                line = test
-        if line:
-            lines.append(line)
+                current = candidate
+        if current:
+            lines.append(current)
+
         if len(lines) <= max_lines:
             return lines, f
+
+    # ── 최소 폰트로도 max_lines 초과 시: 마지막 폰트로 자름 ──────
+    # (공백 없는 긴 텍스트 등 극단적 케이스 — 문자 단위 폴백)
+    size = max(16, int(base_size * (0.85 ** 4)))
+    try:
+        f = ImageFont.truetype(font_path, size=size)
+    except Exception:
+        f = ImageFont.load_default()
+    lines, line = [], ''
+    for ch in text:
+        test = line + ch
+        if _measure(f, test) > max_w and line:
+            lines.append(line)
+            line = ch
+        else:
+            line = test
+    if line:
+        lines.append(line)
     return lines[:max_lines], f
 
 
