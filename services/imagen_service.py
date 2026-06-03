@@ -44,7 +44,7 @@ def _translate_prompt(text: str) -> str:
             ),
             prompt=text,
             max_tokens=300,
-            model='claude-haiku-4-5-20251001',
+            model='claude-sonnet-4-6',
         )
         result = translated.strip().strip('"\'')
         # 번역 결과에 한글이 남아있으면 CJK 문자 제거 후 영어 부분만 사용
@@ -446,7 +446,7 @@ def _topic_to_bg_scene(topic: str) -> str:
             ),
             prompt=topic,
             max_tokens=50,
-            model='claude-haiku-4-5-20251001',
+            model='claude-sonnet-4-6',
         )
         scene = result.strip().strip('"\'').rstrip('.').strip()
         # 차트 관련 단어 후처리 제거
