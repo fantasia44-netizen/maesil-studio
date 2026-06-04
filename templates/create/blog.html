@@ -874,9 +874,16 @@ function updateThumbPreview() {
     document.getElementById('thumbRealPreview')?.classList.add('d-none');
     document.getElementById('thumbPreview').style.opacity = '1';
     const caption = document.getElementById('thumbPreviewCaption');
-    if (caption) caption.innerHTML = 'CSS 미리보기 — 설정이 변경되었습니다. 재생성하세요.';
+    // 배경 키워드(bgTopic)가 그대로면 무료 재합성 가능 알림
+    const curBgTopic = document.getElementById('thumbBgTopic')?.value.trim() || '';
+    const sameBg     = _thumbBgUrl && curBgTopic === _thumbLastBgTopic;
+    if (caption) {
+      caption.innerHTML = sameBg
+        ? '<i class="bi bi-info-circle me-1" style="color:#3b82f6"></i>CSS 미리보기 — <strong>같은 배경에 텍스트만 재합성 (무료)</strong>'
+        : 'CSS 미리보기 — 설정이 변경되었습니다. 재생성하세요.';
+    }
     const btnText = document.getElementById('thumbGenBtnText');
-    if (btnText) btnText.textContent = '썸네일 다시 생성';
+    if (btnText) btnText.textContent = sameBg ? '텍스트만 재합성 (무료)' : '썸네일 다시 생성';
     document.getElementById('thumbDownloadBtn')?.classList.add('d-none');
   }
   const l1Raw    = document.getElementById('thumbLine1')?.value.trim() || '메인 텍스트';
@@ -1018,7 +1025,9 @@ function _splitThumbTitle(title) {
 }
 
 // ── 썸네일 실제 이미지 생성 (미리보기) ───────────────────────
-let _thumbPreviewUrl = null;   // 이미 생성된 URL 캐시
+let _thumbPreviewUrl   = null;   // 이미 생성된 PNG 합성본 URL 캐시
+let _thumbBgUrl        = null;   // FLUX로 생성한 배경 URL — 텍스트만 수정 시 재사용
+let _thumbLastBgTopic  = '';     // 마지막 FLUX 생성 시 사용된 bg_topic (바뀌면 신규 생성)
 
 async function generateThumbPreview() {
   const l1 = document.getElementById('thumbLine1')?.value.trim() || '';
@@ -1074,12 +1083,20 @@ async function generateThumbPreview() {
         // 블로그 글 내용 + 이미지 프롬프트 → Sonnet이 맥락 파악용
         blog_text:        (document.getElementById('blogTextArea')?.value || '').slice(0, 800),
         image_prompts:    (window._prompts || []).slice(0, 5).map(p => p.prompt).join(' | '),
+        // 텍스트만 수정 시 기존 FLUX 배경 재사용 (100P 절약)
+        // bg_topic이 바뀌었다면 빈 문자열로 보내서 신규 생성
+        existing_bg_url:  (useFlux && _thumbBgUrl && bgTopic === _thumbLastBgTopic) ? _thumbBgUrl : '',
       }),
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message || '생성 실패');
 
     _thumbPreviewUrl = data.url;
+    // FLUX 배경 URL 저장 → 다음 재합성 시 재사용 (100P 절약)
+    if (data.bg_url) {
+      _thumbBgUrl       = data.bg_url;
+      _thumbLastBgTopic = bgTopic;
+    }
 
     // 실제 이미지 표시
     const imgEl = document.getElementById('thumbRealImg');

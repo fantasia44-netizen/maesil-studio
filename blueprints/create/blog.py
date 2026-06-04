@@ -749,12 +749,20 @@ def blog_thumbnail():
     text_align      = (data.get('text_align') or 'center').strip()
     if text_align not in ('center', 'left', 'right'):
         text_align = 'center'
+    # 기존 FLUX 배경 재사용 (글자만 수정 시 100P 절약 + 즉시 합성)
+    existing_bg_url = (data.get('existing_bg_url') or '').strip()
+    # 신뢰 가능한 호스트(우리가 생성한 URL)만 허용
+    if existing_bg_url and not any(h in existing_bg_url for h in (
+            'fal.media', 'supabase.co', 'fal.run')):
+        existing_bg_url = ''
 
     if not line1:
         return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
 
-    # ── 포인트 처리 (FLUX 사용 시 50P) ──────────────────────
-    cost = 100 if use_flux else 0   # FLUX Pro 배경 생성
+    # ── 포인트 처리 (FLUX 신규 생성 시 100P, 기존 배경 재사용은 0P) ──
+    # existing_bg_url이 있으면 FLUX 호출 안 함 → 무료 (텍스트만 재합성)
+    will_generate_flux = use_flux and not existing_bg_url
+    cost = 100 if will_generate_flux else 0
     if cost:
         from services.point_service import get_balance, use_points, InsufficientPoints
         from models import POINT_COSTS
@@ -781,9 +789,13 @@ def blog_thumbnail():
         except Exception as e:
             logger.warning(f'[blog/thumbnail] 포인트 처리 오류: {e}')
 
-    # ── FLUX 배경 생성 ────────────────────────────────────────
+    # ── FLUX 배경 생성 (또는 기존 배경 재사용) ────────────────
     bg_url = None
-    if use_flux:
+    if use_flux and existing_bg_url:
+        # 기존 배경 재사용 (텍스트만 수정)
+        bg_url = existing_bg_url
+        logger.info(f'[thumbnail] 기존 배경 재사용: {bg_url[:80]}')
+    elif use_flux:
         from services.imagen_service import _generate_flux
         from services.claude_service import generate_text as _gen_text
 
@@ -871,7 +883,8 @@ def blog_thumbnail():
     except Exception:
         public_url = b64   # 스토리지 실패 시 base64 직접
 
-    return jsonify(ok=True, url=public_url, cost=cost)
+    # bg_url: 프론트가 이 URL을 기억해서 텍스트만 수정 시 재사용 (100P 절약)
+    return jsonify(ok=True, url=public_url, cost=cost, bg_url=bg_url or '')
 
 
 # ─────────────────────────────────────────────────────────────
