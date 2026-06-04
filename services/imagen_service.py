@@ -1115,9 +1115,16 @@ def generate_blog_thumbnail(
     def _wrap(text, font, sz):
         if not fp or not text:
             return [], font
-        # letter_spacing 음수일 때 실제 폭이 더 좁으므로 MAX_TW를 보정해서 1줄 판정 개선
-        effective_tw = MAX_TW - letter_spacing * max(0, len(text) - 1) if letter_spacing < 0 else MAX_TW
-        effective_tw = max(MAX_TW // 2, effective_tw)
+        # 자간 음수 시 실제 폭이 좁으므로 보정
+        if letter_spacing < 0:
+            effective_tw = MAX_TW - letter_spacing * max(0, len(text) - 1)
+            effective_tw = max(MAX_TW // 2, effective_tw)
+        else:
+            effective_tw = MAX_TW
+        # 1줄 우선 시도 (폰트 축소 포함) → 실패 시만 2줄 허용
+        lines1, f1 = _fit_lines(fp, text, sz, effective_tw, 1)
+        if len(lines1) == 1:
+            return lines1, f1
         return _fit_lines(fp, text, sz, effective_tw, 2)
 
     l1_lines, font_l1 = _wrap(render_l1, font_l1, max(24, sz1 if fp else 80))
