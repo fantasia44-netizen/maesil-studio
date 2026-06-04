@@ -421,6 +421,27 @@
                            accept="image/*" onchange="previewBgUpload(this)">
                   </div>
                 </label>
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer" id="thumbBgRecentLabel">
+                  <input type="radio" name="thumbBgType" value="recent" id="thumbBgRecent"
+                         class="mt-1 flex-shrink-0" onchange="onSelectRecentBgMode()">
+                  <div class="flex-fill">
+                    <div class="fw-semibold small">이전 생성 배경 가져오기
+                      <span class="badge bg-success ms-1" style="font-size:.62rem">무료</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">최근 만든 썸네일 배경을 재사용</div>
+                    <div id="thumbRecentBgList" class="mt-2 d-none">
+                      <div class="text-muted small text-center py-2" id="thumbRecentBgLoading">
+                        <span class="spinner-border spinner-border-sm me-1"></span>불러오는 중...
+                      </div>
+                      <div id="thumbRecentBgGrid" class="d-none"
+                           style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"></div>
+                      <div id="thumbRecentBgEmpty" class="d-none text-muted small text-center py-2">
+                        최근 생성한 배경이 없습니다.
+                      </div>
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
           </div>
@@ -819,8 +840,72 @@ function updateThumbCostBadge() {
   if (!badge) return;
   if (!thumbEnabled) { badge.style.opacity = '.4'; badge.textContent = '+100P'; return; }
   const bgType = document.querySelector('input[name="thumbBgType"]:checked')?.value || 'flux';
-  badge.textContent = bgType === 'flux' ? '+100P' : '+0P';
+  // flux 모드인데 _thumbBgUrl이 있고 bg_topic이 그대로면 무료 재합성
+  const curBgTopic = document.getElementById('thumbBgTopic')?.value.trim() || '';
+  const reuseable  = bgType === 'flux' && _thumbBgUrl && curBgTopic === _thumbLastBgTopic;
+  const fluxCost   = (bgType === 'flux' && !reuseable);
+  badge.textContent = fluxCost ? '+100P' : '+0P';
   badge.style.opacity = '1';
+}
+
+// ── 이전 생성 배경 모드 선택 시 갤러리 로드 ──────────────────
+let _thumbRecentBgLoaded = false;
+let _thumbSelectedRecentBg = null;   // 선택된 과거 배경 URL
+
+async function onSelectRecentBgMode() {
+  updateThumbCostBadge();
+  const wrap = document.getElementById('thumbRecentBgList');
+  if (wrap) wrap.classList.remove('d-none');
+  if (_thumbRecentBgLoaded) return;
+  _thumbRecentBgLoaded = true;
+  try {
+    const res  = await fetch('{{ url_for("create.blog_thumbnail_recent_backgrounds") }}');
+    const data = await res.json();
+    const grid    = document.getElementById('thumbRecentBgGrid');
+    const loading = document.getElementById('thumbRecentBgLoading');
+    const empty   = document.getElementById('thumbRecentBgEmpty');
+    loading?.classList.add('d-none');
+    if (!data.ok || !(data.backgrounds || []).length) {
+      empty?.classList.remove('d-none'); return;
+    }
+    grid.innerHTML = data.backgrounds.map((b, i) => `
+      <div class="position-relative recent-bg-item" data-bg-url="${b.bg_url}"
+           style="cursor:pointer;aspect-ratio:1/1;border:2px solid #dee2e6;border-radius:6px;
+                  overflow:hidden;background:#f8f9fa"
+           onclick="selectRecentBg('${b.bg_url}', '${(b.bg_topic||'').replace(/'/g,'')}', this)"
+           title="${b.bg_topic || ''} · ${b.date}">
+        <img src="${b.bg_url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
+      </div>
+    `).join('');
+    grid.classList.remove('d-none');
+  } catch (e) {
+    document.getElementById('thumbRecentBgLoading')?.classList.add('d-none');
+    document.getElementById('thumbRecentBgEmpty')?.classList.remove('d-none');
+  }
+}
+
+function selectRecentBg(url, topic, el) {
+  _thumbSelectedRecentBg = url;
+  // 이전 선택 테두리 초기화
+  document.querySelectorAll('.recent-bg-item').forEach(it => {
+    it.style.borderColor = '#dee2e6';
+    it.style.boxShadow   = '';
+  });
+  if (el) {
+    el.style.borderColor = '#e8355a';
+    el.style.boxShadow   = '0 0 0 3px rgba(232,53,90,.25)';
+  }
+  // FLUX 배경 URL로 등록 → 다음 생성 시 재사용됨 (무료)
+  _thumbBgUrl       = url;
+  _thumbLastBgTopic = topic || '';
+  // 배경 키워드 input에도 반영 (사용자 인지)
+  const bgInput = document.getElementById('thumbBgTopic');
+  if (bgInput && topic) bgInput.value = topic;
+  // bgType을 flux로 강제 전환 (실제 생성 경로가 flux 분기를 타야 함)
+  const fluxRadio = document.getElementById('thumbBgFlux');
+  if (fluxRadio) fluxRadio.checked = true;
+  updateThumbCostBadge();
+  updateThumbPreview();
 }
 
 // ── 강조색 선택 ───────────────────────────────────────────────

@@ -883,8 +883,70 @@ def blog_thumbnail():
     except Exception:
         public_url = b64   # 스토리지 실패 시 base64 직접
 
+    # ── 새로 FLUX 생성한 배경은 creations 테이블에 기록 (재사용 갤러리용) ──
+    # existing_bg_url 재사용은 기록 안 함 (중복 방지)
+    if will_generate_flux and bg_url:
+        try:
+            import uuid as _uuid3
+            now_s = now_kst().isoformat()
+            row = {
+                'id': str(_uuid3.uuid4()),
+                'user_id': current_user.id,
+                'creation_type': 'blog_thumbnail',
+                'input_data': {'bg_topic': bg_topic, 'line1': line1[:30]},
+                'output_data': {'bg_url': bg_url, 'thumbnail_url': public_url},
+                'points_used': cost,
+                'status': 'done',
+                'created_at': now_s, 'updated_at': now_s,
+            }
+            if getattr(current_user, 'operator_id', None):
+                row['operator_id'] = current_user.operator_id
+            if current_app.supabase:
+                current_app.supabase.table('creations').insert(row).execute()
+        except Exception as e:
+            logger.debug(f'[blog/thumbnail] creations 기록 실패: {e}')
+
     # bg_url: 프론트가 이 URL을 기억해서 텍스트만 수정 시 재사용 (100P 절약)
     return jsonify(ok=True, url=public_url, cost=cost, bg_url=bg_url or '')
+
+
+# ─────────────────────────────────────────────────────────────
+# 최근 생성한 썸네일 배경 갤러리 (재사용용)
+# ─────────────────────────────────────────────────────────────
+
+@create_bp.route('/blog/thumbnail/recent-backgrounds', methods=['GET'])
+@login_required
+def blog_thumbnail_recent_backgrounds():
+    """현재 사용자가 최근 FLUX로 생성한 썸네일 배경 URL 목록 (재사용용)."""
+    try:
+        uid = current_user.id
+        oid = getattr(current_user, 'operator_id', None)
+        q = (current_app.supabase.table('creations')
+             .select('id, input_data, output_data, created_at')
+             .eq('creation_type', 'blog_thumbnail')
+             .eq('status', 'done'))
+        q = q.eq('operator_id', oid) if oid else q.eq('user_id', uid)
+        rows = q.order('created_at', desc=True).limit(20).execute().data or []
+
+        out, seen = [], set()
+        for r in rows:
+            bg = ((r.get('output_data') or {}).get('bg_url') or '').strip()
+            if not bg or bg in seen:
+                continue
+            seen.add(bg)
+            out.append({
+                'id':        r.get('id'),
+                'bg_url':    bg,
+                'thumbnail_url': (r.get('output_data') or {}).get('thumbnail_url') or '',
+                'bg_topic':  ((r.get('input_data')  or {}).get('bg_topic')  or '')[:40],
+                'date':      (r.get('created_at') or '')[:10],
+            })
+            if len(out) >= 8:
+                break
+        return jsonify(ok=True, backgrounds=out)
+    except Exception as e:
+        logger.warning(f'[blog/thumbnail/recent] 조회 실패: {e}')
+        return jsonify(ok=True, backgrounds=[])
 
 
 # ─────────────────────────────────────────────────────────────
