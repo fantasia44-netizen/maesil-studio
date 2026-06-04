@@ -456,11 +456,16 @@
                      placeholder="예: 종합소득세" oninput="updateThumbPreview()">
             </div>
             <div class="mb-3">
-              <label class="form-label small fw-semibold mb-1">
-                줄 2 · 강조색 <span class="text-muted fw-normal">(최대 16자)</span>
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                줄 2 · 강조색
+                <span id="thumbLine2LenHint" class="text-muted fw-normal" style="font-size:.72rem"></span>
               </label>
               <input id="thumbLine2" class="form-control form-control-sm" maxlength="16"
-                     placeholder="예: 종결!" oninput="updateThumbPreview()">
+                     placeholder="예: 종결! (짧을수록 1줄)"
+                     oninput="updateThumbLine2Hint(); updateThumbPreview()">
+              <div class="text-muted mt-1" style="font-size:.71rem">
+                💡 <strong>7자 이하</strong>면 1줄, 8자 이상이면 2줄로 나뉠 수 있습니다
+              </div>
             </div>
 
             <!-- 위치 슬라이더 -->
@@ -1018,6 +1023,17 @@ function setThumbTextBg(color, el) {
   const opWrap = document.getElementById('thumbTextBgOpacityWrap');
   if (opWrap) opWrap.classList.toggle('d-none', !color);
   updateThumbPreview();
+}
+
+// ── 줄 2 글자 수 힌트 ────────────────────────────────────────
+function updateThumbLine2Hint() {
+  const el  = document.getElementById('thumbLine2');
+  const hint = document.getElementById('thumbLine2LenHint');
+  if (!el || !hint) return;
+  const len = el.value.length;
+  if (len === 0) { hint.textContent = ''; return; }
+  if (len <= 7)  hint.innerHTML = `<span style="color:#22c55e">${len}자 · 1줄 ✓</span>`;
+  else           hint.innerHTML = `<span style="color:#f59e0b">${len}자 · 2줄 가능</span>`;
 }
 
 // ── 강조색 선택 ───────────────────────────────────────────────
