@@ -211,7 +211,9 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
                 'visible screen content, readable text on screen, UI text on device, '
                 'phone screen with text, laptop screen with content, tablet display text, '
                 'product listing on screen, app interface visible, website on screen, '
-                'any legible text on any display or surface'
+                'any legible text on any display or surface, '
+                'flat lay, top view, bird eye view, overhead shot, product arrangement, '
+                'no people, person missing, empty scene without human'
             ),
             'image_size': {'width': int(w), 'height': int(h)},
             'num_images': 1,
