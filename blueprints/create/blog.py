@@ -807,8 +807,8 @@ def blog_thumbnail():
         # 직접 업로드한 이미지를 background_url로 직접 사용 (base64 data URL)
         bg_url = bg_upload_data
         logger.info('[thumbnail] 업로드 배경 사용 (base64)')
-    elif use_flux and existing_bg_url:
-        # 기존 배경 재사용 (텍스트만 수정)
+    elif existing_bg_url:
+        # 기존 배경 재사용 (텍스트 수정 or 이전 생성 배경 선택)
         bg_url = existing_bg_url
         logger.info(f'[thumbnail] 기존 배경 재사용: {bg_url[:80]}')
     elif use_flux:

@@ -1302,9 +1302,10 @@ async function generateThumbPreview() {
         // 블로그 글 내용 + 이미지 프롬프트 → Sonnet이 맥락 파악용
         blog_text:        (document.getElementById('blogTextArea')?.value || '').slice(0, 800),
         image_prompts:    (window._prompts || []).slice(0, 5).map(p => p.prompt).join(' | '),
-        // 텍스트만 수정 시 기존 FLUX 배경 재사용 (100P 절약)
-        // bg_topic이 바뀌었다면 빈 문자열로 보내서 신규 생성
-        existing_bg_url:  (useFlux && _thumbBgUrl && bgTopic === _thumbLastBgTopic) ? _thumbBgUrl : '',
+        // 배경 재사용: ① 이전 생성 배경 선택 ② 텍스트만 수정(FLUX bg_topic 동일)
+        existing_bg_url:  (bgType === 'recent' && _thumbSelectedRecentBg)
+                            ? _thumbSelectedRecentBg
+                            : (useFlux && _thumbBgUrl && bgTopic === _thumbLastBgTopic) ? _thumbBgUrl : '',
       }),
     });
     const data = await res.json();
