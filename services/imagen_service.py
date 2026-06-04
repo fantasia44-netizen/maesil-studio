@@ -207,7 +207,11 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
                 'chart, bar chart, pie chart, line chart, graph, data visualization, '
                 'infographic, diagram, financial chart, stock chart, candlestick chart, '
                 'flowchart, screen with graphs, tablet with charts, monitor with data, '
-                'floating UI overlay, dashboard, spreadsheet'
+                'floating UI overlay, dashboard, spreadsheet, '
+                'visible screen content, readable text on screen, UI text on device, '
+                'phone screen with text, laptop screen with content, tablet display text, '
+                'product listing on screen, app interface visible, website on screen, '
+                'any legible text on any display or surface'
             ),
             'image_size': {'width': int(w), 'height': int(h)},
             'num_images': 1,
