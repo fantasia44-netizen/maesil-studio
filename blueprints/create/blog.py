@@ -749,6 +749,8 @@ def blog_thumbnail():
     text_align      = (data.get('text_align') or 'center').strip()
     if text_align not in ('center', 'left', 'right'):
         text_align = 'center'
+    # 직접 업로드한 배경 이미지 (base64 data URL)
+    bg_upload_data  = (data.get('bg_upload_data') or '').strip()
     # 기존 FLUX 배경 재사용 (글자만 수정 시 100P 절약 + 즉시 합성)
     existing_bg_url = (data.get('existing_bg_url') or '').strip()
     # 신뢰 가능한 호스트(우리가 생성한 URL)만 허용
@@ -795,9 +797,13 @@ def blog_thumbnail():
         except Exception as e:
             logger.warning(f'[blog/thumbnail] 포인트 처리 오류: {e}')
 
-    # ── FLUX 배경 생성 (또는 기존 배경 재사용) ────────────────
+    # ── FLUX 배경 생성 (또는 기존 배경 재사용 / 직접 업로드) ───
     bg_url = None
-    if use_flux and existing_bg_url:
+    if bg_upload_data:
+        # 직접 업로드한 이미지를 background_url로 직접 사용 (base64 data URL)
+        bg_url = bg_upload_data
+        logger.info('[thumbnail] 업로드 배경 사용 (base64)')
+    elif use_flux and existing_bg_url:
         # 기존 배경 재사용 (텍스트만 수정)
         bg_url = existing_bg_url
         logger.info(f'[thumbnail] 기존 배경 재사용: {bg_url[:80]}')

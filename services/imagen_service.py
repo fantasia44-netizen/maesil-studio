@@ -1016,9 +1016,16 @@ def generate_blog_thumbnail(
     # ── 배경 ─────────────────────────────────────────────
     if background_url:
         try:
-            resp = requests.get(background_url, timeout=30)
-            resp.raise_for_status()
-            bg = Image.open(BytesIO(resp.content)).convert('RGBA').resize((W, H), Image.LANCZOS)
+            if background_url.startswith('data:image/'):
+                # base64 data URL (직접 업로드)
+                _, b64data = background_url.split(',', 1)
+                raw = base64.b64decode(b64data)
+                bg = Image.open(BytesIO(raw)).convert('RGBA').resize((W, H), Image.LANCZOS)
+            else:
+                # 일반 HTTP URL
+                resp = requests.get(background_url, timeout=30)
+                resp.raise_for_status()
+                bg = Image.open(BytesIO(resp.content)).convert('RGBA').resize((W, H), Image.LANCZOS)
         except Exception:
             bg = _make_dark_gradient_bg(W, H, accent_rgb)
     else:

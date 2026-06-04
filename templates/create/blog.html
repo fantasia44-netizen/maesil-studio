@@ -1162,6 +1162,8 @@ async function generateThumbPreview() {
         font_size_pct:    parseInt(document.getElementById('thumbFontSize')?.value || 115),
         overlay_darkness: parseInt(document.getElementById('thumbOverlay')?.value  || 78),
         text_align:       thumbAlign,
+        // 직접 업로드 배경 (base64 data URL)
+        bg_upload_data:   (bgType === 'upload' && thumbUploadedBgUrl) ? thumbUploadedBgUrl : '',
         // 블로그 글 내용 + 이미지 프롬프트 → Sonnet이 맥락 파악용
         blog_text:        (document.getElementById('blogTextArea')?.value || '').slice(0, 800),
         image_prompts:    (window._prompts || []).slice(0, 5).map(p => p.prompt).join(' | '),
