@@ -1012,7 +1012,6 @@ def generate_blog_thumbnail(
     W = H = 1080
     accent_rgb = _hex_to_rgb(accent_color)
     scale = max(0.5, min(1.5, font_size_pct / 100))
-    bot_alpha = int(overlay_darkness * 2.5)  # 0-100 → 0-250
 
     # ── 배경 ─────────────────────────────────────────────
     if background_url:
@@ -1025,10 +1024,13 @@ def generate_blog_thumbnail(
     else:
         bg = _make_dark_gradient_bg(W, H, accent_rgb)
 
-    # ── 오버레이: 상단 얇게 → 하단 overlay_darkness 기반 ─
-    top_alpha = max(10, bot_alpha // 8)
-    mid_alpha = bot_alpha // 2
-    pivot = int(H * 0.38)
+    # ── 오버레이: 슬라이더 값에 따라 전체적으로 어둡게 ──────────
+    # 슬라이더 84%인데 상단이 10%만 어둡던 비대칭 문제 수정.
+    # 상단도 슬라이더 값의 ~70%까지 반영하여 전체 시각적 어둠 강화.
+    top_alpha = max(20, min(255, int(overlay_darkness * 1.7)))   # ≈ slider*0.68 비율
+    mid_alpha = max(40, min(255, int(overlay_darkness * 2.1)))   # 중간(텍스트 영역) 강하게
+    bot_alpha = max(60, min(255, int(overlay_darkness * 2.5)))   # 하단 가장 어둡게
+    pivot = int(H * 0.35)
     ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     _draw_gradient_rect(ov, 0, 0,      W, pivot, (0,0,0,top_alpha), (0,0,0,mid_alpha))
     _draw_gradient_rect(ov, 0, pivot,  W, H,     (0,0,0,mid_alpha), (0,0,0,bot_alpha))
