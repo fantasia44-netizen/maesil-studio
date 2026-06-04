@@ -14,3 +14,6 @@ static/audio/bgm/*.mp3
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Claude Code 로컬 설정 — 명령어 권한이 자동 추가되어 매번 충돌 발생
+.claude/settings.local.json
