@@ -213,8 +213,11 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
                 'product listing on screen, app interface visible, website on screen, '
                 'any legible text on any display or surface, '
                 'sticky note with text, wall poster with writing, bulletin board text, '
-                'readable handwriting on paper, box label with text, '
-                'sign with words, whiteboard writing, paper with text'
+                'readable handwriting on paper, '
+                'text on box, label on package, product label with writing, '
+                'Chinese text on packaging, Korean text on box, brand name on product, '
+                'sign with words, whiteboard writing, paper with text, '
+                'any printed text on any object or surface'
             ),
             'image_size': {'width': int(w), 'height': int(h)},
             'num_images': 1,
