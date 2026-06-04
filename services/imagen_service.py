@@ -1115,7 +1115,10 @@ def generate_blog_thumbnail(
     def _wrap(text, font, sz):
         if not fp or not text:
             return [], font
-        return _fit_lines(fp, text, sz, MAX_TW, 2)
+        # letter_spacing 음수일 때 실제 폭이 더 좁으므로 MAX_TW를 보정해서 1줄 판정 개선
+        effective_tw = MAX_TW - letter_spacing * max(0, len(text) - 1) if letter_spacing < 0 else MAX_TW
+        effective_tw = max(MAX_TW // 2, effective_tw)
+        return _fit_lines(fp, text, sz, effective_tw, 2)
 
     l1_lines, font_l1 = _wrap(render_l1, font_l1, max(24, sz1 if fp else 80))
     l2_lines, font_l2 = _wrap(render_l2, font_l2, max(20, sz2 if fp else 70)) if render_l2 else ([], font_l2)
@@ -1157,16 +1160,28 @@ def generate_blog_thumbnail(
         # 반투명 사각형 레이어
         bg_layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
         bg_draw  = ImageDraw.Draw(bg_layer)
+        # 어두운 배경색은 썸네일 배경과 구분되도록 흰색 외곽선 추가
+        brightness = (bg_rgb[0]*299 + bg_rgb[1]*587 + bg_rgb[2]*114) // 1000
+        outline_color = (255, 255, 255, 90) if brightness < 80 else None
         try:
             bg_draw.rounded_rectangle(
                 [box_x, box_y, box_x + box_w, box_y + box_h],
-                radius=16, fill=(*bg_rgb, bg_alpha)
+                radius=16, fill=(*bg_rgb, bg_alpha),
+                **({'outline': outline_color, 'width': 3} if outline_color else {})
             )
         except Exception:
             bg_draw.rectangle(
                 [box_x, box_y, box_x + box_w, box_y + box_h],
                 fill=(*bg_rgb, bg_alpha)
             )
+            if outline_color:
+                try:
+                    bg_draw.rectangle(
+                        [box_x, box_y, box_x + box_w, box_y + box_h],
+                        outline=outline_color, width=3
+                    )
+                except Exception:
+                    pass
         img = Image.alpha_composite(img, bg_layer)
         draw = ImageDraw.Draw(img)
 
