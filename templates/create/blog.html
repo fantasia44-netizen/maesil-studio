@@ -491,6 +491,20 @@
               </div>
             </div>
 
+            <!-- 자간 슬라이더 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                자간
+                <span id="thumbLetterSpacingLabel" class="text-muted fw-normal">0</span>
+              </label>
+              <input type="range" class="form-range" id="thumbLetterSpacing"
+                     min="-8" max="20" value="0"
+                     oninput="document.getElementById('thumbLetterSpacingLabel').textContent=this.value; updateThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>좁게 (폭 줄임)</span><span>넓게</span>
+              </div>
+            </div>
+
             <!-- 정렬 -->
             <div class="mb-3">
               <label class="form-label small fw-semibold mb-1">텍스트 정렬</label>
@@ -527,9 +541,29 @@
 
           <!-- ── 스타일 탭 ── -->
           <div id="thumbTabStyle" class="d-none">
-            <!-- 강조 색상 -->
+            <!-- 글자색 1 (줄 1 메인 텍스트) -->
             <div class="mb-3">
-              <label class="form-label small fw-semibold mb-2">줄 2 강조 색상</label>
+              <label class="form-label small fw-semibold mb-2">글자색 1 <span class="text-muted fw-normal">(줄 1 · 메인)</span></label>
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                {% for hc, hn in [('#FFFFFF','화이트'),('#F8FAFC','밝은회'),('#FFD700','골드'),('#4ADE80','그린'),('#60A5FA','블루'),('#F472B6','핑크'),('#FF4444','레드'),('#111111','블랙')] %}
+                <div class="thumb-text1-dot" title="{{ hn }}"
+                     onclick="setThumbTextColor1('{{ hc }}', this)"
+                     style="width:28px;height:28px;background:{{ hc }};border-radius:50%;
+                            cursor:pointer;border:2px solid {{ 'rgba(0,0,0,.25)' if hc in ('#FFFFFF','#F8FAFC') else 'transparent' }};
+                            transition:all .15s;box-shadow:0 1px 5px rgba(0,0,0,.2)">
+                </div>
+                {% endfor %}
+                <input type="color" id="thumbTextColor1Custom" value="#FFFFFF"
+                       oninput="setThumbTextColor1(this.value, null)"
+                       class="form-control form-control-color flex-shrink-0"
+                       style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
+                       title="직접 선택">
+              </div>
+            </div>
+
+            <!-- 글자색 2 (줄 2 강조 텍스트) -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">글자색 2 <span class="text-muted fw-normal">(줄 2 · 강조)</span></label>
               <div class="d-flex gap-2 flex-wrap align-items-center">
                 {% for hc, hn in [('#FFD700','골드'),('#FF6B35','오렌지'),
                                    ('#4ADE80','그린'),('#60A5FA','블루'),
@@ -547,6 +581,42 @@
                        class="form-control form-control-color flex-shrink-0"
                        style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
                        title="직접 선택">
+              </div>
+            </div>
+
+            <!-- 글자 배경색 (2중 강조) -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">글자 배경색 <span class="text-muted fw-normal">(2중 강조 · 없음 선택 시 비활성)</span></label>
+              <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <div class="thumb-textbg-dot thumb-textbg-none active" title="없음"
+                     onclick="setThumbTextBg('', this)"
+                     style="width:28px;height:28px;background:transparent;border-radius:50%;
+                            cursor:pointer;border:2px solid #aaa;transition:all .15s;
+                            display:flex;align-items:center;justify-content:center;">
+                  <span style="font-size:11px;color:#aaa;line-height:1">✕</span>
+                </div>
+                {% for hc, hn in [('#000000','블랙'),('#1a1a2e','네이비'),('#FFD700','골드'),('#FF6B35','오렌지'),('#4ADE80','그린'),('#60A5FA','블루'),('#F472B6','핑크'),('#FFFFFF','화이트')] %}
+                <div class="thumb-textbg-dot" title="{{ hn }}"
+                     onclick="setThumbTextBg('{{ hc }}', this)"
+                     style="width:28px;height:28px;background:{{ hc }};border-radius:50%;
+                            cursor:pointer;border:2px solid {{ 'rgba(0,0,0,.25)' if hc=='#FFFFFF' else 'transparent' }};
+                            transition:all .15s;box-shadow:0 1px 5px rgba(0,0,0,.2)">
+                </div>
+                {% endfor %}
+                <input type="color" id="thumbTextBgCustom" value="#000000"
+                       oninput="setThumbTextBg(this.value, null)"
+                       class="form-control form-control-color flex-shrink-0"
+                       style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
+                       title="직접 선택">
+              </div>
+              <!-- 배경 불투명도 (글자 배경이 선택된 경우에만 활성) -->
+              <div id="thumbTextBgOpacityWrap" class="d-none">
+                <label class="form-label small mb-1 d-flex justify-content-between" style="color:#555">
+                  배경 불투명도 <span id="thumbTextBgOpacityLabel" class="fw-normal">60%</span>
+                </label>
+                <input type="range" class="form-range" id="thumbTextBgOpacity"
+                       min="10" max="100" value="60"
+                       oninput="document.getElementById('thumbTextBgOpacityLabel').textContent=this.value+'%'; updateThumbPreview()">
               </div>
             </div>
 
@@ -807,8 +877,10 @@
 // 블로그 썸네일 비주얼 에디터
 // ══════════════════════════════════════════════════════════════
 let thumbEnabled     = false;
-let thumbAccentColor = '#FFD700';
-let thumbAlign       = 'center';
+let thumbAccentColor  = '#FFD700';
+let thumbTextColor1   = '#FFFFFF';
+let thumbTextBgColor  = '';
+let thumbAlign        = 'center';
 let thumbUploadedBgUrl = null;   // 직접 업로드한 배경 URL
 
 // ── 카드 토글 ──────────────────────────────────────────────────
@@ -908,6 +980,46 @@ function selectRecentBg(url, topic, el) {
   updateThumbPreview();
 }
 
+// ── 글자색 1 선택 ─────────────────────────────────────────────
+function setThumbTextColor1(color, el) {
+  thumbTextColor1 = color;
+  document.querySelectorAll('.thumb-text1-dot').forEach(d => {
+    d.style.borderColor = 'transparent';
+    d.style.transform   = '';
+    d.style.boxShadow   = '0 1px 5px rgba(0,0,0,.2)';
+  });
+  if (el) {
+    el.style.borderColor = '#333';
+    el.style.transform   = 'scale(1.22)';
+    el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
+  }
+  const c = document.getElementById('thumbTextColor1Custom');
+  if (c) c.value = color;
+  updateThumbPreview();
+}
+
+// ── 글자 배경색 선택 ──────────────────────────────────────────
+function setThumbTextBg(color, el) {
+  thumbTextBgColor = color;
+  document.querySelectorAll('.thumb-textbg-dot').forEach(d => {
+    d.style.borderColor = d.classList.contains('thumb-textbg-none') ? '#aaa' : 'transparent';
+    d.style.transform   = '';
+    d.style.boxShadow   = d.classList.contains('thumb-textbg-none') ? '' : '0 1px 5px rgba(0,0,0,.2)';
+    d.classList.remove('active');
+  });
+  if (el) {
+    el.style.borderColor = '#333';
+    el.style.transform   = 'scale(1.22)';
+    el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
+    el.classList.add('active');
+  }
+  const c = document.getElementById('thumbTextBgCustom');
+  if (c && color) c.value = color;
+  const opWrap = document.getElementById('thumbTextBgOpacityWrap');
+  if (opWrap) opWrap.classList.toggle('d-none', !color);
+  updateThumbPreview();
+}
+
 // ── 강조색 선택 ───────────────────────────────────────────────
 function setThumbAccent(color, el) {
   thumbAccentColor = color;
@@ -984,18 +1096,37 @@ function updateThumbPreview() {
   const el1 = document.getElementById('thumbPrevLine1');
   const el2 = document.getElementById('thumbPrevLine2');
   // 320/1080 ≈ 0.296 스케일: PIL line1(116px)→34px, line2(101px)→30px
+  const letterSpacing = parseInt(document.getElementById('thumbLetterSpacing')?.value || 0);
   if (el1) {
-    el1.textContent    = l1;
+    el1.textContent       = l1;
     const sz = Math.round(34 * fontSize / 100);
-    el1.style.fontSize = sz + 'px';
-    el1.style.textAlign = thumbAlign;
+    el1.style.fontSize    = sz + 'px';
+    el1.style.textAlign   = thumbAlign;
+    el1.style.color       = thumbTextColor1;
+    el1.style.letterSpacing = letterSpacing + 'px';
   }
   if (el2) {
-    el2.textContent    = l2;
+    el2.textContent       = l2;
     const sz = Math.round(30 * fontSize / 100);
-    el2.style.fontSize = sz + 'px';
-    el2.style.color    = thumbAccentColor;
-    el2.style.textAlign = thumbAlign;
+    el2.style.fontSize    = sz + 'px';
+    el2.style.color       = thumbAccentColor;
+    el2.style.textAlign   = thumbAlign;
+    el2.style.letterSpacing = letterSpacing + 'px';
+  }
+  // 글자 배경색 미리보기
+  const textBgOpacity = parseInt(document.getElementById('thumbTextBgOpacity')?.value || 60);
+  const textBlock = document.getElementById('thumbPrevTextBlock');
+  if (textBlock) {
+    if (thumbTextBgColor) {
+      const [r,g,b] = _hexToRgb(thumbTextBgColor);
+      textBlock.style.background = `rgba(${r},${g},${b},${(textBgOpacity/100).toFixed(2)})`;
+      textBlock.style.padding    = '10px 16px';
+      textBlock.style.borderRadius = '6px';
+    } else {
+      textBlock.style.background   = '';
+      textBlock.style.padding      = '';
+      textBlock.style.borderRadius = '';
+    }
   }
 
   // 텍스트 정렬
@@ -1162,6 +1293,10 @@ async function generateThumbPreview() {
         font_size_pct:    parseInt(document.getElementById('thumbFontSize')?.value || 115),
         overlay_darkness: parseInt(document.getElementById('thumbOverlay')?.value  || 78),
         text_align:       thumbAlign,
+        line1_color:      thumbTextColor1,
+        letter_spacing:   parseInt(document.getElementById('thumbLetterSpacing')?.value || 0),
+        text_bg_color:    thumbTextBgColor,
+        text_bg_opacity:  parseInt(document.getElementById('thumbTextBgOpacity')?.value || 60),
         // 직접 업로드 배경 (base64 data URL)
         bg_upload_data:   (bgType === 'upload' && thumbUploadedBgUrl) ? thumbUploadedBgUrl : '',
         // 블로그 글 내용 + 이미지 프롬프트 → Sonnet이 맥락 파악용

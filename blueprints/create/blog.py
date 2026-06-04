@@ -749,6 +749,10 @@ def blog_thumbnail():
     text_align      = (data.get('text_align') or 'center').strip()
     if text_align not in ('center', 'left', 'right'):
         text_align = 'center'
+    line1_color     = (data.get('line1_color') or '#FFFFFF').strip()
+    letter_spacing  = max(-10, min(30, int(data.get('letter_spacing', 0))))
+    text_bg_color   = (data.get('text_bg_color') or '').strip()
+    text_bg_opacity = max(0, min(100, int(data.get('text_bg_opacity', 60))))
     # 직접 업로드한 배경 이미지 (base64 data URL)
     bg_upload_data  = (data.get('bg_upload_data') or '').strip()
     # 기존 FLUX 배경 재사용 (글자만 수정 시 100P 절약 + 즉시 합성)

@@ -994,11 +994,15 @@ def generate_blog_thumbnail(
     background_url: str | None = None,
     brand_name: str = '',
     accent_color: str = '#FFD700',
+    line1_color: str = '#FFFFFF',     # 줄1 글자색
     use_quotes: bool = True,
-    text_y_pct: int = 55,        # 텍스트 블록 시작 Y 위치 (0-100%)
-    font_size_pct: int = 115,    # 폰트 크기 스케일 (네이버 카드 축소 대응 — 기본 115%)
-    overlay_darkness: int = 78,  # 하단 오버레이 강도 (0-100, 텍스트 가독성 위해 78%)
-    text_align: str = 'center',  # 'center' | 'left' | 'right'
+    text_y_pct: int = 55,
+    font_size_pct: int = 115,
+    overlay_darkness: int = 78,
+    text_align: str = 'center',
+    letter_spacing: int = 0,           # 자간 (픽셀, 음수=좁힘)
+    text_bg_color: str = '',           # 글자 배경색 (빈 문자열=없음)
+    text_bg_opacity: int = 60,         # 글자 배경 불투명도 (0-100)
 ) -> bytes:
     """블로그 썸네일 카드 생성 (1080×1080 PNG) — 비주얼 에디터 연동.
 
@@ -1057,8 +1061,9 @@ def generate_blog_thumbnail(
         fp = None
         font_l1 = font_l2 = font_mark = ImageFont.load_default()
 
-    white  = (255, 255, 255, 255)
-    accent = (*accent_rgb, 255)
+    l1_rgb    = _hex_to_rgb(line1_color)
+    line1_fill = (*l1_rgb, 255)
+    accent    = (*accent_rgb, 255)
 
     # 정렬에 따른 좌우 여백
     MARGIN = 80
@@ -1070,6 +1075,27 @@ def generate_blog_thumbnail(
         except Exception:
             return int(sz1)
 
+    def _measure_spaced(draw, text, font, spacing):
+        “””자간 적용된 총 너비 계산.”””
+        total = 0
+        for c in text:
+            try:
+                cw = draw.textbbox((0,0), c, font=font)[2]
+            except Exception:
+                cw = font.size if hasattr(font,'size') else 20
+            total += cw + spacing
+        return max(0, total - spacing)
+
+    def _draw_spaced(draw, x, y, text, font, fill, shadow_color, offset, spacing):
+        “””자간 적용 문자별 렌더링.”””
+        for c in text:
+            _shadow_text(draw, (x, y), c, font, fill, shadow_color, offset)
+            try:
+                cw = draw.textbbox((0,0), c, font=font)[2]
+            except Exception:
+                cw = font.size if hasattr(font,'size') else 20
+            x += cw + spacing
+
     def _x(tw):
         if text_align == 'left':   return MARGIN
         if text_align == 'right':  return W - MARGIN - tw
@@ -1077,10 +1103,10 @@ def generate_blog_thumbnail(
 
     # ── 인용부호 ─────────────────────────────────────────
     if use_quotes:
-        render_l1 = '“' + line1            # "
+        render_l1 = '”' + line1
         render_l2 = (line2 + '”') if line2 else ''
         if not line2:
-            render_l1 = '“' + line1 + '”'
+            render_l1 = '”' + line1 + '”'
     else:
         render_l1 = line1
         render_l2 = line2
@@ -1103,27 +1129,73 @@ def generate_blog_thumbnail(
     MARK_PAD = int(H * 0.11)
     total_h  = h1 + (LINE_GAP + h2 if l2_lines else 0)
 
-    # text_y_pct → 픽셀 Y 좌표
     y_start_raw = int(H * text_y_pct / 100)
-    # 이미지 밖으로 나가지 않도록 클램프
     y = max(int(H * 0.05), min(y_start_raw, H - MARK_PAD - total_h - 20))
 
-    # ── Line 1 (흰색) ─────────────────────────────────────
+    # ── 글자 배경 강조 (text highlight box) ──────────────
+    if text_bg_color and text_bg_opacity > 0:
+        bg_rgb = _hex_to_rgb(text_bg_color)
+        bg_alpha = int(text_bg_opacity * 2.55)
+        PAD_X, PAD_Y = 28, 14
+        # 전체 텍스트 블록 너비 기준 배경 박스
+        all_lines = l1_lines + l2_lines
+        all_fonts = [font_l1]*len(l1_lines) + [font_l2]*len(l2_lines)
+        max_tw = 0
+        for ln, fnt in zip(all_lines, all_fonts):
+            if letter_spacing:
+                tw = _measure_spaced(draw, ln, fnt, letter_spacing)
+            else:
+                try:
+                    tw = draw.textbbox((0,0), ln, font=fnt)[2]
+                except Exception:
+                    tw = 0
+            max_tw = max(max_tw, tw)
+        box_w = max_tw + PAD_X * 2
+        box_h = total_h + PAD_Y * 2
+        box_x = _x(max_tw) - PAD_X
+        box_y = y - PAD_Y
+        # 반투명 사각형 레이어
+        bg_layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        bg_draw  = ImageDraw.Draw(bg_layer)
+        try:
+            bg_draw.rounded_rectangle(
+                [box_x, box_y, box_x + box_w, box_y + box_h],
+                radius=16, fill=(*bg_rgb, bg_alpha)
+            )
+        except Exception:
+            bg_draw.rectangle(
+                [box_x, box_y, box_x + box_w, box_y + box_h],
+                fill=(*bg_rgb, bg_alpha)
+            )
+        img = Image.alpha_composite(img, bg_layer)
+        draw = ImageDraw.Draw(img)
+
+    # ── Line 1 ────────────────────────────────────────────
     for l in l1_lines:
-        bbox = draw.textbbox((0, 0), l, font=font_l1)
-        tw = bbox[2] - bbox[0]
-        _shadow_text(draw, (_x(tw), y), l, font_l1,
-                     fill=white, shadow_color=(0,0,0,225), offset=5)
+        if letter_spacing:
+            tw = _measure_spaced(draw, l, font_l1, letter_spacing)
+            _draw_spaced(draw, _x(tw), y, l, font_l1,
+                         line1_fill, (0,0,0,225), 5, letter_spacing)
+        else:
+            bbox = draw.textbbox((0, 0), l, font=font_l1)
+            tw = bbox[2] - bbox[0]
+            _shadow_text(draw, (_x(tw), y), l, font_l1,
+                         fill=line1_fill, shadow_color=(0,0,0,225), offset=5)
         y += dy1
 
-    # ── Line 2 (강조색) ───────────────────────────────────
+    # ── Line 2 ────────────────────────────────────────────
     if l2_lines:
         y += LINE_GAP
         for l in l2_lines:
-            bbox = draw.textbbox((0, 0), l, font=font_l2)
-            tw = bbox[2] - bbox[0]
-            _shadow_text(draw, (_x(tw), y), l, font_l2,
-                         fill=accent, shadow_color=(0,0,0,225), offset=5)
+            if letter_spacing:
+                tw = _measure_spaced(draw, l, font_l2, letter_spacing)
+                _draw_spaced(draw, _x(tw), y, l, font_l2,
+                             accent, (0,0,0,225), 5, letter_spacing)
+            else:
+                bbox = draw.textbbox((0, 0), l, font=font_l2)
+                tw = bbox[2] - bbox[0]
+                _shadow_text(draw, (_x(tw), y), l, font_l2,
+                             fill=accent, shadow_color=(0,0,0,225), offset=5)
             y += dy2
 
     # ── 워터마크 ──────────────────────────────────────────
