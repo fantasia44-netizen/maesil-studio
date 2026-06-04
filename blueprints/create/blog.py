@@ -831,25 +831,23 @@ def blog_thumbnail():
                 max_tokens=220,
                 model='claude-sonnet-4-6',
             )
-            bg_prompt = bg_prompt.strip().strip('"\'')
+            bg_prompt = bg_prompt.strip().strip('"\'').strip()
             logger.info(
                 f'[thumbnail] context_len={len(context_str)} '
-                f'→ FLUX prompt: {bg_prompt[:150]}'
+                f'bg_topic={bg_topic[:50]!r} '
+                f'→ FLUX prompt: {bg_prompt[:200]}'
             )
         except Exception as e:
-            logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패: {e}')
+            logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패 → 폴백 사용: {e}')
             bg_prompt = (
                 'dark atmospheric interior space with dramatic directional lighting, '
-                'photorealistic DSLR photography, dark exposure, no people, no text in image'
+                'photorealistic DSLR photography, dark exposure, '
+                'no people, no text in image'
             )
-        else:
-            bg_prompt = (
-                'abstract dark atmospheric background, dramatic directional lighting, '
-                'textured surface bokeh, photorealistic, high quality DSLR, '
-                'dark moody tones, suitable as text overlay background'
-            )
+
         try:
             bg_url, _ = _generate_flux(bg_prompt, 'flux_standard', '1080x1080')
+            logger.info(f'[thumbnail] FLUX 배경 생성 완료: {bg_url[:80]}')
         except Exception as e:
             logger.warning(f'[blog/thumbnail] FLUX 배경 실패 → PIL 폴백: {e}')
 
