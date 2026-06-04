@@ -868,19 +868,16 @@ function previewBgUpload(input) {
 
 // ── 실시간 미리보기 업데이트 ─────────────────────────────────
 function updateThumbPreview() {
-  // 설정 변경 시 이전 생성 URL 무효화 → 재생성 필요
+  // 설정 변경 시 — 이전 이미지는 그대로 두고 "변경됨" 배지만 표시
+  // (사라지지 않으니 배경을 잃을 일 없음. 다운로드는 비활성화)
   if (_thumbPreviewUrl) {
-    _thumbPreviewUrl = null;
-    document.getElementById('thumbRealPreview')?.classList.add('d-none');
-    document.getElementById('thumbPreview').style.opacity = '1';
     const caption = document.getElementById('thumbPreviewCaption');
-    // 배경 키워드(bgTopic)가 그대로면 무료 재합성 가능 알림
     const curBgTopic = document.getElementById('thumbBgTopic')?.value.trim() || '';
     const sameBg     = _thumbBgUrl && curBgTopic === _thumbLastBgTopic;
     if (caption) {
       caption.innerHTML = sameBg
-        ? '<i class="bi bi-info-circle me-1" style="color:#3b82f6"></i>CSS 미리보기 — <strong>같은 배경에 텍스트만 재합성 (무료)</strong>'
-        : 'CSS 미리보기 — 설정이 변경되었습니다. 재생성하세요.';
+        ? '<i class="bi bi-exclamation-circle me-1" style="color:#f59e0b"></i>설정 변경됨 — <strong>텍스트만 재합성 (무료)</strong>을 눌러 반영하세요'
+        : '<i class="bi bi-exclamation-circle me-1" style="color:#f59e0b"></i>설정 변경됨 — 재생성하세요';
     }
     const btnText = document.getElementById('thumbGenBtnText');
     if (btnText) btnText.textContent = sameBg ? '텍스트만 재합성 (무료)' : '썸네일 다시 생성';
