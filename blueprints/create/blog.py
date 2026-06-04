@@ -886,11 +886,15 @@ def blog_thumbnail():
         background_url=bg_url,
         brand_name=brand_name,
         accent_color=accent_color,
+        line1_color=line1_color,
         use_quotes=use_quotes,
         text_y_pct=text_y_pct,
         font_size_pct=font_size_pct,
         overlay_darkness=overlay_darkness,
         text_align=text_align,
+        letter_spacing=letter_spacing,
+        text_bg_color=text_bg_color,
+        text_bg_opacity=text_bg_opacity,
     )
     b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
 
