@@ -759,30 +759,36 @@ def blog_thumbnail():
     if not line1:
         return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
 
-    # ── 포인트 처리 (FLUX 신규 생성 시 100P, 기존 배경 재사용은 0P) ──
+    # ── 포인트 처리 + creations 행 1개 생성 (마지막에 done으로 UPDATE) ──
     # existing_bg_url이 있으면 FLUX 호출 안 함 → 무료 (텍스트만 재합성)
     will_generate_flux = use_flux and not existing_bg_url
     cost = 100 if will_generate_flux else 0
+    import uuid as _uuid2
+    cid = str(_uuid2.uuid4())   # 무료 모드에서도 cid 정의 (이후 update에서 사용)
+
     if cost:
         from services.point_service import get_balance, use_points, InsufficientPoints
-        from models import POINT_COSTS
         balance = get_balance(current_user)
         if balance < cost:
             return jsonify(ok=False,
                            message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
         try:
-            import uuid as _uuid2
-            cid = str(_uuid2.uuid4())
             now_s = now_kst().isoformat()
             if current_app.supabase:
-                current_app.supabase.table('creations').insert({
+                _row = {
                     'id': cid, 'user_id': current_user.id,
                     'creation_type': 'blog_thumbnail',
-                    'input_data': {'line1': line1, 'line2': line2, 'accent': accent_color},
+                    'input_data': {
+                        'line1': line1, 'line2': line2,
+                        'accent': accent_color, 'bg_topic': bg_topic,
+                    },
                     'output_data': {}, 'points_used': cost,
                     'status': 'pending',
                     'created_at': now_s, 'updated_at': now_s,
-                }).execute()
+                }
+                if getattr(current_user, 'operator_id', None):
+                    _row['operator_id'] = current_user.operator_id
+                current_app.supabase.table('creations').insert(_row).execute()
             use_points(current_user, 'blog_thumbnail', cid, cost_override=cost)
         except InsufficientPoints as e:
             return jsonify(ok=False, message=str(e))
@@ -883,28 +889,22 @@ def blog_thumbnail():
     except Exception:
         public_url = b64   # 스토리지 실패 시 base64 직접
 
-    # ── 새로 FLUX 생성한 배경은 creations 테이블에 기록 (재사용 갤러리용) ──
-    # existing_bg_url 재사용은 기록 안 함 (중복 방지)
-    if will_generate_flux and bg_url:
+    # ── creations 행을 done으로 UPDATE (재사용 갤러리용 bg_url + thumbnail 저장) ──
+    # FLUX 신규 생성 시만 pending 행이 있음 → 그 행을 done으로 마감
+    if will_generate_flux and bg_url and current_app.supabase:
         try:
-            import uuid as _uuid3
             now_s = now_kst().isoformat()
-            row = {
-                'id': str(_uuid3.uuid4()),
-                'user_id': current_user.id,
-                'creation_type': 'blog_thumbnail',
-                'input_data': {'bg_topic': bg_topic, 'line1': line1[:30]},
-                'output_data': {'bg_url': bg_url, 'thumbnail_url': public_url},
-                'points_used': cost,
+            current_app.supabase.table('creations').update({
+                'output_data': {
+                    'bg_url': bg_url,
+                    'thumbnail_url': public_url,
+                },
                 'status': 'done',
-                'created_at': now_s, 'updated_at': now_s,
-            }
-            if getattr(current_user, 'operator_id', None):
-                row['operator_id'] = current_user.operator_id
-            if current_app.supabase:
-                current_app.supabase.table('creations').insert(row).execute()
+                'updated_at': now_s,
+            }).eq('id', cid).execute()
+            logger.info(f'[blog/thumbnail] creations 저장 완료 cid={cid[:8]} bg={bg_url[:60]}')
         except Exception as e:
-            logger.debug(f'[blog/thumbnail] creations 기록 실패: {e}')
+            logger.warning(f'[blog/thumbnail] creations 업데이트 실패: {e}')
 
     # bg_url: 프론트가 이 URL을 기억해서 텍스트만 수정 시 재사용 (100P 절약)
     return jsonify(ok=True, url=public_url, cost=cost, bg_url=bg_url or '')
@@ -921,10 +921,11 @@ def blog_thumbnail_recent_backgrounds():
     try:
         uid = current_user.id
         oid = getattr(current_user, 'operator_id', None)
+        # status 'done' + 호환을 위해 'pending' 행도 조회 (output_data에 bg_url 있는 것만 필터)
         q = (current_app.supabase.table('creations')
-             .select('id, input_data, output_data, created_at')
+             .select('id, input_data, output_data, created_at, status')
              .eq('creation_type', 'blog_thumbnail')
-             .eq('status', 'done'))
+             .in_('status', ['done', 'pending']))
         q = q.eq('operator_id', oid) if oid else q.eq('user_id', uid)
         rows = q.order('created_at', desc=True).limit(20).execute().data or []
 
