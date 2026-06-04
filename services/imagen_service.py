@@ -1076,7 +1076,7 @@ def generate_blog_thumbnail(
             return int(sz1)
 
     def _measure_spaced(draw, text, font, spacing):
-        “””자간 적용된 총 너비 계산.”””
+        # 자간 적용된 총 너비 계산
         total = 0
         for c in text:
             try:
@@ -1087,7 +1087,7 @@ def generate_blog_thumbnail(
         return max(0, total - spacing)
 
     def _draw_spaced(draw, x, y, text, font, fill, shadow_color, offset, spacing):
-        “””자간 적용 문자별 렌더링.”””
+        # 자간 적용 문자별 렌더링
         for c in text:
             _shadow_text(draw, (x, y), c, font, fill, shadow_color, offset)
             try:
