@@ -744,8 +744,8 @@ def blog_thumbnail():
     blog_text       = (data.get('blog_text') or '').strip()[:800]
     image_prompts   = (data.get('image_prompts') or '').strip()[:600]
     text_y_pct      = max(10, min(90, int(data.get('text_y_pct',  55))))
-    font_size_pct   = max(50, min(150, int(data.get('font_size_pct', 100))))
-    overlay_darkness = max(0, min(100, int(data.get('overlay_darkness', 65))))
+    font_size_pct   = max(50, min(150, int(data.get('font_size_pct', 115))))
+    overlay_darkness = max(0, min(100, int(data.get('overlay_darkness', 78))))
     text_align      = (data.get('text_align') or 'center').strip()
     if text_align not in ('center', 'left', 'right'):
         text_align = 'center'

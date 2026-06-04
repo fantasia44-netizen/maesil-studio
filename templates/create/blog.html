@@ -481,10 +481,10 @@
             <div class="mb-2">
               <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
                 글자 크기
-                <span id="thumbSizeLabel" class="text-muted fw-normal">100%</span>
+                <span id="thumbSizeLabel" class="text-muted fw-normal">115%</span>
               </label>
               <input type="range" class="form-range" id="thumbFontSize"
-                     min="65" max="140" value="100"
+                     min="65" max="140" value="115"
                      oninput="document.getElementById('thumbSizeLabel').textContent=this.value+'%'; updateThumbPreview()">
               <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
                 <span>작게</span><span>크게</span>
@@ -553,10 +553,10 @@
             <!-- 오버레이 강도 -->
             <div class="mb-3">
               <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
-                오버레이 강도 <span id="thumbOverlayLabel" class="text-muted fw-normal">65%</span>
+                오버레이 강도 <span id="thumbOverlayLabel" class="text-muted fw-normal">78%</span>
               </label>
               <input type="range" class="form-range" id="thumbOverlay"
-                     min="20" max="95" value="65"
+                     min="20" max="95" value="78"
                      oninput="document.getElementById('thumbOverlayLabel').textContent=this.value+'%'; updateThumbPreview()">
               <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
                 <span>밝음 (배경 잘 보임)</span><span>어둠 (텍스트 선명)</span>
@@ -972,8 +972,8 @@ function updateThumbPreview() {
   const l2Raw    = document.getElementById('thumbLine2')?.value.trim() || '서브 텍스트';
   const useQuote = document.getElementById('thumbUseQuotes')?.checked ?? false;
   const yPct     = parseInt(document.getElementById('thumbYPos')?.value  || 55);
-  const fontSize = parseInt(document.getElementById('thumbFontSize')?.value || 100);
-  const overlay  = parseInt(document.getElementById('thumbOverlay')?.value || 65);
+  const fontSize = parseInt(document.getElementById('thumbFontSize')?.value || 115);
+  const overlay  = parseInt(document.getElementById('thumbOverlay')?.value || 78);
   const watermark= document.getElementById('thumbWatermark')?.value.trim() || '';
 
   // 인용부호 적용
@@ -1159,8 +1159,8 @@ async function generateThumbPreview() {
         use_quotes:       document.getElementById('thumbUseQuotes')?.checked ?? false,
         bg_topic:         bgTopic,
         text_y_pct:       parseInt(document.getElementById('thumbYPos')?.value   || 55),
-        font_size_pct:    parseInt(document.getElementById('thumbFontSize')?.value || 100),
-        overlay_darkness: parseInt(document.getElementById('thumbOverlay')?.value  || 65),
+        font_size_pct:    parseInt(document.getElementById('thumbFontSize')?.value || 115),
+        overlay_darkness: parseInt(document.getElementById('thumbOverlay')?.value  || 78),
         text_align:       thumbAlign,
         // 블로그 글 내용 + 이미지 프롬프트 → Sonnet이 맥락 파악용
         blog_text:        (document.getElementById('blogTextArea')?.value || '').slice(0, 800),

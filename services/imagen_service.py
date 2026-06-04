@@ -996,8 +996,8 @@ def generate_blog_thumbnail(
     accent_color: str = '#FFD700',
     use_quotes: bool = True,
     text_y_pct: int = 55,        # 텍스트 블록 시작 Y 위치 (0-100%)
-    font_size_pct: int = 100,    # 폰트 크기 스케일 (50-150)
-    overlay_darkness: int = 65,  # 하단 오버레이 강도 (0-100)
+    font_size_pct: int = 115,    # 폰트 크기 스케일 (네이버 카드 축소 대응 — 기본 115%)
+    overlay_darkness: int = 78,  # 하단 오버레이 강도 (0-100, 텍스트 가독성 위해 78%)
     text_align: str = 'center',  # 'center' | 'left' | 'right'
 ) -> bytes:
     """블로그 썸네일 카드 생성 (1080×1080 PNG) — 비주얼 에디터 연동.
@@ -1038,8 +1038,8 @@ def generate_blog_thumbnail(
     # ── 폰트 ─────────────────────────────────────────────
     try:
         fp = _find_korean_font()
-        sz1 = int(H * 0.108 * scale)
-        sz2 = int(H * 0.094 * scale)
+        sz1 = int(H * 0.120 * scale)   # 10.8% → 12% (네이버 카드 가독성 개선)
+        sz2 = int(H * 0.104 * scale)   # 9.4%  → 10.4%
         szm = int(H * 0.036)
         font_l1   = ImageFont.truetype(fp, size=max(24, sz1))
         font_l2   = ImageFont.truetype(fp, size=max(20, sz2))
