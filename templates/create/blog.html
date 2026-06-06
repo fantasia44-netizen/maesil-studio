@@ -1334,22 +1334,9 @@ async function generateThumbPreview() {
       _thumbLastBgTopic = bgTopic;
     }
 
-    // 실제 이미지 표시 (CDN 캐시 완전 우회: fetch no-store → blob URL)
+    // 실제 이미지 표시 (서버가 매번 고유 파일명 사용 → URL 자체가 달라 캐시 무관)
     const imgEl = document.getElementById('thumbRealImg');
-    if (imgEl) {
-      if (data.url.startsWith('data:')) {
-        imgEl.src = data.url;
-      } else {
-        try {
-          const blob = await fetch(data.url, { cache: 'no-store' }).then(r => r.blob());
-          const prev = imgEl.src;
-          imgEl.src = URL.createObjectURL(blob);
-          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
-        } catch {
-          imgEl.src = data.url + '?_t=' + Date.now();
-        }
-      }
-    }
+    if (imgEl) imgEl.src = data.url;
     if (real)  real.classList.remove('d-none');
     if (mock)  mock.style.opacity = '0';
 

@@ -920,7 +920,9 @@ def blog_thumbnail():
     b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
 
     try:
-        public_url = upload_to_supabase(b64, current_user.id, 'blog_thumbnail.png')
+        import time as _time
+        _fname = f'blog_thumbnail_{int(_time.time())}.png'
+        public_url = upload_to_supabase(b64, current_user.id, _fname)
     except Exception:
         public_url = b64   # 스토리지 실패 시 base64 직접
 

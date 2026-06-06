@@ -473,26 +473,45 @@ def _topic_to_bg_scene(topic: str) -> str:
         return 'dark atmospheric cinematic background bokeh'
 
 
-def _find_korean_font() -> str:
-    candidates = [
+def _find_korean_font(bold: bool = False) -> str:
+    """한국어 폰트 경로 반환. bold=True면 Bold 우선 탐색."""
+    bold_candidates = [
+        'static/fonts/NanumGothicBold.ttf',          # Render buildCommand로 다운로드
+        '/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf',
+        'C:/Windows/Fonts/malgunbd.ttf',
+    ]
+    regular_candidates = [
+        'static/fonts/NanumGothic.ttf',
         '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',
         '/System/Library/Fonts/AppleSDGothicNeo.ttc',
         'C:/Windows/Fonts/malgun.ttf',
         '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc',
     ]
+    candidates = (bold_candidates + regular_candidates) if bold else (regular_candidates + bold_candidates)
     for path in candidates:
         if os.path.exists(path):
             return path
     # 자동 다운로드 (Render 등 클라우드 환경)
     import urllib.request
-    dest = '/tmp/NanumGothic.ttf'
-    if not os.path.exists(dest):
+    dest_bold = '/tmp/NanumGothicBold.ttf'
+    dest_reg  = '/tmp/NanumGothic.ttf'
+    if bold and not os.path.exists(dest_bold):
+        logger.info('[font] NanumGothicBold 자동 다운로드 중...')
+        try:
+            urllib.request.urlretrieve(
+                'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf',
+                dest_bold,
+            )
+            return dest_bold
+        except Exception:
+            pass
+    if not os.path.exists(dest_reg):
         logger.info('[font] NanumGothic 자동 다운로드 중...')
         urllib.request.urlretrieve(
             'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
-            dest,
+            dest_reg,
         )
-    return dest
+    return dest_reg
 
 
 # ════════════════════════════════════════════════════════
@@ -1061,15 +1080,16 @@ def generate_blog_thumbnail(
     img = Image.alpha_composite(bg, ov)
     draw = ImageDraw.Draw(img)
 
-    # ── 폰트 ─────────────────────────────────────────────
+    # ── 폰트 (썸네일은 항상 Bold — 일관된 두께 보장) ────────────
     try:
-        fp = _find_korean_font()
+        fp  = _find_korean_font(bold=True)   # 본문 줄 (Bold)
+        fpm = _find_korean_font(bold=False)  # 워터마크 (Regular)
         sz1 = int(H * 0.120 * scale)   # 10.8% → 12% (네이버 카드 가독성 개선)
         sz2 = int(H * 0.104 * scale)   # 9.4%  → 10.4%
         szm = int(H * 0.036)
-        font_l1   = ImageFont.truetype(fp, size=max(24, sz1))
-        font_l2   = ImageFont.truetype(fp, size=max(20, sz2))
-        font_mark = ImageFont.truetype(fp, size=max(16, szm))
+        font_l1   = ImageFont.truetype(fp,  size=max(24, sz1))
+        font_l2   = ImageFont.truetype(fp,  size=max(20, sz2))
+        font_mark = ImageFont.truetype(fpm, size=max(16, szm))
     except Exception:
         fp = None
         font_l1 = font_l2 = font_mark = ImageFont.load_default()
