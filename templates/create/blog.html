@@ -2564,7 +2564,9 @@ function openBlogRegenModal(vidx) {
   _blogRegenIdx    = vidx;
   _blogRegenNewUrl = null;
   const img        = window._validImgs?.[vidx];
-  const promptObj  = window._prompts?.[vidx];
+  // _prompts는 AI 생성 이미지만 포함 — 제품 원본(isOriginal) 슬롯 수만큼 offset 보정
+  const originCount = (window._validImgs || []).filter((g, i) => i < vidx && g.isOriginal).length;
+  const promptObj  = window._prompts?.[vidx - originCount];
   const promptHint = promptObj?.en || promptObj?.prompt || '';
   document.getElementById('blogRegenCurrentImg').src = img?.url || '';
   document.getElementById('blogRegenPrompt').value    = promptHint;
