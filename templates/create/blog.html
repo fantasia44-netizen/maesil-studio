@@ -1334,13 +1334,21 @@ async function generateThumbPreview() {
       _thumbLastBgTopic = bgTopic;
     }
 
-    // 실제 이미지 표시 (캐시 방지: 동일 Supabase URL이라도 새로 로드)
+    // 실제 이미지 표시 (CDN 캐시 완전 우회: fetch no-store → blob URL)
     const imgEl = document.getElementById('thumbRealImg');
     if (imgEl) {
-      const freshUrl = data.url.startsWith('data:')
-        ? data.url
-        : data.url + (data.url.includes('?') ? '&' : '?') + '_t=' + Date.now();
-      imgEl.src = freshUrl;
+      if (data.url.startsWith('data:')) {
+        imgEl.src = data.url;
+      } else {
+        try {
+          const blob = await fetch(data.url, { cache: 'no-store' }).then(r => r.blob());
+          const prev = imgEl.src;
+          imgEl.src = URL.createObjectURL(blob);
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        } catch {
+          imgEl.src = data.url + '?_t=' + Date.now();
+        }
+      }
     }
     if (real)  real.classList.remove('d-none');
     if (mock)  mock.style.opacity = '0';
