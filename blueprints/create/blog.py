@@ -799,6 +799,17 @@ def blog_thumbnail():
         if balance < cost:
             return jsonify(ok=False,
                            message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
+
+        # brand_id 자동 결정 (creations NOT NULL 제약 회피 — 운영자 환경 호환)
+        # 클라이언트가 brand_id를 보내지 않으므로 기본 브랜드로 fallback
+        _brand_id_for_thumb = (data.get('brand_id') or '').strip()
+        if not _brand_id_for_thumb:
+            try:
+                _default = get_default_brand(current_app.supabase)
+                _brand_id_for_thumb = (_default or {}).get('id') or None
+            except Exception:
+                _brand_id_for_thumb = None
+
         try:
             now_s = now_kst().isoformat()
             if current_app.supabase:
@@ -813,14 +824,35 @@ def blog_thumbnail():
                     'status': 'pending',
                     'created_at': now_s, 'updated_at': now_s,
                 }
+                if _brand_id_for_thumb:
+                    _row['brand_id'] = _brand_id_for_thumb
                 if getattr(current_user, 'operator_id', None):
                     _row['operator_id'] = current_user.operator_id
-                current_app.supabase.table('creations').insert(_row).execute()
+                try:
+                    current_app.supabase.table('creations').insert(_row).execute()
+                except Exception as ins_e:
+                    # brand_id 컬럼이 NOT NULL인데 fallback도 실패한 경우 → operator_id 빼고 재시도
+                    logger.warning(f'[blog/thumbnail] insert 1차 실패 → 최소 컬럼 재시도: {ins_e}')
+                    _min_row = {k: v for k, v in _row.items()
+                                if k in ('id','user_id','operator_id','brand_id','creation_type',
+                                         'input_data','output_data','points_used','status',
+                                         'created_at','updated_at')}
+                    current_app.supabase.table('creations').insert(_min_row).execute()
             use_points(current_user, 'blog_thumbnail', cid, cost_override=cost)
+            logger.info(
+                f'[blog/thumbnail] 포인트 차감 완료 cid={cid[:8]} cost={cost}P '
+                f'uid={current_user.id[:8]} oid={(getattr(current_user,"operator_id","") or "")[:8]} '
+                f'brand={(_brand_id_for_thumb or "")[:8]}'
+            )
         except InsufficientPoints as e:
             return jsonify(ok=False, message=str(e))
         except Exception as e:
-            logger.warning(f'[blog/thumbnail] 포인트 처리 오류: {e}')
+            # 사일런트 무시 → 사용자에게 명확히 알림
+            logger.error(f'[blog/thumbnail] 포인트/DB 처리 실패: {e}', exc_info=True)
+            return jsonify(
+                ok=False,
+                message=f'썸네일 생성을 시작할 수 없습니다. ({str(e)[:120]})'
+            )
 
     # ── FLUX 배경 생성 (또는 기존 배경 재사용 / 직접 업로드) ───
     bg_url = None

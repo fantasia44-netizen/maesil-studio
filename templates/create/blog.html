@@ -1300,6 +1300,8 @@ async function generateThumbPreview() {
       body: JSON.stringify({
         line1:            l1,
         line2:            document.getElementById('thumbLine2')?.value.trim() || '',
+        // 현재 선택된 브랜드 ID 전달 — creations.brand_id NOT NULL 회피 (운영자 환경)
+        brand_id:         document.getElementById('brandSelect')?.value || '',
         brand_name:       watermark,
         accent_color:     thumbAccentColor,
         use_flux:         useFlux,
