@@ -960,11 +960,16 @@ def blog_thumbnail_recent_backgrounds():
         oid = getattr(current_user, 'operator_id', None)
         # status 'done' + 호환을 위해 'pending' 행도 조회 (output_data에 bg_url 있는 것만 필터)
         q = (current_app.supabase.table('creations')
-             .select('id, input_data, output_data, created_at, status')
+             .select('id, user_id, operator_id, input_data, output_data, created_at, status')
              .eq('creation_type', 'blog_thumbnail')
              .in_('status', ['done', 'pending']))
-        q = q.eq('operator_id', oid) if oid else q.eq('user_id', uid)
-        rows = q.order('created_at', desc=True).limit(20).execute().data or []
+        # 운영자 모드: 이전 행은 user_id만 있을 수 있으므로 OR로 둘 다 조회
+        if oid:
+            q = q.or_(f'operator_id.eq.{oid},user_id.eq.{uid}')
+        else:
+            q = q.eq('user_id', uid)
+        rows = q.order('created_at', desc=True).limit(30).execute().data or []
+        logger.info(f'[blog/thumbnail/recent] uid={uid[:8]} oid={(oid or "")[:8]} rows={len(rows)}')
 
         out, seen = [], set()
         for r in rows:
