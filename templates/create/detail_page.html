@@ -1,42 +1,73 @@
 {% extends 'base.html' %}
-{% block title %}상세페이지 기획서 — 매실 스튜디오{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 상세페이지 기획서{% endblock %}
+{% block title %}상세페이지 초안 제안서 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 상세페이지 초안{% endblock %}
 
 {% block content %}
 <style>
-  .section-card { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 1rem; }
-  .section-card-header { background: #f8faff; border-bottom: 1px solid #e5e7eb; padding: .65rem 1rem; display: flex; align-items: center; gap: .6rem; }
-  .section-no { background: #4b5cde; color: #fff; font-size: .75rem; font-weight: 700; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .section-name { font-weight: 700; font-size: .9rem; color: #1a2332; }
-  .section-purpose { font-size: .75rem; color: #6b7280; margin-left: auto; font-style: italic; }
-  .section-body { padding: .9rem 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-  @media (max-width: 768px) { .section-body { grid-template-columns: 1fr; } }
-  .field-box { border-radius: 8px; padding: .75rem; position: relative; }
-  .field-box.scene { background: #fdf6f8; border: 1px solid #fbd5de; }
-  .field-box.copy  { background: #f0f7ff; border: 1px solid #bfdbfe; }
-  .field-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
-  .field-box.scene .field-label { color: #e8355a; }
-  .field-box.copy  .field-label { color: #4b5cde; }
-  .field-text { font-size: .82rem; color: #374151; line-height: 1.65; white-space: pre-wrap; }
-  .copy-btn { position: absolute; top: .5rem; right: .5rem; font-size: .7rem; padding: .15rem .5rem; }
-  .appeal-card { border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: .5rem; }
-  .appeal-point-tag { display: inline-block; background: #e8f4fd; color: #1d4ed8; border-radius: 20px; padding: .2rem .75rem; font-size: .78rem; font-weight: 600; margin: .2rem .2rem 0 0; }
+/* ── 스텝 인디케이터 ── */
+.step-bar { display:flex; gap:.5rem; margin-bottom:1.5rem; }
+.step-item { flex:1; text-align:center; padding:.45rem .5rem; border-radius:8px; font-size:.78rem; font-weight:600; border:2px solid #e5e7eb; color:#9ca3af; transition:.2s; }
+.step-item.active  { border-color:#4b5cde; color:#4b5cde; background:#f0f3ff; }
+.step-item.done    { border-color:#10b981; color:#10b981; background:#f0fdf4; }
+
+/* ── 타입 카드 ── */
+.type-card { border:2px solid #e5e7eb; border-radius:12px; padding:1.1rem 1.2rem; cursor:pointer; transition:.18s; }
+.type-card:hover   { border-color:#4b5cde; background:#f8faff; }
+.type-card.selected{ border-color:#4b5cde; background:#eef1ff; }
+.type-card .type-name { font-weight:700; font-size:.95rem; color:#1a2332; margin-bottom:.3rem; }
+.type-card .type-desc { font-size:.78rem; color:#6b7280; line-height:1.5; }
+.section-pill { display:inline-block; background:#f3f4f6; border-radius:4px; padding:.1rem .45rem; font-size:.7rem; color:#374151; margin:.15rem .1rem 0 0; }
+
+/* ── 섹션 카드 ── */
+.sec-card { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; margin-bottom:1rem; }
+.sec-header { background:#1a2332; color:#fff; padding:.55rem .9rem; display:flex; align-items:center; gap:.6rem; }
+.sec-no { background:#4b5cde; color:#fff; font-size:.72rem; font-weight:700; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.sec-name { font-weight:700; font-size:.88rem; }
+.sec-purpose { font-size:.72rem; color:#94a3c8; margin-left:auto; font-style:italic; max-width:300px; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sec-body { display:grid; grid-template-columns:1fr 1fr; }
+@media(max-width:768px){ .sec-body{grid-template-columns:1fr;} }
+.sec-img-box { position:relative; background:#e8ebf5; min-height:220px; display:flex; align-items:center; justify-content:center; }
+.sec-img-box img { width:100%; height:220px; object-fit:cover; display:block; }
+.sec-img-spinner { text-align:center; color:#9ca3af; font-size:.8rem; padding:1.5rem; }
+.sec-img-actions { position:absolute; bottom:.5rem; right:.5rem; display:flex; gap:.3rem; }
+.sec-copy-box { padding:1rem; background:#fafbff; display:flex; flex-direction:column; border-left:1px solid #e5e7eb; }
+.sec-copy-box textarea { border:1px solid #d1d5db; border-radius:6px; padding:.6rem; font-size:.82rem; color:#1a2332; resize:vertical; flex:1; min-height:140px; line-height:1.6; }
+.sec-copy-actions { display:flex; justify-content:flex-end; gap:.4rem; margin-top:.5rem; }
+
+/* ── 소구포인트 분석 ── */
+.appeal-mini { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.6rem; margin-bottom:.8rem; }
+@media(max-width:600px){ .appeal-mini{grid-template-columns:1fr;} }
+.appeal-box { border-radius:8px; padding:.7rem .9rem; }
+.appeal-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.3rem; }
+.appeal-val { font-size:.8rem; color:#374151; line-height:1.5; }
+.appeal-tag { display:inline-block; background:#e0e7ff; color:#3730a3; border-radius:20px; padding:.15rem .65rem; font-size:.74rem; font-weight:600; margin:.15rem .1rem 0 0; }
+
+/* ── 진행 바 ── */
+.gen-progress-wrap { background:#f3f4f6; border-radius:8px; overflow:hidden; height:8px; margin:.6rem 0; }
+.gen-progress-bar  { background:#4b5cde; height:8px; transition:width .4s; }
 </style>
 
+<div class="step-bar" id="stepBar">
+  <div class="step-item active" id="step1Label">① 입력</div>
+  <div class="step-item" id="step2Label">② 타입 선택</div>
+  <div class="step-item" id="step3Label">③ 이미지 생성</div>
+  <div class="step-item" id="step4Label">④ 내보내기</div>
+</div>
+
+<!-- ══ STEP 1: 입력 폼 ══════════════════════════════════════ -->
+<div id="stepInput">
 <div class="row g-4">
-  <!-- ── 왼쪽: 입력 폼 ── -->
-  <div class="col-lg-4">
+  <div class="col-lg-5">
     <div class="card">
       <div class="card-header py-3">
         <h6 class="mb-0 fw-bold">
-          <i class="bi bi-layout-text-sidebar me-2" style="color:#4b5cde"></i>상세페이지 기획서
-          <span class="badge ms-1" style="background:#4b5cde">150P</span>
+          <i class="bi bi-layout-text-sidebar me-2" style="color:#4b5cde"></i>상세페이지 초안 제안서
+          <span class="badge ms-1" style="background:#4b5cde">150P + 이미지 생성비</span>
         </h6>
       </div>
       <div class="card-body p-4">
-        <form id="genForm">
+        <form id="planForm">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
           <div class="mb-3">
             <label class="form-label fw-semibold small">브랜드 선택</label>
             <select name="brand_id" id="dpBrandSelect" class="form-select form-select-sm"
@@ -46,175 +77,211 @@
               {% endfor %}
             </select>
           </div>
-
           <div class="mb-3">
             <label class="form-label fw-semibold small">상품명/카테고리 <span class="text-danger">*</span></label>
-            <input type="text" name="product_name" class="form-control form-control-sm"
+            <input type="text" name="product_name" id="inputProductName" class="form-control form-control-sm"
                    placeholder="예: 비타민C 세럼 30ml" required>
           </div>
-
           <div class="mb-3">
             <label class="form-label fw-semibold small">핵심 기능/특징 <span class="text-danger">*</span></label>
             <textarea name="features" class="form-control form-control-sm" rows="3"
                       placeholder="예: 고농도 비타민C 15%, 저자극 포뮬러, 흡수 빠름" required></textarea>
           </div>
-
           <div class="mb-3">
             <label class="form-label fw-semibold small">타겟 고객 <span class="text-muted">(선택)</span></label>
             <input type="text" name="target_customer" class="form-control form-control-sm"
                    placeholder="예: 30대 직장여성, 피부 트러블 고민">
           </div>
-
           <div class="mb-3">
             <label class="form-label fw-semibold small">가격대 <span class="text-muted">(선택)</span></label>
-            <input type="text" name="price_range" class="form-control form-control-sm"
-                   placeholder="예: 2만원대">
+            <input type="text" name="price_range" class="form-control form-control-sm" placeholder="예: 2만원대">
           </div>
-
           <div class="mb-4">
             <label class="form-label fw-semibold small">경쟁 대비 차별점 <span class="text-muted">(선택)</span></label>
             <input type="text" name="differentiator" class="form-control form-control-sm"
                    placeholder="예: 국내 최초 특허 성분 함유">
           </div>
-
-          <button type="submit" id="genBtn" class="btn w-100 fw-semibold py-2" style="background:#4b5cde;color:#fff">
-            <span class="normal-text"><i class="bi bi-magic me-1"></i>기획서 생성 (150P)</span>
-            <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>기획 중...</span>
+          <button type="submit" id="planBtn" class="btn w-100 fw-semibold py-2" style="background:#4b5cde;color:#fff">
+            <span class="normal-text"><i class="bi bi-magic me-1"></i>3가지 초안 기획 시작 (150P)</span>
+            <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>기획 중 (30~60초)...</span>
           </button>
         </form>
-
         <div class="mt-3 rounded-3 p-3" style="background:#f8faff;border:1px solid #c7d2fe;font-size:.75rem;color:#3730a3;line-height:1.6">
           <i class="bi bi-info-circle me-1"></i>
-          소구포인트 분석 + 섹션별 <strong>비주얼 디렉션</strong> + <strong>카피</strong>를 생성합니다.<br>
-          디자인 업체에 그대로 전달할 수 있는 기획서 형식입니다.
+          <strong>공감형 / 스토리형 / 데이터형</strong> 3가지 방향 초안을 동시에 생성합니다.<br>
+          선택 후 섹션별 스케치 이미지를 생성 (50P/장)하고 PNG·PDF로 내보낼 수 있습니다.
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- 최근 이력 -->
-    {% if brands %}
-    <div class="card mt-3">
+  <div class="col-lg-7">
+    <div class="card">
       <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <span class="fw-semibold small"><i class="bi bi-clock-history me-1" style="color:#4b5cde"></i>최근 기획서</span>
+        <span class="fw-semibold small"><i class="bi bi-clock-history me-1" style="color:#4b5cde"></i>최근 초안</span>
         <select id="dpRedoBrandSelect" class="form-select form-select-sm" style="width:auto;min-width:130px"
                 onchange="loadDpRecentDone(this.value)">
           <option value="">브랜드 선택</option>
-          {% for b in brands %}
-          <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}</option>
-          {% endfor %}
+          {% for b in brands %}<option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>{{ b.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="card-body p-3">
-        <div id="dpRedoList">
-          <div class="text-muted small text-center py-2">브랜드를 선택하면 이력이 표시됩니다.</div>
-        </div>
+        <div id="dpRedoList"><div class="text-muted small text-center py-3">브랜드를 선택하면 최근 이력이 표시됩니다.</div></div>
       </div>
     </div>
-    {% endif %}
+  </div>
+</div>
+</div><!-- /stepInput -->
+
+
+<!-- ══ STEP 2: 타입 선택 ════════════════════════════════════ -->
+<div id="stepTypeSelect" style="display:none">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h6 class="fw-bold mb-0">기획 방향을 선택하세요</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(1)"><i class="bi bi-arrow-left me-1"></i>다시 입력</button>
+  </div>
+  <div id="typeCardList" class="row g-3 mb-3"></div>
+  <button id="startDraftBtn" class="btn fw-semibold px-4" style="background:#4b5cde;color:#fff" disabled
+          onclick="initDraftAndGenerate()">
+    <i class="bi bi-images me-1"></i>이 타입으로 이미지 생성 시작
+  </button>
+  <span class="text-muted small ms-2" id="imgCostHint"></span>
+</div>
+
+
+<!-- ══ STEP 3: 섹션 편집 ════════════════════════════════════ -->
+<div id="stepDraft" style="display:none">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h6 class="fw-bold mb-0" id="draftTitle">초안 제안서</h6>
+      <div class="text-muted small" id="draftSubtitle"></div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-secondary" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>타입 재선택</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="goStep(4)"><i class="bi bi-download me-1"></i>내보내기</button>
+    </div>
   </div>
 
-  <!-- ── 오른쪽: 결과 ── -->
-  <div class="col-lg-8">
-    <div id="resultWrap">
-      <!-- 빈 상태 -->
-      <div id="emptyState" class="card h-100">
-        <div class="card-body d-flex flex-column align-items-center justify-content-center py-5 text-muted">
-          <i class="bi bi-layout-text-sidebar mb-3" style="font-size:3rem;color:#c7d2fe"></i>
-          <div class="fw-semibold mb-1">기획서가 여기에 표시됩니다</div>
-          <div class="small">소구포인트 분석 → 섹션별 비주얼 디렉션 + 카피</div>
+  <!-- 소구포인트 분석 (접힘) -->
+  <div class="card mb-3">
+    <div class="card-header py-2 d-flex align-items-center" style="cursor:pointer" onclick="toggleAppeal()">
+      <h6 class="mb-0 fw-bold small"><i class="bi bi-bullseye me-2" style="color:#e8355a"></i>소구포인트 분석</h6>
+      <i class="bi bi-chevron-down ms-auto" id="appealChevron"></i>
+    </div>
+    <div class="card-body p-3" id="appealBody" style="display:none">
+      <div class="appeal-mini">
+        <div class="appeal-box" style="background:#fff8f0;border:1px solid #fed7aa">
+          <div class="appeal-label" style="color:#c2410c">타겟 고객</div>
+          <div class="appeal-val" id="aTarget"></div>
+        </div>
+        <div class="appeal-box" style="background:#fdf2f8;border:1px solid #f9a8d4">
+          <div class="appeal-label" style="color:#9d174d">핵심 불편함</div>
+          <div class="appeal-val" id="aPain"></div>
+        </div>
+        <div class="appeal-box" style="background:#f0fdf4;border:1px solid #86efac">
+          <div class="appeal-label" style="color:#166534">구매 트리거</div>
+          <div class="appeal-val" id="aTrigger"></div>
         </div>
       </div>
+      <div id="aPoints"></div>
+    </div>
+  </div>
 
-      <!-- 결과 컨테이너 (생성 후 표시) -->
-      <div id="resultContainer" style="display:none">
+  <!-- 이미지 생성 진행 바 (생성 중일 때만) -->
+  <div id="genProgressWrap" style="display:none" class="mb-3">
+    <div class="d-flex justify-content-between small text-muted mb-1">
+      <span>스케치 이미지 생성 중...</span>
+      <span id="genProgressText">0 / 0</span>
+    </div>
+    <div class="gen-progress-wrap"><div class="gen-progress-bar" id="genProgressBar" style="width:0%"></div></div>
+  </div>
 
-        <!-- 소구포인트 분석 -->
-        <div class="card mb-3" id="appealCard">
-          <div class="card-header py-3 d-flex align-items-center justify-content-between">
-            <h6 class="mb-0 fw-bold"><i class="bi bi-bullseye me-2" style="color:#e8355a"></i>소구포인트 분석</h6>
-            <button class="btn btn-sm btn-outline-secondary" onclick="copyAppeal()">
-              <i class="bi bi-clipboard me-1"></i>전체 복사
-            </button>
-          </div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <div class="appeal-card" style="background:#fff8f0;border:1px solid #fed7aa">
-                  <div class="fw-semibold small mb-1" style="color:#c2410c">👤 타겟 고객</div>
-                  <div class="small" id="appealTarget" style="color:#374151;line-height:1.6"></div>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="appeal-card" style="background:#fdf2f8;border:1px solid #f9a8d4">
-                  <div class="fw-semibold small mb-1" style="color:#9d174d">😤 핵심 불편함</div>
-                  <div class="small" id="appealPain" style="color:#374151;line-height:1.6"></div>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="appeal-card" style="background:#f0fdf4;border:1px solid #86efac">
-                  <div class="fw-semibold small mb-1" style="color:#166534">⚡ 구매 트리거</div>
-                  <div class="small" id="appealTrigger" style="color:#374151;line-height:1.6"></div>
-                </div>
-              </div>
-            </div>
-            <div class="mt-3">
-              <div class="fw-semibold small mb-2" style="color:#4b5cde">핵심 소구포인트</div>
-              <div id="appealPoints"></div>
-            </div>
-          </div>
-        </div>
+  <div id="sectionList"></div>
+</div>
 
-        <!-- 섹션 시나리오 -->
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <h6 class="fw-bold mb-0"><i class="bi bi-collection me-2" style="color:#4b5cde"></i>페이지 시나리오</h6>
-          <button class="btn btn-sm btn-outline-secondary" onclick="copyAllSections()">
-            <i class="bi bi-clipboard me-1"></i>전체 복사
-          </button>
-        </div>
-        <div id="sectionsList"></div>
 
+<!-- ══ STEP 4: 내보내기 ════════════════════════════════════ -->
+<div id="stepExport" style="display:none">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h6 class="fw-bold mb-0">초안 내보내기</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>편집으로</button>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card text-center p-4">
+        <i class="bi bi-file-image mb-2" style="font-size:2.5rem;color:#4b5cde"></i>
+        <div class="fw-bold mb-1">PNG 이미지</div>
+        <div class="text-muted small mb-3">섹션들을 세로로 이어붙인 긴 이미지<br>카카오톡·이메일로 바로 전달 가능</div>
+        <a id="exportPngBtn" class="btn fw-semibold" style="background:#4b5cde;color:#fff">
+          <i class="bi bi-download me-1"></i>PNG 다운로드
+        </a>
       </div>
     </div>
+    <div class="col-md-6">
+      <div class="card text-center p-4">
+        <i class="bi bi-file-earmark-pdf mb-2" style="font-size:2.5rem;color:#e8355a"></i>
+        <div class="fw-bold mb-1">PDF 문서</div>
+        <div class="text-muted small mb-3">인쇄 가능한 PDF<br>디자인 업체 공식 전달용</div>
+        <a id="exportPdfBtn" class="btn btn-outline-danger fw-semibold">
+          <i class="bi bi-download me-1"></i>PDF 다운로드
+        </a>
+      </div>
+    </div>
+  </div>
+  <div class="alert alert-info mt-3 small py-2">
+    <i class="bi bi-lightbulb me-1"></i>
+    내보내기 파일에는 각 섹션의 <strong>스케치 이미지 + 카피 + 역할 설명</strong>이 포함됩니다.
+    이미지가 아직 생성되지 않은 섹션은 빈 슬롯으로 표시됩니다.
   </div>
 </div>
 {% endblock %}
 
 {% block extra_script %}
 <script>
-let _currentData = null;
+const CSRF = document.querySelector('[name=csrf_token]').value;
+let _plans      = [];     // 3가지 플랜 (Step 2)
+let _selPlanIdx = -1;     // 선택된 플랜 인덱스
+let _draftId    = null;   // DB에 저장된 draft ID
+let _draftData  = null;   // 현재 draft output_data
 
-document.getElementById('genForm').addEventListener('submit', async (e) => {
+// ── 스텝 이동 ────────────────────────────────────────────
+function goStep(n) {
+  ['stepInput','stepTypeSelect','stepDraft','stepExport'].forEach((id, i) => {
+    document.getElementById(id).style.display = (i + 1 === n) ? '' : 'none';
+  });
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById(`step${i}Label`);
+    el.classList.toggle('active', i === n);
+    el.classList.toggle('done', i < n);
+  });
+}
+
+// ── STEP 1: 기획 생성 ────────────────────────────────────
+document.getElementById('planForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const btn = document.getElementById('genBtn');
+  const btn = document.getElementById('planBtn');
   btn.querySelector('.normal-text').classList.add('d-none');
   btn.querySelector('.loading-text').classList.remove('d-none');
   btn.disabled = true;
 
-  document.getElementById('emptyState').style.display = '';
-  document.getElementById('emptyState').querySelector('.fw-semibold').textContent = 'AI가 기획 중입니다...';
-  document.getElementById('resultContainer').style.display = 'none';
-
   try {
-    const fd   = new FormData(e.target);
+    const fd = new FormData(e.target);
     const body = {};
     fd.forEach((v, k) => { body[k] = v; });
 
-    const res  = await fetch('{{ url_for("create.detail_page_generate") }}', {
+    const res  = await fetch('{{ url_for("create.detail_page_plan") }}', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': body.csrf_token },
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify(body),
     });
-    const result = await res.json();
+    const data = await res.json();
+    if (!data.ok) { alert('오류: ' + data.message); return; }
 
-    if (result.ok && result.data) {
-      _renderResult(result.data);
-    } else {
-      document.getElementById('emptyState').querySelector('.fw-semibold').textContent =
-        '오류: ' + (result.message || '생성 실패');
-    }
+    _plans = data.plans || [];
+    _renderTypeCards();
+    goStep(2);
   } catch (err) {
-    document.getElementById('emptyState').querySelector('.fw-semibold').textContent =
-      '네트워크 오류가 발생했습니다.';
+    alert('네트워크 오류: ' + err.message);
   } finally {
     btn.querySelector('.normal-text').classList.remove('d-none');
     btn.querySelector('.loading-text').classList.add('d-none');
@@ -222,143 +289,276 @@ document.getElementById('genForm').addEventListener('submit', async (e) => {
   }
 });
 
-function _renderResult(data) {
-  _currentData = data;
-
-  // 구형 텍스트 (하위 호환)
-  if (data._legacy_text) {
-    document.getElementById('emptyState').style.display = '';
-    document.getElementById('emptyState').querySelector('.fw-semibold').textContent = data._legacy_text;
-    document.getElementById('resultContainer').style.display = 'none';
-    return;
-  }
-
-  const aa = data.appeal_analysis || {};
-  document.getElementById('appealTarget').textContent  = aa.target_customer || '-';
-  document.getElementById('appealPain').textContent    = aa.core_pain || '-';
-  document.getElementById('appealTrigger').textContent = aa.buy_trigger || '-';
-
-  const pointsEl = document.getElementById('appealPoints');
-  pointsEl.innerHTML = (aa.appeal_points || [])
-    .map(p => `<span class="appeal-point-tag">${_esc(p)}</span>`)
-    .join('');
-
-  const sectionsEl = document.getElementById('sectionsList');
-  sectionsEl.innerHTML = (data.sections || []).map(s => `
-    <div class="section-card">
-      <div class="section-card-header">
-        <div class="section-no">${s.no}</div>
-        <div class="section-name">${_esc(s.name)}</div>
-        <div class="section-purpose">${_esc(s.purpose || '')}</div>
+// ── STEP 2: 타입 카드 렌더링 ─────────────────────────────
+function _renderTypeCards() {
+  const list = document.getElementById('typeCardList');
+  const colors = ['#4b5cde','#e8355a','#059669'];
+  list.innerHTML = _plans.map((plan, idx) => {
+    const aa = plan.appeal_analysis || {};
+    const secs = (plan.sections || []).map(s => `<span class="section-pill">${_esc(s.name)}</span>`).join('');
+    return `
+    <div class="col-md-4">
+      <div class="type-card" id="typeCard_${idx}" onclick="selectType(${idx})" style="border-top:4px solid ${colors[idx]}">
+        <div class="type-name">${_esc(plan.type_name)}</div>
+        <div class="type-desc mb-2">${_esc((aa.buy_trigger || '').substring(0,80))}</div>
+        <div>${secs}</div>
       </div>
-      <div class="section-body">
-        <div class="field-box scene">
-          <div class="field-label">📐 비주얼 디렉션 (디자이너에게)</div>
-          <div class="field-text">${_esc(s.scene || '')}</div>
-          <button class="btn btn-sm btn-outline-secondary copy-btn" onclick="copyText(this, ${JSON.stringify(s.scene || '')})">복사</button>
+    </div>`;
+  }).join('');
+}
+
+function selectType(idx) {
+  _selPlanIdx = idx;
+  document.querySelectorAll('.type-card').forEach((el, i) => {
+    el.classList.toggle('selected', i === idx);
+  });
+  const plan    = _plans[idx];
+  const secCnt  = (plan.sections || []).length;
+  const cost    = secCnt * 50;
+  document.getElementById('imgCostHint').textContent = `섹션 ${secCnt}개 × 50P = ${cost.toLocaleString()}P 추가 소요`;
+  document.getElementById('startDraftBtn').disabled = false;
+}
+
+// ── STEP 3: 초안 초기화 + 이미지 생성 ───────────────────
+async function initDraftAndGenerate() {
+  if (_selPlanIdx < 0) return;
+  const plan        = _plans[_selPlanIdx];
+  const productName = document.getElementById('inputProductName').value.trim();
+  const brandId     = document.getElementById('dpBrandSelect').value;
+
+  // DB 저장
+  const initRes = await fetch('{{ url_for("create.detail_page_draft_init") }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ brand_id: brandId, product_name: productName, plan }),
+  }).then(r => r.json());
+
+  if (!initRes.ok) { alert('초안 저장 실패: ' + initRes.message); return; }
+  _draftId   = initRes.draft_id;
+  _draftData = {
+    type_name: plan.type_name, product_name: productName,
+    appeal_analysis: plan.appeal_analysis,
+    sections: plan.sections.map(s => ({...s, image_url: null, img_status: 'pending'})),
+  };
+
+  _renderDraft();
+  goStep(3);
+  _setExportLinks();
+
+  // 이미지 순차 생성
+  await _generateAllImages();
+}
+
+function _renderDraft() {
+  const od = _draftData;
+  document.getElementById('draftTitle').textContent = od.product_name + ' — 상세페이지 초안';
+  document.getElementById('draftSubtitle').textContent = od.type_name;
+
+  const aa = od.appeal_analysis || {};
+  document.getElementById('aTarget').textContent  = aa.target_customer || '-';
+  document.getElementById('aPain').textContent    = aa.core_pain || '-';
+  document.getElementById('aTrigger').textContent = aa.buy_trigger || '-';
+  const pts = document.getElementById('aPoints');
+  pts.innerHTML = (aa.appeal_points || []).map(p => `<span class="appeal-tag">${_esc(p)}</span>`).join('');
+
+  const list = document.getElementById('sectionList');
+  list.innerHTML = (od.sections || []).map(s => _secCardHTML(s)).join('');
+}
+
+function _secCardHTML(s) {
+  const imgContent = s.image_url
+    ? `<img src="${_esc(s.image_url)}" alt="섹션 ${s.no}">`
+    : `<div class="sec-img-spinner"><span class="spinner-border spinner-border-sm me-1"></span>${s.img_status === 'done' ? '이미지 없음' : '대기 중...'}</div>`;
+
+  return `
+  <div class="sec-card" id="secCard_${s.no}">
+    <div class="sec-header">
+      <div class="sec-no">${String(s.no).padStart(2,'0')}</div>
+      <div class="sec-name">${_esc(s.name)}</div>
+      <div class="sec-purpose">${_esc(s.purpose || '')}</div>
+    </div>
+    <div class="sec-body">
+      <div class="sec-img-box" id="secImg_${s.no}">${imgContent}
+        <div class="sec-img-actions">
+          <button class="btn btn-sm btn-light" onclick="regenImage(${s.no})" title="이미지 재생성" id="regenBtn_${s.no}">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
         </div>
-        <div class="field-box copy">
-          <div class="field-label">✍️ 카피</div>
-          <div class="field-text">${_esc(s.copy || '')}</div>
-          <button class="btn btn-sm btn-outline-primary copy-btn" onclick="copyText(this, ${JSON.stringify(s.copy || '')})">복사</button>
+      </div>
+      <div class="sec-copy-box">
+        <textarea id="secCopy_${s.no}" rows="5">${_escAttr(s.copy || '')}</textarea>
+        <div class="sec-copy-actions">
+          <button class="btn btn-sm btn-outline-secondary" onclick="saveCopy(${s.no})">저장</button>
+          <button class="btn btn-sm btn-outline-primary" onclick="copyCopy(${s.no})"><i class="bi bi-clipboard me-1"></i>복사</button>
         </div>
       </div>
     </div>
-  `).join('');
-
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('resultContainer').style.display = '';
+  </div>`;
 }
 
-function _esc(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    .replace(/\n/g, '<br>');
+async function _generateAllImages() {
+  const sections = _draftData.sections || [];
+  const wrap = document.getElementById('genProgressWrap');
+  const bar  = document.getElementById('genProgressBar');
+  const txt  = document.getElementById('genProgressText');
+  wrap.style.display = '';
+  let done = 0;
+
+  for (const sec of sections) {
+    txt.textContent = `${done} / ${sections.length}`;
+    bar.style.width = `${Math.round(done / sections.length * 100)}%`;
+
+    _setSecImgSpinner(sec.no, '생성 중...');
+    const result = await _genSectionImage(sec.no);
+    if (result.ok) {
+      sec.image_url  = result.image_url;
+      sec.img_status = 'done';
+      _setSecImg(sec.no, result.image_url);
+    } else {
+      sec.img_status = 'failed';
+      _setSecImgSpinner(sec.no, '생성 실패');
+    }
+    done++;
+  }
+  txt.textContent = `${done} / ${sections.length}`;
+  bar.style.width = '100%';
+  setTimeout(() => { wrap.style.display = 'none'; }, 1200);
 }
 
-function copyText(btn, text) {
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.textContent;
-    btn.textContent = '복사됨 ✓';
-    setTimeout(() => { btn.textContent = orig; }, 1500);
-  });
+async function _genSectionImage(secNo) {
+  try {
+    const res = await fetch('{{ url_for("create.detail_page_draft_gen_image") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ draft_id: _draftId, section_no: secNo }),
+    });
+    return await res.json();
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
 }
 
-function copyAppeal() {
-  if (!_currentData) return;
-  const aa = _currentData.appeal_analysis || {};
-  const txt = [
-    `[타겟 고객] ${aa.target_customer || ''}`,
-    `[핵심 불편함] ${aa.core_pain || ''}`,
-    `[구매 트리거] ${aa.buy_trigger || ''}`,
-    `[소구포인트] ${(aa.appeal_points || []).join(' / ')}`,
-  ].join('\n');
-  navigator.clipboard.writeText(txt);
+async function regenImage(secNo) {
+  const btn = document.getElementById(`regenBtn_${secNo}`);
+  if (btn) btn.disabled = true;
+  _setSecImgSpinner(secNo, '재생성 중...');
+  const result = await _genSectionImage(secNo);
+  if (result.ok) {
+    const sec = (_draftData.sections || []).find(s => s.no === secNo);
+    if (sec) { sec.image_url = result.image_url; sec.img_status = 'done'; }
+    _setSecImg(secNo, result.image_url);
+  } else {
+    _setSecImgSpinner(secNo, '실패: ' + (result.message || ''));
+  }
+  if (btn) btn.disabled = false;
 }
 
-function copyAllSections() {
-  if (!_currentData) return;
-  const txt = (_currentData.sections || []).map(s =>
-    `== 섹션 ${s.no}: ${s.name} ==\n[역할] ${s.purpose || ''}\n\n[비주얼 디렉션]\n${s.scene || ''}\n\n[카피]\n${s.copy || ''}`
-  ).join('\n\n' + '─'.repeat(40) + '\n\n');
-  navigator.clipboard.writeText(txt);
+function _setSecImgSpinner(no, msg) {
+  const el = document.getElementById(`secImg_${no}`);
+  if (el) el.innerHTML = `<div class="sec-img-spinner"><span class="spinner-border spinner-border-sm me-1"></span>${_esc(msg)}</div>
+    <div class="sec-img-actions"><button class="btn btn-sm btn-light" onclick="regenImage(${no})" id="regenBtn_${no}"><i class="bi bi-arrow-clockwise"></i></button></div>`;
 }
 
-// ── 최근 이력 ──────────────────────────────────
+function _setSecImg(no, url) {
+  const el = document.getElementById(`secImg_${no}`);
+  if (el) el.innerHTML = `<img src="${_esc(url)}" alt="섹션 ${no}">
+    <div class="sec-img-actions"><button class="btn btn-sm btn-light" onclick="regenImage(${no})" id="regenBtn_${no}"><i class="bi bi-arrow-clockwise"></i></button></div>`;
+}
+
+async function saveCopy(secNo) {
+  const val = document.getElementById(`secCopy_${secNo}`)?.value || '';
+  const res = await fetch('{{ url_for("create.detail_page_draft_update_copy") }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ draft_id: _draftId, section_no: secNo, copy: val }),
+  }).then(r => r.json());
+  if (res.ok) {
+    const sec = (_draftData.sections||[]).find(s=>s.no===secNo);
+    if (sec) sec.copy = val;
+  }
+}
+
+function copyCopy(secNo) {
+  const val = document.getElementById(`secCopy_${secNo}`)?.value || '';
+  navigator.clipboard.writeText(val);
+}
+
+function toggleAppeal() {
+  const body = document.getElementById('appealBody');
+  const chev = document.getElementById('appealChevron');
+  const visible = body.style.display !== 'none';
+  body.style.display = visible ? 'none' : '';
+  chev.className = visible ? 'bi bi-chevron-down ms-auto' : 'bi bi-chevron-up ms-auto';
+}
+
+// ── STEP 4: 내보내기 링크 ────────────────────────────────
+function _setExportLinks() {
+  if (!_draftId) return;
+  document.getElementById('exportPngBtn').href = `/create/detail-page/draft/${_draftId}/export/png`;
+  document.getElementById('exportPdfBtn').href = `/create/detail-page/draft/${_draftId}/export/pdf`;
+}
+
+// ── 최근 이력 ─────────────────────────────────────────────
 function _renderDpRedoList(items) {
   const box = document.getElementById('dpRedoList');
-  if (!box) return;
   if (!items || items.length === 0) {
-    box.innerHTML = '<div class="text-muted small text-center py-2">생성 이력이 없습니다.</div>';
-    return;
+    box.innerHTML = '<div class="text-muted small text-center py-3">생성 이력이 없습니다.</div>'; return;
   }
-  box.innerHTML = items.map(it => `
-    <div class="d-flex align-items-start justify-content-between rounded px-3 py-2 mb-1"
-         style="background:#fafafa;border:1px solid #e5e7eb">
+  box.innerHTML = items.map(it => {
+    const label = it.label ? `<span class="badge bg-info-subtle text-info me-1" style="font-size:.65rem">${_esc(it.label)}</span>` : '';
+    return `
+    <div class="d-flex align-items-start justify-content-between rounded px-3 py-2 mb-1" style="background:#fafafa;border:1px solid #e5e7eb">
       <div class="flex-fill min-w-0 me-2">
-        <div class="fw-semibold small text-truncate">${_escPlain(it.product_name || '제목 없음')}</div>
-        ${it.text_preview ? `<div class="text-muted" style="font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px">${_escPlain(it.text_preview)}…</div>` : ''}
-        <div class="text-muted" style="font-size:.7rem">${it.created_at || ''}</div>
+        <div class="fw-semibold small text-truncate">${label}${_esc(it.product_name||'제목 없음')}</div>
+        ${it.text_preview ? `<div class="text-muted" style="font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px">${_esc(it.text_preview)}…</div>` : ''}
+        <div class="text-muted" style="font-size:.68rem">${it.created_at||''}</div>
       </div>
       <button class="btn btn-sm py-0 px-2 flex-shrink-0"
-              style="font-size:.75rem;background:#4b5cde;color:#fff;border:none"
-              onclick="redoDpResult('${it.id}')">불러오기</button>
-    </div>`).join('');
+              style="font-size:.72rem;background:#4b5cde;color:#fff;border:none"
+              onclick="loadDraft('${it.id}', '${it.type}')">불러오기</button>
+    </div>`;
+  }).join('');
 }
 
-function _escPlain(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+async function loadDraft(id, type) {
+  if (type === 'detail_page_draft') {
+    const res = await fetch(`/create/detail-page/draft/${id}`).then(r => r.json());
+    if (res.ok && res.data) {
+      _draftId   = id;
+      _draftData = res.data;
+      _renderDraft();
+      goStep(3);
+      _setExportLinks();
+    } else {
+      alert(res.message || '불러오기 실패');
+    }
+  } else {
+    const res = await fetch(`/create/detail-page/result/${id}`).then(r => r.json());
+    if (res.ok && res.data) {
+      // 기획서 타입은 step3에 기존 방식으로 표시 (호환)
+      alert('이 항목은 구형 기획서 형식입니다. 새 초안 생성을 이용해 주세요.');
+    }
+  }
 }
 
 async function loadDpRecentDone(brandId) {
   const redoSel = document.getElementById('dpRedoBrandSelect');
   if (redoSel && brandId) redoSel.value = brandId;
-  const url = '{{ url_for("create.detail_page_recent_done") }}?brand_id=' + encodeURIComponent(brandId || '');
+  const url = '{{ url_for("create.detail_page_recent_done") }}?brand_id=' + encodeURIComponent(brandId||'');
   try {
     const data = await fetch(url).then(r => r.json());
     if (data.ok) _renderDpRedoList(data.items);
-  } catch (e) { console.warn('[loadDpRecentDone]', e); }
+  } catch {}
 }
 
-async function redoDpResult(creationId) {
-  try {
-    const res  = await fetch(`/create/detail-page/result/${creationId}`);
-    const data = await res.json();
-    if (data.ok && data.data) {
-      _renderResult(data.data);
-      document.getElementById('resultWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      alert(data.message || '불러오기 실패');
-    }
-  } catch (e) {
-    alert('불러오기 실패: ' + e.message);
-  }
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function _escAttr(s) { return _esc(s); }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const defaultBrandId = document.getElementById('dpBrandSelect')?.value;
-  if (defaultBrandId) loadDpRecentDone(defaultBrandId);
+  const id = document.getElementById('dpBrandSelect')?.value;
+  if (id) loadDpRecentDone(id);
 });
 </script>
 {% endblock %}

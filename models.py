@@ -76,6 +76,9 @@ POINT_COSTS = {
     'dp_block_image':       50,  # 블록 이미지 FLUX Schnell 생성
     'dp_bg_replace':        80,  # 블록 이미지 배경 교체 (Bria)
     'dp_flux_text':        300,  # FLUX 배경 + PIL 텍스트 오버레이
+    # 상세페이지 초안 제안서
+    'detail_page_plan':    150,  # Claude 3타입 기획서 생성
+    'detail_page_draft_image': 50,  # 섹션 스케치 이미지 (FLUX Schnell, 장당)
     # 상세페이지 이미지 세트 — 스토리 빌더 섹션별
     'detail_page_image':   250,  # 스토리 섹션 이미지 (PIL 합성, 실제 비용은 섹션별 override)
     # 배너 이미지
@@ -177,6 +180,9 @@ CREATION_LABELS = {
     'thumbnail_image':  '썸네일 이미지',
     'detail_image':     '상세페이지 이미지',
     'detail_page_image':'상세페이지 이미지 세트',
+    'detail_page_plan': '상세페이지 기획 (3타입)',
+    'detail_page_draft':'상세페이지 초안 제안서',
+    'detail_page_draft_image': '초안 섹션 이미지',
     'card_news':        '인스타 카드뉴스',
     'logo':             '브랜드 로고',
     'banner':           'AI 배너 이미지',
