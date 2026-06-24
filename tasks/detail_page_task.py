@@ -38,7 +38,7 @@ def generate_plan(
         os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
 
         system, user_prompt = build_plan_prompt(brand, input_data)
-        raw = generate_text(system, user_prompt, max_tokens=7000,
+        raw = generate_text(system, user_prompt, max_tokens=8000,
                             model='claude-sonnet-4-6')
 
         cleaned = raw.strip()

@@ -102,8 +102,8 @@ For each plan generate exactly 6 sections. Each section must have:
 - no: section number (1-6)
 - name: Korean section label (e.g. "첫인상·훅", "고객 공감", "솔루션 소개", "핵심 기능", "신뢰 증거", "구매 유도")
 - purpose: one Korean sentence explaining this section's psychological role in the scroll journey
-- copy: actual Korean copywriting for this section — headline (bold hook) + 1-2 supporting sentences
-- image_prompt: English prompt for FLUX sketch image — describe composition, mood, lighting, props, colors. Must be photorealistic scene with NO text/words in the image. Be specific: camera angle, background, subject placement, color palette.
+- copy: Korean copywriting — headline (max 20 chars) + 1 supporting sentence (max 60 chars). Keep it short.
+- image_prompt: English FLUX prompt — max 30 words. Camera angle, subject, background, lighting. No text in image.
 
 Output this exact JSON structure:
 {{
