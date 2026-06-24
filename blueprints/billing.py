@@ -976,7 +976,7 @@ def cancel_subscription():
              .is_('operator_id', 'null')
              .eq('user_id', current_user.id)
              .eq('status', 'active').execute())
-        flash('구독 자동갱신이 해제되었습니다. 현재 구독 기간 만료 후 무료 플랜으로 전환됩니다.', 'info')
+        flash('구독이 취소되었습니다. 현재 구독 기간 만료일까지 계속 이용할 수 있으며, 이후 자동 청구가 중단됩니다.', 'info')
     except Exception as e:
         logger.error(f'[BILLING] cancel error: {e}')
         flash('오류가 발생했습니다.', 'danger')
