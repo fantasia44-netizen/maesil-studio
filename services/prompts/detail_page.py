@@ -171,4 +171,4 @@ def build_image_prompt_for_section(section: dict, product_name: str) -> str:
             scene = val
             break
 
-    return f"{product_name} product, {scene}, high resolution, no text no words no letters"
+    return f"{scene}, high resolution, no text no words no letters in the image"
