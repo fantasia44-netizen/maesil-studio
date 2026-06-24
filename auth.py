@@ -310,10 +310,14 @@ def register():
                              and operator_id is not None)
         if not is_invited_member:
             try:
+                from datetime import timedelta
+                _trial_end = (now_kst() + timedelta(days=30)).isoformat()
                 sub_row = {
                     'user_id': user_id,
                     'plan_type': 'free',
                     'status': 'trial',
+                    'current_period_start': now_kst().isoformat(),
+                    'current_period_end':   _trial_end,
                     'created_at': now_kst().isoformat(),
                     'updated_at': now_kst().isoformat(),
                 }
