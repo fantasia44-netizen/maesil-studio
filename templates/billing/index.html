@@ -108,15 +108,15 @@
           <div class="mt-3">
             {% if subscription.auto_renewal %}
             <form method="POST" action="{{ url_for('billing.cancel_subscription') }}"
-                  onsubmit="return confirm('자동갱신을 해제하시겠습니까?\n현재 구독 기간은 계속 유지됩니다.')">
+                  onsubmit="return confirm('구독을 취소하시겠습니까?\n현재 구독 기간은 만료일까지 유지되며, 이후 자동 청구가 중단됩니다.')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-danger w-100">자동갱신 해제</button>
+              <button class="btn btn-sm btn-outline-danger w-100">구독 취소</button>
             </form>
             {% else %}
             <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.78rem">
               <i class="bi bi-exclamation-triangle me-1"></i>
-              자동갱신 해제 상태 — {{ subscription.current_period_end[:10] if subscription.current_period_end else '' }} 이후 무료 전환<br>
-              <span style="color:#92400e">이 날짜 이후 잔여 구독 포인트는 자동 소멸됩니다.</span>
+              구독 취소됨 — {{ subscription.current_period_end[:10] if subscription.current_period_end else '' }} 까지 이용 가능<br>
+              <span style="color:#92400e">만료 후 잔여 포인트는 자동 소멸됩니다.</span>
             </div>
             {% endif %}
           </div>
@@ -222,7 +222,7 @@
         <div class="table-responsive">
           <table class="table table-sm mb-0" style="font-size:.82rem">
             <thead class="table-light">
-              <tr><th class="ps-3">유형</th><th>금액</th><th>포인트</th><th>날짜</th><th>환불</th></tr>
+              <tr><th class="ps-3">유형</th><th>금액</th><th>포인트</th><th>날짜</th></tr>
             </thead>
             <tbody>
               {% for p in payments %}
@@ -235,17 +235,6 @@
                 <td>{{ p.amount | number }}원</td>
                 <td class="text-success fw-semibold">{{ ('+' + (p.points_granted | number) + 'P') if p.points_granted else '-' }}</td>
                 <td class="text-muted">{{ p.paid_at[:10] if p.paid_at else '-' }}</td>
-                <td>
-                  {% if not p.refund_status and p.status == 'paid' %}
-                  <button class="btn btn-outline-secondary btn-xs py-0 px-2"
-                          style="font-size:.75rem"
-                          onclick="openRefundModal('{{ p.payment_id }}', {{ p.amount }})">환불</button>
-                  {% elif p.refund_status == 'completed' %}
-                  <span class="text-muted small">환불완료</span>
-                  {% elif p.refund_status %}
-                  <span class="text-muted small">{{ p.refund_status }}</span>
-                  {% else %}-{% endif %}
-                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -426,33 +415,6 @@
             <i class="bi bi-credit-card me-2"></i>신용·체크카드로 결제
           </button>
         </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 환불 요청 모달 -->
-<div class="modal fade" id="refundModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header border-0 pb-0">
-        <h6 class="modal-title fw-bold">환불 요청</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body pt-2 pb-4">
-        <input type="hidden" id="refundPaymentId">
-        <p class="text-muted small mb-3">결제금액: <strong id="refundAmount"></strong></p>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold">환불 사유 <span class="text-danger">*</span></label>
-          <textarea id="refundReason" class="form-control form-control-sm" rows="3"
-                    placeholder="환불 사유를 입력해주세요."></textarea>
-        </div>
-        <div class="rounded-3 p-3 mb-3" style="background:#fff8f0;font-size:.78rem;color:#92400e;border:1px solid #fed7aa">
-          <i class="bi bi-info-circle me-1"></i>
-          결제일로부터 7일 이내 결제는 즉시 자동 환불됩니다. 이후에는 영업일 5일 내 수동 처리됩니다.
-        </div>
-        <button id="refundSubmitBtn" class="btn btn-danger w-100 fw-semibold"
-                onclick="submitRefund()">환불 신청</button>
       </div>
     </div>
   </div>
@@ -657,40 +619,6 @@ function startTestPayment() {
   if (!confirm('100원 실결제를 진행합니다.\n결제 후 즉시 환불이 가능합니다.\n계속하시겠습니까?')) return;
   _pgCtx = { type: 'test' };
   _pgPay('card');
-}
-
-function openRefundModal(paymentId, amount) {
-  document.getElementById('refundPaymentId').value = paymentId;
-  document.getElementById('refundAmount').textContent = amount.toLocaleString() + '원';
-  document.getElementById('refundReason').value = '';
-  new bootstrap.Modal(document.getElementById('refundModal')).show();
-}
-
-async function submitRefund() {
-  const paymentId = document.getElementById('refundPaymentId').value;
-  const reason    = document.getElementById('refundReason').value.trim();
-  if (!reason) { alert('환불 사유를 입력해주세요.'); return; }
-
-  const btn = document.getElementById('refundSubmitBtn');
-  btn.disabled = true;
-  btn.textContent = '처리 중...';
-
-  try {
-    const res  = await fetch('/billing/refund/request', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body:    JSON.stringify({ payment_id: paymentId, reason, amount: 0 }),
-    });
-    const data = await res.json();
-    bootstrap.Modal.getInstance(document.getElementById('refundModal')).hide();
-    alert(data.ok ? '✅ ' + data.message : '❌ ' + data.message);
-    if (data.ok) location.reload();
-  } catch (e) {
-    alert('오류: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '환불 신청';
-  }
 }
 
 async function _verify(paymentId, extra) {
