@@ -459,43 +459,45 @@ def detail_page_draft_load(draft_id: str):
     return jsonify(ok=True, data=row.get('output_data') or {})
 
 
-@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>', methods=['GET'])
+@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>', methods=['POST'])
 @login_required
 def detail_page_draft_export(draft_id: str, fmt: str):
-    """초안 내보내기 — fmt: png | pdf"""
-    from services.detail_page_draft_service import compose_draft_png, compose_draft_pdf
-
-    supabase = current_app.supabase
-    row      = _get_draft(supabase, draft_id)
-    if not row:
-        return jsonify(ok=False, message='초안을 찾을 수 없습니다.')
-
-    od           = row.get('output_data') or {}
-    product_name = od.get('product_name', '상품명')
+    """내보내기 Celery 태스크 제출 → task_id 반환. 워커에서 PNG/PDF 합성 후 Storage 업로드."""
+    from tasks.detail_page_task import export_draft
+    from services.config_service import get_config
 
     if fmt not in ('png', 'pdf'):
         return jsonify(ok=False, message=f'지원하지 않는 형식: {fmt}')
 
-    try:
-        if fmt == 'pdf':
-            data_bytes = compose_draft_pdf(od)
-            mimetype   = 'application/pdf'
-            filename   = f'상세페이지_초안_{product_name}.pdf'
-        else:
-            data_bytes = compose_draft_png(od)
-            mimetype   = 'image/png'
-            filename   = f'상세페이지_초안_{product_name}.png'
+    supabase = current_app.supabase
+    row = _get_draft(supabase, draft_id)
+    if not row:
+        return jsonify(ok=False, message='초안을 찾을 수 없습니다.')
 
-        from flask import make_response
-        resp = make_response(data_bytes)
-        resp.headers['Content-Type'] = mimetype
-        resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-        resp.headers['Content-Length'] = len(data_bytes)
-        return resp
-    except Exception as e:
-        logger.error(f'[dp_export] 오류: {e}', exc_info=True)
-        # 브라우저에서 바로 보이게 plain text로 반환
-        from flask import make_response
-        r = make_response(f'내보내기 오류: {type(e).__name__}: {e}', 500)
-        r.headers['Content-Type'] = 'text/plain; charset=utf-8'
-        return r
+    # 이미 생성된 URL이 있으면 즉시 반환
+    od = row.get('output_data') or {}
+    cached_url = od.get(f'export_{fmt}_url')
+    if cached_url:
+        return jsonify(ok=True, status='done', url=cached_url)
+
+    supabase_url = current_app.config.get('SUPABASE_URL') or get_config('supabase_url') or ''
+    supabase_key = current_app.config.get('SUPABASE_SERVICE_KEY') or get_config('supabase_service_key') or ''
+
+    task = export_draft.delay(draft_id, fmt, supabase_url, supabase_key)
+    return jsonify(ok=True, status='queued', task_id=task.id)
+
+
+@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>/status', methods=['GET'])
+@login_required
+def detail_page_draft_export_status(draft_id: str, fmt: str):
+    """내보내기 완료 여부 폴링 — done이면 url 반환."""
+    supabase = current_app.supabase
+    row = _get_draft(supabase, draft_id)
+    if not row:
+        return jsonify(ok=False, status='error', message='초안을 찾을 수 없습니다.')
+
+    od = row.get('output_data') or {}
+    url = od.get(f'export_{fmt}_url')
+    if url:
+        return jsonify(ok=True, status='done', url=url)
+    return jsonify(ok=True, status='generating')

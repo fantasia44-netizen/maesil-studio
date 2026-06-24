@@ -1,6 +1,7 @@
 """상세페이지 초안 Celery 태스크"""
 import json
 import logging
+import io
 
 from celery_app import celery
 
@@ -105,4 +106,47 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             supabase.table('creations').update({'output_data': od}).eq('id', draft_id).execute()
         except Exception:
             pass
+        raise
+
+
+# ── Phase 3: PNG/PDF 합성 및 Supabase 업로드 ─────────────────
+@celery.task(bind=True, name='tasks.detail_page_task.export_draft',
+             max_retries=1, soft_time_limit=180, time_limit=210)
+def export_draft(self, draft_id, fmt, supabase_url, supabase_key):
+    """PNG/PDF 합성 → Supabase Storage 업로드 → creations에 export URL 저장."""
+    _setup()
+    from supabase import create_client
+    supabase = create_client(supabase_url, supabase_key)
+
+    try:
+        r = supabase.table('creations').select('output_data, user_id').eq('id', draft_id).single().execute()
+        od = r.data.get('output_data') or {}
+        user_id = r.data.get('user_id', 'unknown')
+
+        from services.detail_page_draft_service import compose_draft_png, compose_draft_pdf
+        if fmt == 'pdf':
+            data_bytes = compose_draft_pdf(od)
+            content_type = 'application/pdf'
+            ext = 'pdf'
+        else:
+            data_bytes = compose_draft_png(od)
+            content_type = 'image/png'
+            ext = 'png'
+
+        path = f'detail_page_exports/{user_id}/{draft_id}.{ext}'
+        supabase.storage.from_('creations').upload(
+            path, data_bytes,
+            file_options={'content-type': content_type, 'upsert': 'true'}
+        )
+        url = supabase.storage.from_('creations').get_public_url(path)
+
+        # output_data에 export URL 기록
+        od[f'export_{ext}_url'] = url
+        supabase.table('creations').update({'output_data': od}).eq('id', draft_id).execute()
+
+        logger.info('[dp_export] 완료 draft_id=%s fmt=%s', draft_id, fmt)
+        return {'ok': True, 'url': url}
+
+    except Exception as e:
+        logger.error('[dp_export] 오류 draft_id=%s: %s', draft_id, e, exc_info=True)
         raise

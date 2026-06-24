@@ -205,9 +205,9 @@
         <i class="bi bi-file-image mb-2" style="font-size:2.5rem;color:#4b5cde"></i>
         <div class="fw-bold mb-1">PNG 이미지</div>
         <div class="text-muted small mb-3">섹션들을 세로로 이어붙인 긴 이미지<br>카카오톡·이메일로 바로 전달 가능</div>
-        <a id="exportPngBtn" class="btn fw-semibold" style="background:#4b5cde;color:#fff">
+        <button id="exportPngBtn" class="btn fw-semibold" style="background:#4b5cde;color:#fff" onclick="startExport('png')">
           <i class="bi bi-download me-1"></i>PNG 다운로드
-        </a>
+        </button>
       </div>
     </div>
     <div class="col-md-6">
@@ -215,9 +215,9 @@
         <i class="bi bi-file-earmark-pdf mb-2" style="font-size:2.5rem;color:#e8355a"></i>
         <div class="fw-bold mb-1">PDF 문서</div>
         <div class="text-muted small mb-3">인쇄 가능한 PDF<br>디자인 업체 공식 전달용</div>
-        <a id="exportPdfBtn" class="btn btn-outline-danger fw-semibold">
+        <button id="exportPdfBtn" class="btn btn-outline-danger fw-semibold" onclick="startExport('pdf')">
           <i class="bi bi-download me-1"></i>PDF 다운로드
-        </a>
+        </button>
       </div>
     </div>
   </div>
@@ -518,11 +518,49 @@ function toggleAppeal() {
   chev.className = visible ? 'bi bi-chevron-down ms-auto' : 'bi bi-chevron-up ms-auto';
 }
 
-// ── STEP 4: 내보내기 링크 ────────────────────────────────
-function _setExportLinks() {
-  if (!_draftId) return;
-  document.getElementById('exportPngBtn').href = `/create/detail-page/draft/${_draftId}/export/png`;
-  document.getElementById('exportPdfBtn').href = `/create/detail-page/draft/${_draftId}/export/pdf`;
+// ── STEP 4: 내보내기 (워커 비동기) ────────────────────────
+function _setExportLinks() { /* no-op: 이제 버튼 클릭 시 startExport() 호출 */ }
+
+async function startExport(fmt) {
+  if (!_draftId) { alert('초안을 먼저 생성해 주세요.'); return; }
+  const btn = document.getElementById(fmt === 'png' ? 'exportPngBtn' : 'exportPdfBtn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>생성 중…';
+
+  try {
+    // 태스크 제출
+    const r = await fetch(`/create/detail-page/draft/${_draftId}/export/${fmt}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+    });
+    const d = await r.json();
+    if (!d.ok) { alert(d.message || '내보내기 오류'); btn.disabled = false; btn.innerHTML = origHtml; return; }
+
+    // 이미 캐시된 URL이면 바로 다운로드
+    if (d.status === 'done' && d.url) { _triggerDownload(d.url, fmt); btn.disabled = false; btn.innerHTML = origHtml; return; }
+
+    // 폴링
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries++;
+      if (tries > 60) { clearInterval(timer); btn.disabled = false; btn.innerHTML = origHtml; alert('내보내기 시간 초과. 다시 시도해 주세요.'); return; }
+      const s = await fetch(`/create/detail-page/draft/${_draftId}/export/${fmt}/status`).then(x => x.json());
+      if (s.status === 'done' && s.url) {
+        clearInterval(timer);
+        _triggerDownload(s.url, fmt);
+        btn.disabled = false; btn.innerHTML = origHtml;
+      }
+    }, 3000);
+  } catch(e) {
+    btn.disabled = false; btn.innerHTML = origHtml;
+    alert('내보내기 오류가 발생했습니다.');
+  }
+}
+
+function _triggerDownload(url, fmt) {
+  const a = document.createElement('a');
+  a.href = url; a.download = `상세페이지_초안.${fmt}`; a.target = '_blank';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 // ── 최근 이력 ─────────────────────────────────────────────

@@ -97,47 +97,91 @@ Output ONLY this JSON:
 # ── Phase 2: 선택된 1타입 카피 생성 ─────────────────────────
 def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tuple[str, str]:
     """선택된 플랜의 섹션별 카피 + 영문 이미지 프롬프트 동시 생성."""
-    brand_ctx = build_brand_context(brand)
-    type_name = plan_preview.get('type_name', '')
-    hook      = plan_preview.get('hook', '')
-    sections  = plan_preview.get('sections', [])
-    sec_list  = '\n'.join(f"{s['no']}. {s['name']} — {s.get('purpose','')}" for s in sections)
+    brand_ctx    = build_brand_context(brand)
+    type_name    = plan_preview.get('type_name', '')
+    hook         = plan_preview.get('hook', '')
+    sections     = plan_preview.get('sections', [])
+    appeal       = plan_preview.get('appeal_analysis', {})
+    sec_list     = '\n'.join(
+        f"{s['no']}. [{s['name']}] 목적: {s.get('purpose','')}" for s in sections
+    )
 
     product_name = input_data.get('product_name', '')
     features     = input_data.get('features', '')
+    target       = input_data.get('target_customer') or appeal.get('target_customer', '브랜드 기준')
+    diff         = input_data.get('differentiator') or ''
+    price        = input_data.get('price_range') or ''
 
-    system = f"""당신은 한국 온라인 커머스 카피라이터입니다.
+    # 타입별 카피 전략 힌트
+    strategy_hint = {
+        '공감·문제해결형': (
+            "독자가 '맞아, 나 얘기다'라고 느끼게. "
+            "섹션 흐름: 고통 공감 → 문제 제기 → 해결책 → 증거 → 안심 → 구매 유도. "
+            "자극적이지 않고 따뜻한 어조. 숫자/사실보다 감정 언어 우선."
+        ),
+        '스토리·라이프스타일형': (
+            "브랜드 철학과 라이프스타일 이미지 중심. "
+            "섹션 흐름: 세계관 제시 → 주인공 이야기 → 제품 등장 → 경험 → 변화 → 초대. "
+            "시적이고 감성적인 문장. 짧은 문장 여러 개가 효과적."
+        ),
+        '데이터·전문가형': (
+            "수치·인증·전문성으로 신뢰 구축. "
+            "섹션 흐름: 임팩트 수치 → 문제 정의 → 전문가 솔루션 → 성분/기술 → 실증 → 결론. "
+            "구체적 숫자, 성분명, 수상 실적 등 팩트 적극 활용."
+        ),
+    }.get(type_name, '설득력 있는 카피라이팅')
+
+    appeal_ctx = ''
+    if appeal:
+        pain    = appeal.get('core_pain', '')
+        trigger = appeal.get('buy_trigger', '')
+        points  = ', '.join(appeal.get('appeal_points', []))
+        appeal_ctx = f"""
+타겟 핵심 고통: {pain}
+구매 결정 트리거: {trigger}
+소구 포인트: {points}"""
+
+    system = f"""당신은 대한민국 최고 수준의 온라인 커머스 카피라이터입니다.
+쿠팡·네이버 상세페이지 판매 전환율 최적화 전문가입니다.
 결과는 순수 JSON만 출력합니다. 마크다운 없음.
 
 브랜드: {brand_ctx}"""
 
-    user = f"""상품: {product_name}
-특징: {features}
-타겟: {input_data.get('target_customer') or '브랜드 기준'}
-가격: {input_data.get('price_range') or '-'}
-차별점: {input_data.get('differentiator') or '-'}
+    user = f"""[상품 정보]
+상품명: {product_name}
+핵심 특징: {features}
+타겟 고객: {target}
+가격대: {price or '-'}
+경쟁 차별점: {diff or '-'}
+{appeal_ctx}
 
-기획 방향: {type_name} — {hook}
+[기획 방향]
+타입: {type_name}
+핵심 전략: {hook}
+카피 작성 원칙: {strategy_hint}
 
-아래 6개 섹션의 카피와 이미지 프롬프트를 작성하세요:
+[섹션 목록]
 {sec_list}
 
-카피 규칙:
-- 헤드라인: 15자 이내
-- 본문: 2~3줄, 각 줄 30자 이내
-- 이모지·특수기호 없이 순수 텍스트
+[카피 작성 규칙]
+1. 헤드라인(첫 줄): 10자 이내, 핵심 감정/가치를 담은 임팩트 문구
+2. 본문(2~3줄): 각 줄 25자 이내, 설득력 있는 구체적 문장
+3. 각 섹션은 해당 목적에 충실하게, 전체 흐름이 자연스럽게 이어져야 함
+4. 진부한 표현 금지: "최고", "최상", "품질 좋은" 같은 막연한 단어 배제
+5. 이모지·특수기호 없이 순수 텍스트만
+6. 타겟 고객의 언어로 — 그들이 실제 쓰는 표현, 그들이 느끼는 감정
 
-image_prompt 규칙 (FLUX AI 전송용):
-- 반드시 영어로만 작성
-- 실제 이 상품({product_name})이 주인공인 제품 상세페이지 장면
-- 20단어 이내, 사진 스타일 묘사
-- 이미지 안에 텍스트·글자 절대 없음 (no text, no words, no letters)
-- 예시: "baby food cube set on white marble surface, overhead shot, soft natural light, clean minimal styling"
+[image_prompt 규칙 — FLUX AI 전송용]
+- 반드시 영어로만 작성 (한글 절대 금지)
+- {product_name} 실제 제품이 화면 중심에 있는 상세페이지 장면
+- 섹션 목적과 카피 분위기에 어울리는 촬영 스타일
+- 20단어 이내, 구체적 촬영 설정 묘사
+- no text, no words, no letters in the image
 
 Output ONLY this JSON:
 {{
   "copies": [
-    {{"no": 1, "copy": "헤드라인\\n본문 첫줄\\n본문 둘째줄", "image_prompt": "English scene for section 1"}},
+    {{"no": 1, "copy": "헤드라인\\n본문 첫줄\\n본문 둘째줄", "image_prompt": "English scene"}},
     {{"no": 2, "copy": "...", "image_prompt": "..."}},
     {{"no": 3, "copy": "...", "image_prompt": "..."}},
     {{"no": 4, "copy": "...", "image_prompt": "..."}},
