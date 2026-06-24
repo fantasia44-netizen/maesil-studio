@@ -361,12 +361,11 @@ def detail_page_draft_gen_image():
     if not sec:
         return jsonify(ok=False, message=f'섹션 {sec_no}을 찾을 수 없습니다.')
 
-    image_prompt = sec.get('image_prompt', '')
+    image_prompt = (sec.get('image_prompt') or '').strip()
     if not image_prompt:
-        # 규칙 기반으로 즉석 생성 (API 호출 없음)
-        from services.prompts.detail_page import build_image_prompt_for_section
-        product_name = od.get('product_name', '')
-        image_prompt = build_image_prompt_for_section(sec, product_name)
+        # fallback: 섹션명 기반 영문 프롬프트
+        name = sec.get('name', 'product')
+        image_prompt = f"product detail page scene for {name} section, professional commercial photography, clean background, no text no words"
 
     cost = POINT_COSTS.get('detail_page_draft_image', 50)
     gen_id = str(uuid.uuid4())

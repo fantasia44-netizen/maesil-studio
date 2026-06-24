@@ -96,43 +96,53 @@ Output ONLY this JSON:
 
 # ── Phase 2: 선택된 1타입 카피 생성 ─────────────────────────
 def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tuple[str, str]:
-    """선택된 플랜의 섹션별 카피 생성. 이미지 프롬프트 없음."""
+    """선택된 플랜의 섹션별 카피 + 영문 이미지 프롬프트 동시 생성."""
     brand_ctx = build_brand_context(brand)
     type_name = plan_preview.get('type_name', '')
     hook      = plan_preview.get('hook', '')
     sections  = plan_preview.get('sections', [])
     sec_list  = '\n'.join(f"{s['no']}. {s['name']} — {s.get('purpose','')}" for s in sections)
 
+    product_name = input_data.get('product_name', '')
+    features     = input_data.get('features', '')
+
     system = f"""당신은 한국 온라인 커머스 카피라이터입니다.
 결과는 순수 JSON만 출력합니다. 마크다운 없음.
 
 브랜드: {brand_ctx}"""
 
-    user = f"""상품: {input_data.get('product_name','')}
-특징: {input_data.get('features','')}
+    user = f"""상품: {product_name}
+특징: {features}
 타겟: {input_data.get('target_customer') or '브랜드 기준'}
 가격: {input_data.get('price_range') or '-'}
 차별점: {input_data.get('differentiator') or '-'}
 
 기획 방향: {type_name} — {hook}
 
-아래 6개 섹션의 카피를 작성하세요:
+아래 6개 섹션의 카피와 이미지 프롬프트를 작성하세요:
 {sec_list}
 
-각 섹션 카피 규칙:
-- 헤드라인: 15자 이내 (임팩트 있는 짧은 문구)
+카피 규칙:
+- 헤드라인: 15자 이내
 - 본문: 2~3줄, 각 줄 30자 이내
-- 이모지나 특수기호 없이 순수 텍스트
+- 이모지·특수기호 없이 순수 텍스트
+
+image_prompt 규칙 (FLUX AI 전송용):
+- 반드시 영어로만 작성
+- 실제 이 상품({product_name})이 주인공인 제품 상세페이지 장면
+- 20단어 이내, 사진 스타일 묘사
+- 이미지 안에 텍스트·글자 절대 없음 (no text, no words, no letters)
+- 예시: "baby food cube set on white marble surface, overhead shot, soft natural light, clean minimal styling"
 
 Output ONLY this JSON:
 {{
   "copies": [
-    {{"no": 1, "copy": "헤드라인\\n본문 첫줄\\n본문 둘째줄"}},
-    {{"no": 2, "copy": "..."}},
-    {{"no": 3, "copy": "..."}},
-    {{"no": 4, "copy": "..."}},
-    {{"no": 5, "copy": "..."}},
-    {{"no": 6, "copy": "..."}}
+    {{"no": 1, "copy": "헤드라인\\n본문 첫줄\\n본문 둘째줄", "image_prompt": "English scene for section 1"}},
+    {{"no": 2, "copy": "...", "image_prompt": "..."}},
+    {{"no": 3, "copy": "...", "image_prompt": "..."}},
+    {{"no": 4, "copy": "...", "image_prompt": "..."}},
+    {{"no": 5, "copy": "...", "image_prompt": "..."}},
+    {{"no": 6, "copy": "...", "image_prompt": "..."}}
   ]
 }}"""
 

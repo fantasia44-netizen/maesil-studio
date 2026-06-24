@@ -80,13 +80,13 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
         result = json.loads(cleaned)
 
-        # copies를 sections에 병합
-        copies = {c['no']: c['copy'] for c in result.get('copies', [])}
+        # copies + image_prompt를 sections에 병합
+        copies = {c['no']: (c['copy'], c.get('image_prompt', '')) for c in result.get('copies', [])}
         r = supabase.table('creations').select('output_data').eq('id', draft_id).single().execute()
         od = r.data.get('output_data') or {}
         for sec in od.get('sections', []):
             if sec['no'] in copies:
-                sec['copy'] = copies[sec['no']]
+                sec['copy'], sec['image_prompt'] = copies[sec['no']]
         od['copy_status'] = 'done'
 
         supabase.table('creations').update(
