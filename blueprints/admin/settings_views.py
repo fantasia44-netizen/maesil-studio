@@ -164,7 +164,6 @@ def _test_fal(api_key: str):
         return jsonify(ok=False, message='API 키가 설정되지 않았습니다.')
     try:
         import requests as req_lib
-        # GET 요청 — 모델 정보만 조회, 이미지 생성 없음 (크레딧 소모 없음)
         r = req_lib.get(
             'https://fal.run/fal-ai/flux/schnell',
             headers={'Authorization': f'Key {api_key}'},
@@ -180,6 +179,57 @@ def _test_fal(api_key: str):
             return jsonify(ok=False, message=f'HTTP {r.status_code}: {r.text[:120]}')
     except Exception as e:
         return jsonify(ok=False, message=f'연결 실패: {e}')
+
+
+@admin_bp.route('/settings/fal-balance', methods=['GET'])
+@login_required
+@require_superadmin
+def fal_balance():
+    """fal.ai 크레딧 잔액 조회."""
+    from services.config_service import get_config
+    import requests as req_lib
+
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        return jsonify(ok=False, message='fal.ai API 키 미설정')
+
+    # fal.ai billing 엔드포인트 시도 순서
+    endpoints = [
+        'https://rest.alpha.fal.ai/billing/credits',
+        'https://api.fal.ai/billing/credits',
+        'https://fal.run/billing/credits',
+    ]
+    headers = {'Authorization': f'Key {api_key}'}
+
+    for url in endpoints:
+        try:
+            r = req_lib.get(url, headers=headers, timeout=8)
+            if r.status_code == 200:
+                data = r.json()
+                # 응답 형식: {"credits": 12.34} 또는 {"balance": 12.34} 등
+                balance = (
+                    data.get('credits') or
+                    data.get('balance') or
+                    data.get('amount') or
+                    data.get('credit_balance')
+                )
+                if balance is not None:
+                    return jsonify(ok=True, balance=float(balance), raw=data)
+                # 숫자 키 탐색
+                for v in data.values():
+                    if isinstance(v, (int, float)):
+                        return jsonify(ok=True, balance=float(v), raw=data)
+                return jsonify(ok=True, balance=None, raw=data,
+                               message='잔액 파싱 불가 — raw 응답 확인 필요')
+            elif r.status_code == 404:
+                continue  # 다음 엔드포인트 시도
+            elif r.status_code == 401:
+                return jsonify(ok=False, message='인증 실패')
+        except Exception:
+            continue
+
+    return jsonify(ok=False, message='잔액 API를 찾을 수 없습니다. fal.ai 대시보드에서 직접 확인하세요.',
+                   dashboard_url='https://fal.ai/dashboard/billing')
 
 
 def _test_maeyo(agency_url: str, cs_token: str):
