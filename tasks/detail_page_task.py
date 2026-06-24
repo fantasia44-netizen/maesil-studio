@@ -31,27 +31,31 @@ def generate_plan(
     supabase = create_client(supabase_url, supabase_key)
 
     try:
-        from services.prompts.detail_page import build_plan_prompt
+        from services.prompts.detail_page import build_single_plan_prompt, _PLAN_TYPES
         from services.claude_service import generate_text
 
-        # anthropic_api_key를 환경변수로 주입 (config_service 우회)
         os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
 
-        system, user_prompt = build_plan_prompt(brand, input_data)
-        raw = generate_text(system, user_prompt, max_tokens=8000,
-                            model='claude-sonnet-4-6')
+        plans = []
+        for type_name in _PLAN_TYPES:
+            system, user_prompt = build_single_plan_prompt(brand, input_data, type_name)
+            raw = generate_text(system, user_prompt, max_tokens=3000,
+                                model='claude-sonnet-4-6')
+            cleaned = raw.strip()
+            if cleaned.startswith('```'):
+                cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            plan = json.loads(cleaned)
+            plans.append(plan)
+            logger.info('[dp_plan_task] plan "%s" 완료', type_name)
 
-        cleaned = raw.strip()
-        if cleaned.startswith('```'):
-            cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-        plans_data = json.loads(cleaned)
+        plans_data = {'plans': plans}
 
         supabase.table('creations').update({
             'output_data': plans_data,
             'status': 'done',
         }).eq('id', plan_id).execute()
 
-        logger.info('[dp_plan_task] 완료 plan_id=%s', plan_id)
+        logger.info('[dp_plan_task] 전체 완료 plan_id=%s', plan_id)
 
     except Exception as e:
         logger.error('[dp_plan_task] 오류 plan_id=%s: %s', plan_id, e, exc_info=True)

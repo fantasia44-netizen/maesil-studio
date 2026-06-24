@@ -60,75 +60,68 @@ def build_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
     return system, user
 
 
-# ── 초안 제안서 — 3가지 타입 동시 생성 ─────────────────────
+# ── 초안 제안서 — 1개 타입씩 생성 (3번 호출) ───────────────
 _PLAN_SYSTEM = """You are a senior Korean e-commerce marketing strategist.
-Generate 3 different detail page draft proposals using distinct narrative strategies.
-Each proposal has 6 sections with specific visual sketch directions for a designer.
+Generate ONE detail page draft proposal with 6 sections.
 
 CRITICAL OUTPUT RULES:
-- Output ONLY valid JSON. No markdown fences, no explanation text.
-- All copy/name/purpose fields must be in Korean.
-- All image_prompt fields must be in English only (for FLUX AI image generation).
-- image_prompt must describe a photographic scene — no text, no words, no letters in the image.
+- Output ONLY valid JSON. No markdown, no explanation, no code fences.
+- copy/name/purpose fields: Korean only.
+- image_prompt fields: English only (for FLUX AI image generation).
+- Keep all text SHORT to avoid truncation.
 """
 
+_PLAN_TYPES = {
+    '공감·문제해결형': 'Lead with customer pain empathy → problem cause → solution reveal → proof → benefit → CTA',
+    '스토리·라이프스타일형': 'Brand/product story → aspiration lifestyle → product as enabler → testimonial → value → CTA',
+    '데이터·전문가형': 'Hard data/stats → ingredient/tech proof → expert endorsement → social proof → value → CTA',
+}
 
-def build_plan_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
-    """3가지 타입 상세페이지 초안 동시 생성."""
+
+def build_single_plan_prompt(brand: dict, input_data: dict, type_name: str) -> tuple[str, str]:
+    """1개 타입 상세페이지 초안 생성."""
     brand_ctx = build_brand_context(brand)
-    product_name    = input_data.get('product_name',    '')
-    features        = input_data.get('features',        '')
-    target_customer = input_data.get('target_customer', '')
-    differentiator  = input_data.get('differentiator',  '')
-    price_range     = input_data.get('price_range',     '')
+    strategy = _PLAN_TYPES.get(type_name, '')
 
     system = f"""{_PLAN_SYSTEM}
 
 Brand context:
 {brand_ctx}"""
 
-    user = f"""Product: {product_name}
-Key features: {features}
-Target customer: {target_customer or 'based on brand profile'}
-Price range: {price_range or 'not specified'}
-Differentiator: {differentiator or 'not specified'}
+    user = f"""Product: {input_data.get('product_name', '')}
+Features: {input_data.get('features', '')}
+Target: {input_data.get('target_customer') or 'brand profile default'}
+Price: {input_data.get('price_range') or 'not specified'}
+Differentiator: {input_data.get('differentiator') or 'not specified'}
 
-Generate exactly 3 detail page draft proposals. Each uses a different narrative strategy:
-1. "공감·문제해결형" — Lead with customer pain empathy → problem cause → solution reveal
-2. "스토리·라이프스타일형" — Brand/product story → aspiration lifestyle → product as enabler
-3. "데이터·전문가형" — Hard data/stats → ingredient/tech proof → expert endorsement → social proof
+Generate ONE plan with type_name "{type_name}".
+Narrative strategy: {strategy}
 
-For each plan generate exactly 6 sections. Each section must have:
-- no: section number (1-6)
-- name: Korean section label (e.g. "첫인상·훅", "고객 공감", "솔루션 소개", "핵심 기능", "신뢰 증거", "구매 유도")
-- purpose: one Korean sentence explaining this section's psychological role in the scroll journey
-- copy: Korean copywriting — headline (max 20 chars) + 1 supporting sentence (max 60 chars). Keep it short.
-- image_prompt: English FLUX prompt — max 30 words. Camera angle, subject, background, lighting. No text in image.
+6 sections required. Section names suggestion: 첫인상·훅 / 고객 공감 / 솔루션 소개 / 핵심 기능 / 신뢰 증거 / 구매 유도
 
-Output this exact JSON structure:
+Output ONLY this JSON (no other text):
 {{
-  "plans": [
+  "type_name": "{type_name}",
+  "appeal_analysis": {{
+    "target_customer": "Korean, max 30 chars",
+    "core_pain": "Korean, max 30 chars",
+    "buy_trigger": "Korean, max 30 chars",
+    "appeal_points": ["point1", "point2", "point3"]
+  }},
+  "sections": [
     {{
-      "type_name": "공감·문제해결형",
-      "appeal_analysis": {{
-        "target_customer": "Korean persona description",
-        "core_pain": "Korean core pain point",
-        "buy_trigger": "Korean purchase trigger",
-        "appeal_points": ["point1", "point2", "point3"]
-      }},
-      "sections": [
-        {{
-          "no": 1,
-          "name": "Korean section name",
-          "purpose": "Korean — psychological role of this section",
-          "copy": "Korean — headline + supporting copy",
-          "image_prompt": "English only — photographic scene description for FLUX"
-        }}
-      ]
-    }},
-    {{ ... second plan ... }},
-    {{ ... third plan ... }}
+      "no": 1,
+      "name": "Korean, max 10 chars",
+      "purpose": "Korean, max 40 chars",
+      "copy": "Korean headline (max 20 chars)\\n supporting sentence (max 50 chars)",
+      "image_prompt": "English, max 20 words, photographic, no text in image"
+    }}
   ]
 }}"""
 
     return system, user
+
+
+def build_plan_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
+    """호환성 유지용 — 첫 번째 타입 프롬프트 반환."""
+    return build_single_plan_prompt(brand, input_data, '공감·문제해결형')
