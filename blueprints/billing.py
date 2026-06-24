@@ -552,7 +552,7 @@ def billing_key_delete():
 def billing_key_subscribe():
     """빌링키 발급 후 구독 등록 + 첫 달 즉시 청구.
 
-    Body: {"billing_key": "billing-key-xxx", "pg": "card"|"kakaopay", "plan_type": "starter"|"growth"|"pro"}
+    Body: {"billing_key": "billing-key-xxx", "pg": "card"|"kakaopay", "plan_type": "growth"|"pro"|"enterprise"}
 
     Flow:
       1. billing_key 저장 (users/operators)
