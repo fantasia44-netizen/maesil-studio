@@ -107,9 +107,9 @@
     <p class="text-center text-muted mb-5">구독 포인트 + 충전 포인트 조합으로 유연하게 사용</p>
     <div class="row g-4 justify-content-center">
       {% set plans = [
-        ('Starter','9,900','월','3,000','1','블로그·인스타·상세페이지·썸네일·광고 카피',False),
-        ('Growth','24,900','월','10,000','3','+ 이미지 생성 · 브랜드 키트',True),
-        ('Pro','49,900','월','25,000','5','+ 브랜드 프로필 5개',False),
+        ('Growth','24,900','월','10,000','3','블로그·인스타·상세페이지·이미지 생성·브랜드 키트 전체 이용',True),
+        ('Pro','49,900','월','22,000','5','브랜드 프로필 5개 · 쇼츠/릴스 영상 · 홍보물 제작',False),
+        ('Enterprise','99,000','월','50,000','10','브랜드 프로필 10개 · 팀 협업 · 전용 지원',False),
       ] %}
       {% for name, price, unit, points, brands, desc, featured in plans %}
       <div class="col-md-4">
@@ -120,7 +120,7 @@
             <span class="price-num">{{ price }}원</span>
             <span class="price-unit">/{{ unit }}</span>
           </div>
-          <p class="text-success fw-semibold"><i class="bi bi-coin me-1"></i>{{ points }}P/월 지급</p>
+          <p class="text-success fw-semibold"><i class="bi bi-coin me-1"></i>매월 {{ points }}P 지급</p>
           <hr>
           <ul class="list-unstyled small text-muted">
             <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>브랜드 프로필 {{ brands }}개</li>
@@ -134,7 +134,7 @@
       {% endfor %}
     </div>
     <p class="text-center text-muted mt-4 small">
-      포인트 충전도 가능 — 1,000P 9,900원 / 3,000P 24,900원 / 10,000P 69,900원
+      구독 회원 전용 포인트 추가 충전 가능 · 30일 무료 체험 후 원하는 플랜 선택
     </p>
   </div>
 </section>
