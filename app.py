@@ -103,6 +103,14 @@ def _init_csrf(app):
             return redirect(request.referrer or url_for('main.dashboard'))
         return e
 
+    @app.errorhandler(500)
+    def internal_error(e):
+        import logging
+        logging.getLogger(__name__).error(f'[500] {e}', exc_info=True)
+        if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(ok=False, message='서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'), 500
+        return e
+
 
 def _init_login(app):
     login_manager = LoginManager(app)

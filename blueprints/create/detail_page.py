@@ -236,13 +236,18 @@ def detail_page_plan():
         return jsonify(ok=True, plans=plans_data.get('plans', []))
 
     except Exception as e:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', plan_id).execute()
+        try:
+            supabase.table('creations').update({'status': 'failed'}).eq('id', plan_id).execute()
+        except Exception:
+            pass
         logger.error(f'[dp_plan] 오류: {e}', exc_info=True)
         err = str(e)
-        if 'overloaded' in err.lower():
+        if 'insufficient' in err.lower() or '포인트' in err:
+            msg = '포인트가 부족합니다.'
+        elif 'overloaded' in err.lower():
             msg = 'AI 서버가 잠시 과부하 상태입니다. 잠시 후 다시 시도해 주세요.'
         else:
-            msg = 'AI 기획 생성 중 오류가 발생했습니다.'
+            msg = f'AI 기획 생성 중 오류가 발생했습니다. ({type(e).__name__})'
         return jsonify(ok=False, message=msg)
 
 
