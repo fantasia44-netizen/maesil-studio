@@ -180,9 +180,9 @@ def detail_page_result(creation_id: str):
 @create_bp.route('/detail-page/plan', methods=['POST'])
 @login_required
 def detail_page_plan():
-    """Claude로 3가지 타입 초안 기획 동시 생성."""
-    from services.prompts.detail_page import build_plan_prompt
+    """Claude 3타입 기획을 Celery 워커에 제출 후 plan_id 반환."""
     from services.point_service import use_points, InsufficientPoints
+    from services.config_service import get_config
     from models import POINT_COSTS
 
     supabase = current_app.supabase
@@ -202,10 +202,17 @@ def detail_page_plan():
     if not input_data['product_name'] or not input_data['features']:
         return jsonify(ok=False, message='상품명과 핵심 기능을 입력해 주세요.')
 
-    cost = POINT_COSTS.get('detail_page_plan', 150)
+    cost    = POINT_COSTS.get('detail_page_plan', 150)
     plan_id = str(uuid.uuid4())
 
-    # 임시 creation 행 (generating)
+    try:
+        use_points(current_user, 'detail_page_plan', plan_id, cost_override=cost)
+    except InsufficientPoints as ip:
+        return jsonify(ok=False, error='points', message=str(ip) or '포인트가 부족합니다.')
+    except Exception as e:
+        logger.error(f'[dp_plan] use_points 오류: {e}')
+        return jsonify(ok=False, message='포인트 차감 중 오류가 발생했습니다.')
+
     try:
         supabase.table('creations').insert({
             'id': plan_id, 'user_id': current_user.id,
@@ -216,39 +223,56 @@ def detail_page_plan():
     except Exception as e:
         logger.warning(f'[dp_plan] creation insert 실패: {e}')
 
+    # Celery 워커에 제출
+    import os
+    from supabase import create_client as _sb_create
+    from tasks.detail_page_task import generate_plan
+
+    supabase_url = os.environ.get('SUPABASE_URL', '')
+    supabase_key = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_KEY', '')
+    anthropic_key = get_config('anthropic_api_key') or os.environ.get('ANTHROPIC_API_KEY', '')
+
+    generate_plan.delay(
+        plan_id=plan_id,
+        user_id=current_user.id,
+        operator_id=getattr(current_user, 'operator_id', None),
+        brand=brand,
+        input_data=input_data,
+        cost=cost,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+        anthropic_api_key=anthropic_key,
+    )
+
+    return jsonify(ok=True, plan_id=plan_id, async_mode=True)
+
+
+@create_bp.route('/detail-page/plan/<plan_id>/status', methods=['GET'])
+@login_required
+def detail_page_plan_status(plan_id: str):
+    """Celery 태스크 완료 여부 폴링."""
+    supabase = current_app.supabase
     try:
-        use_points(current_user, 'detail_page_plan', plan_id, cost_override=cost)
+        r = supabase.table('creations').select(
+            'id, status, output_data, user_id'
+        ).eq('id', plan_id).single().execute()
+        row = r.data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
 
-        from services.claude_service import generate_text
-        system, user_prompt = build_plan_prompt(brand, input_data)
-        raw = generate_text(system, user_prompt, max_tokens=7000, model='claude-sonnet-4-6')
+    if not row or row.get('user_id') != current_user.id:
+        return jsonify(ok=False, status='error', message='권한 없음')
 
-        # JSON 정리
-        cleaned = raw.strip()
-        if cleaned.startswith('```'):
-            cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-        plans_data = json.loads(cleaned)
-
-        supabase.table('creations').update({
-            'output_data': plans_data, 'status': 'done',
-        }).eq('id', plan_id).execute()
-
-        return jsonify(ok=True, plans=plans_data.get('plans', []))
-
-    except Exception as e:
-        try:
-            supabase.table('creations').update({'status': 'failed'}).eq('id', plan_id).execute()
-        except Exception:
-            pass
-        logger.error(f'[dp_plan] 오류: {e}', exc_info=True)
-        err = str(e)
-        if 'insufficient' in err.lower() or '포인트' in err:
-            msg = '포인트가 부족합니다.'
-        elif 'overloaded' in err.lower():
-            msg = 'AI 서버가 잠시 과부하 상태입니다. 잠시 후 다시 시도해 주세요.'
-        else:
-            msg = f'AI 기획 생성 중 오류가 발생했습니다. ({type(e).__name__})'
-        return jsonify(ok=False, message=msg)
+    status = row.get('status', '')
+    if status == 'done':
+        od = row.get('output_data') or {}
+        return jsonify(ok=True, status='done', plans=od.get('plans', []))
+    elif status == 'failed':
+        od = row.get('output_data') or {}
+        return jsonify(ok=False, status='failed',
+                       message=od.get('error', 'AI 기획 생성 중 오류가 발생했습니다.'))
+    else:
+        return jsonify(ok=True, status='generating')
 
 
 @create_bp.route('/detail-page/draft/init', methods=['POST'])

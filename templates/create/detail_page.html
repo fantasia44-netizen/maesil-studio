@@ -256,7 +256,7 @@ function goStep(n) {
   });
 }
 
-// ── STEP 1: 기획 생성 ────────────────────────────────────
+// ── STEP 1: 기획 생성 (Celery 비동기) ───────────────────
 document.getElementById('planForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('planBtn');
@@ -269,17 +269,41 @@ document.getElementById('planForm').addEventListener('submit', async (e) => {
     const body = {};
     fd.forEach((v, k) => { body[k] = v; });
 
+    // 1) 태스크 제출
     const res  = await fetch('{{ url_for("create.detail_page_plan") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
-    if (!data.ok) { alert('오류: ' + data.message); return; }
+    const submit = await res.json();
+    if (!submit.ok) { alert('오류: ' + submit.message); return; }
 
-    _plans = data.plans || [];
-    _renderTypeCards();
-    goStep(2);
+    const planId = submit.plan_id;
+
+    // 2) 완료될 때까지 폴링 (3초 간격, 최대 3분)
+    const statusUrl = `/create/detail-page/plan/${planId}/status`;
+    let elapsed = 0;
+    while (elapsed < 180) {
+      await new Promise(r => setTimeout(r, 3000));
+      elapsed += 3;
+      try {
+        const sr = await fetch(statusUrl);
+        const sd = await sr.json();
+        if (sd.status === 'done') {
+          _plans = sd.plans || [];
+          _renderTypeCards();
+          goStep(2);
+          return;
+        } else if (sd.status === 'failed') {
+          alert('기획 생성 실패: ' + (sd.message || '알 수 없는 오류'));
+          return;
+        }
+        // status === 'generating' → 계속 대기
+      } catch (pollErr) {
+        // 네트워크 일시 오류 무시하고 계속 폴링
+      }
+    }
+    alert('기획 생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
   } catch (err) {
     alert('네트워크 오류: ' + err.message);
   } finally {
