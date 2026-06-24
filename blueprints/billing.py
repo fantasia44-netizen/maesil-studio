@@ -27,15 +27,15 @@ billing_bp = Blueprint('billing', __name__)
 
 # 포인트 충전 패키지
 POINT_PACKAGES = [
-    {'points': 3000,  'price': 9900,  'label': '3,000P'},
     {'points': 10000, 'price': 24900, 'label': '10,000P', 'badge': '인기'},
-    {'points': 25000, 'price': 49900, 'label': '25,000P', 'badge': '최저가/P'},
+    {'points': 22000, 'price': 49900, 'label': '22,000P', 'badge': '최저가/P'},
+    {'points': 50000, 'price': 99000, 'label': '50,000P', 'badge': '대용량'},
 ]
 
 PLAN_PRICES = {
-    'starter': {'label': 'Starter', 'price': 9900,  'points': 3000},
-    'growth':  {'label': 'Growth',  'price': 24900, 'points': 10000},
-    'pro':     {'label': 'Pro',     'price': 49900, 'points': 25000},
+    'growth':     {'label': 'Growth',     'price': 24900, 'points': 10000},
+    'pro':        {'label': 'Pro',        'price': 49900, 'points': 22000},
+    'enterprise': {'label': 'Enterprise', 'price': 99000, 'points': 50000},
 }
 
 
@@ -215,10 +215,10 @@ def _webhook_handle_paid(supabase, data: dict):
         try:
             if operator_id:
                 op_row = supabase.table('operators').select('plan_type').eq('id', operator_id).single().execute().data or {}
-                sub_data['plan_type'] = op_row.get('plan_type', 'starter')
+                sub_data['plan_type'] = op_row.get('plan_type', 'growth')
             else:
                 u_row = supabase.table('users').select('plan_type').eq('id', user_id).single().execute().data or {}
-                sub_data['plan_type'] = u_row.get('plan_type', 'starter')
+                sub_data['plan_type'] = u_row.get('plan_type', 'growth')
         except Exception:
             pass
 

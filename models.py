@@ -17,14 +17,6 @@ PLAN_FEATURES = {
         'image_gen': False,
         'brand_kit': False,
     },
-    'starter': {
-        'label': 'Starter',
-        'price': 9900,
-        'monthly_points': 3000,
-        'brand_profiles': 1,
-        'image_gen': False,
-        'brand_kit': False,
-    },
     'growth': {
         'label': 'Growth',
         'price': 24900,
@@ -36,8 +28,16 @@ PLAN_FEATURES = {
     'pro': {
         'label': 'Pro',
         'price': 49900,
-        'monthly_points': 25000,
+        'monthly_points': 22000,
         'brand_profiles': 5,
+        'image_gen': True,
+        'brand_kit': True,
+    },
+    'enterprise': {
+        'label': 'Enterprise',
+        'price': 99000,
+        'monthly_points': 50000,
+        'brand_profiles': 10,
         'image_gen': True,
         'brand_kit': True,
     },

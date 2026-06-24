@@ -131,7 +131,7 @@ def _run_subscription_renewal(app):
 
                 user_id     = sub.get('user_id')
                 operator_id = sub.get('operator_id')
-                plan_type   = sub.get('plan_type') or 'starter'
+                plan_type   = sub.get('plan_type') or 'growth'
                 cur_attempt = int(sub.get('failed_attempt_count') or 0)
                 billing_key = sub.get('billing_key')
 
