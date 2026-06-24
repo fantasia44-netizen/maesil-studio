@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 def _recent_detail_page_creations(supabase, user_id: str, brand_id, limit: int = 5):
     q = supabase.table('creations').select(
         'id, output_data, input_data, created_at'
-    ).eq('user_id', user_id).eq('status', 'done').in_(
-        'creation_type', ['detail_page', 'detail_page_draft']
+    ).eq('user_id', user_id).eq('status', 'done').eq(
+        'creation_type', 'detail_page_draft'
     )
     if brand_id:
         q = q.eq('brand_id', brand_id)

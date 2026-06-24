@@ -542,29 +542,21 @@ function _renderDpRedoList(items) {
       </div>
       <button class="btn btn-sm py-0 px-2 flex-shrink-0"
               style="font-size:.72rem;background:#4b5cde;color:#fff;border:none"
-              onclick="loadDraft('${it.id}', '${it.type}')">불러오기</button>
+              onclick="loadDraft('${it.id}')">불러오기</button>
     </div>`;
   }).join('');
 }
 
-async function loadDraft(id, type) {
-  if (type === 'detail_page_draft') {
-    const res = await fetch(`/create/detail-page/draft/${id}`).then(r => r.json());
-    if (res.ok && res.data) {
-      _draftId   = id;
-      _draftData = res.data;
-      _renderDraft();
-      goStep(3);
-      _setExportLinks();
-    } else {
-      alert(res.message || '불러오기 실패');
-    }
+async function loadDraft(id) {
+  const res = await fetch(`/create/detail-page/draft/${id}`).then(r => r.json());
+  if (res.ok && res.data) {
+    _draftId   = id;
+    _draftData = res.data;
+    _renderDraft();
+    goStep(3);
+    _setExportLinks();
   } else {
-    const res = await fetch(`/create/detail-page/result/${id}`).then(r => r.json());
-    if (res.ok && res.data) {
-      // 기획서 타입은 step3에 기존 방식으로 표시 (호환)
-      alert('이 항목은 구형 기획서 형식입니다. 새 초안 생성을 이용해 주세요.');
-    }
+    alert(res.message || '불러오기 실패');
   }
 }
 
