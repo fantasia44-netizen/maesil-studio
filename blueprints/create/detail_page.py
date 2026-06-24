@@ -473,6 +473,9 @@ def detail_page_draft_export(draft_id: str, fmt: str):
     od           = row.get('output_data') or {}
     product_name = od.get('product_name', '상품명')
 
+    if fmt not in ('png', 'pdf'):
+        return jsonify(ok=False, message=f'지원하지 않는 형식: {fmt}')
+
     try:
         if fmt == 'pdf':
             data_bytes = compose_draft_pdf(od)
@@ -483,12 +486,16 @@ def detail_page_draft_export(draft_id: str, fmt: str):
             mimetype   = 'image/png'
             filename   = f'상세페이지_초안_{product_name}.png'
 
-        return send_file(
-            BytesIO(data_bytes),
-            mimetype=mimetype,
-            as_attachment=True,
-            download_name=filename,
-        )
+        from flask import make_response
+        resp = make_response(data_bytes)
+        resp.headers['Content-Type'] = mimetype
+        resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        resp.headers['Content-Length'] = len(data_bytes)
+        return resp
     except Exception as e:
         logger.error(f'[dp_export] 오류: {e}', exc_info=True)
-        return jsonify(ok=False, message='내보내기 중 오류가 발생했습니다.')
+        # 브라우저에서 바로 보이게 plain text로 반환
+        from flask import make_response
+        r = make_response(f'내보내기 오류: {type(e).__name__}: {e}', 500)
+        r.headers['Content-Type'] = 'text/plain; charset=utf-8'
+        return r
