@@ -161,7 +161,18 @@ def dashboard():
                 for u in recent_users:
                     sub = sub_map.get(u['id'], {})
                     u['sub_status']  = sub.get('status', '')
-                    u['sub_expires'] = sub.get('current_period_end', '')
+                    expires = sub.get('current_period_end', '')
+                    # current_period_end 없는 trial은 created_at + 30일로 추정
+                    if not expires and sub.get('status') == 'trial':
+                        created = sub.get('created_at') or u.get('created_at', '')
+                        if created:
+                            from datetime import datetime, timedelta, timezone
+                            try:
+                                dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                                expires = (dt + timedelta(days=30)).isoformat()
+                            except Exception:
+                                pass
+                    u['sub_expires'] = expires
             except Exception as sub_err:
                 logger.warning(f'[ADMIN] 구독 정보 병합 실패: {sub_err}')
                 for u in recent_users:

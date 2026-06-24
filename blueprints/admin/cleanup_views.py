@@ -116,6 +116,43 @@ def cleanup_run():
     return jsonify(ok=True, message=msg, count=success_count, refunded=refund_total, errors=errors)
 
 
+@admin_bp.route('/cleanup/backfill-trial-end', methods=['POST'])
+@login_required
+@require_superadmin
+def backfill_trial_end():
+    """current_period_end 없는 trial 구독 → created_at + 30일로 백필."""
+    supabase = current_app.supabase
+    try:
+        rows = supabase.table('subscriptions').select(
+            'id, user_id, created_at, current_period_end'
+        ).eq('status', 'trial').is_('current_period_end', 'null').execute().data or []
+
+        updated, errors = 0, []
+        for r in rows:
+            created = r.get('created_at', '')
+            if not created:
+                continue
+            try:
+                dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                end = (dt + timedelta(days=30)).isoformat()
+                supabase.table('subscriptions').update({
+                    'current_period_end':   end,
+                    'current_period_start': created,
+                }).eq('id', r['id']).execute()
+                updated += 1
+            except Exception as e:
+                errors.append(str(e))
+
+        msg = f'백필 완료: {updated}/{len(rows)}건'
+        if errors:
+            msg += f' | 오류 {len(errors)}건'
+        logger.info('[backfill_trial] %s', msg)
+        return jsonify(ok=True, message=msg, updated=updated, total=len(rows))
+    except Exception as e:
+        logger.error('[backfill_trial] 오류: %s', e)
+        return jsonify(ok=False, message=str(e))
+
+
 def _refund(supabase, user_id: str, operator_id, creation_id: str, pts: int):
     """포인트 환불 처리 — point_ledger에 잔액 누적 행 INSERT.
 

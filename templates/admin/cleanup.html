@@ -90,6 +90,17 @@
   </div>
 </div>
 
+<!-- 체험 만료일 백필 -->
+<div class="card mb-4 border-warning">
+  <div class="card-header py-2 bg-warning bg-opacity-10 d-flex align-items-center justify-content-between">
+    <span class="fw-bold small"><i class="bi bi-clock-history me-1 text-warning"></i>체험 만료일 백필</span>
+    <button class="btn btn-sm btn-warning" onclick="runBackfill()">실행</button>
+  </div>
+  <div class="card-body py-2 small text-muted">
+    <code>current_period_end</code>가 없는 trial 구독을 <strong>가입일 + 30일</strong>로 채웁니다. 어드민 대시보드 만료일 표시 정상화용.
+  </div>
+</div>
+
 <!-- 결과 -->
 <div id="resultBox" class="alert d-none mb-4"></div>
 
@@ -105,6 +116,24 @@ function runCleanupSelected() {
   if (!ids.length) { alert('선택된 항목이 없습니다.'); return; }
   if (!confirm(`선택한 ${ids.length}개 항목을 실패 처리하고 포인트를 환불합니까?`)) return;
   runCleanup(ids);
+}
+
+function runBackfill() {
+  if (!confirm('current_period_end 없는 trial 구독을 가입일+30일로 채웁니까?')) return;
+  const resultBox = document.getElementById('resultBox');
+  resultBox.className = 'alert alert-info';
+  resultBox.textContent = '처리 중...';
+  fetch('/admin/cleanup/backfill-trial-end', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: JSON.stringify({}),
+  })
+  .then(r => r.json())
+  .then(data => {
+    resultBox.className = data.ok ? 'alert alert-success' : 'alert alert-danger';
+    resultBox.textContent = data.ok ? `✅ ${data.message}` : `❌ ${data.message}`;
+  })
+  .catch(e => { resultBox.className = 'alert alert-danger'; resultBox.textContent = '오류: ' + e.message; });
 }
 
 function runCleanup(ids) {
