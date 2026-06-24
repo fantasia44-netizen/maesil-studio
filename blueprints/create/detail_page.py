@@ -278,7 +278,10 @@ def detail_page_plan_status(plan_id: str):
 @create_bp.route('/detail-page/draft/init', methods=['POST'])
 @login_required
 def detail_page_draft_init():
-    """선택한 타입의 초안을 DB에 저장하고 draft_id 반환."""
+    """선택한 타입 미리보기로 draft 생성 → 카피 생성 Celery 태스크 제출."""
+    from services.config_service import get_config
+    import os
+
     supabase = current_app.supabase
     data     = request.get_json(silent=True) or {}
     brand_id = (data.get('brand_id') or '').strip()
@@ -286,33 +289,51 @@ def detail_page_draft_init():
     if not brand:
         return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
 
-    plan         = data.get('plan') or {}
+    plan_preview = data.get('plan') or {}
     product_name = (data.get('product_name') or '').strip()
-    if not plan or not plan.get('sections'):
+    input_data   = data.get('input_data') or {}
+    if not plan_preview or not plan_preview.get('sections'):
         return jsonify(ok=False, message='초안 데이터가 없습니다.')
 
     draft_id = str(uuid.uuid4())
     output_data = {
-        'type_name':       plan.get('type_name', ''),
+        'type_name':       plan_preview.get('type_name', ''),
         'product_name':    product_name,
-        'appeal_analysis': plan.get('appeal_analysis', {}),
+        'appeal_analysis': plan_preview.get('appeal_analysis', {}),
+        'copy_status':     'generating',
         'sections':        [
-            {**sec, 'image_url': None, 'img_status': 'pending'}
-            for sec in plan.get('sections', [])
+            {**sec, 'copy': '', 'image_url': None, 'img_status': 'pending'}
+            for sec in plan_preview.get('sections', [])
         ],
     }
     try:
         supabase.table('creations').insert({
             'id': draft_id, 'user_id': current_user.id,
             'brand_id': brand['id'], 'creation_type': 'detail_page_draft',
-            'input_data': {'product_name': product_name},
+            'input_data': {'product_name': product_name, **input_data},
             'output_data': output_data,
-            'points_used': 0, 'status': 'done',
+            'points_used': 0, 'status': 'generating',
             'created_at': now_kst().isoformat(),
         }).execute()
     except Exception as e:
         logger.error(f'[dp_draft_init] insert 실패: {e}')
         return jsonify(ok=False, message='초안 저장 실패')
+
+    # 카피 생성 Celery 태스크
+    from tasks.detail_page_task import generate_copy
+    supabase_url = os.environ.get('SUPABASE_URL', '')
+    supabase_key = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_KEY', '')
+    anthropic_key = get_config('anthropic_api_key') or os.environ.get('ANTHROPIC_API_KEY', '')
+
+    generate_copy.delay(
+        draft_id=draft_id,
+        brand=brand,
+        input_data={**input_data, 'product_name': product_name},
+        plan_preview=plan_preview,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+        anthropic_api_key=anthropic_key,
+    )
 
     return jsonify(ok=True, draft_id=draft_id)
 
@@ -342,7 +363,10 @@ def detail_page_draft_gen_image():
 
     image_prompt = sec.get('image_prompt', '')
     if not image_prompt:
-        return jsonify(ok=False, message='이미지 프롬프트가 없습니다.')
+        # 규칙 기반으로 즉석 생성 (API 호출 없음)
+        from services.prompts.detail_page import build_image_prompt_for_section
+        product_name = od.get('product_name', '')
+        image_prompt = build_image_prompt_for_section(sec, product_name)
 
     cost = POINT_COSTS.get('detail_page_draft_image', 50)
     gen_id = str(uuid.uuid4())
@@ -407,6 +431,23 @@ def detail_page_draft_update_copy():
     od['sections'] = sections
     supabase.table('creations').update({'output_data': od}).eq('id', draft_id).execute()
     return jsonify(ok=True)
+
+
+@create_bp.route('/detail-page/draft/<draft_id>/copy-status', methods=['GET'])
+@login_required
+def detail_page_draft_copy_status(draft_id: str):
+    """카피 생성 완료 여부 폴링."""
+    supabase = current_app.supabase
+    row = _get_draft(supabase, draft_id)
+    if not row:
+        return jsonify(ok=False, status='error', message='초안을 찾을 수 없습니다.')
+    od = row.get('output_data') or {}
+    copy_status = od.get('copy_status', 'generating')
+    if copy_status == 'done':
+        return jsonify(ok=True, status='done', data=od)
+    elif copy_status == 'failed':
+        return jsonify(ok=False, status='failed', message=od.get('copy_error', '카피 생성 실패'))
+    return jsonify(ok=True, status='generating')
 
 
 @create_bp.route('/detail-page/draft/<draft_id>', methods=['GET'])

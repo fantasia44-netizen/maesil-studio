@@ -1,4 +1,4 @@
-"""상세페이지 초안 기획 (3타입) Celery 태스크"""
+"""상세페이지 초안 Celery 태스크"""
 import json
 import logging
 
@@ -7,64 +7,102 @@ from celery_app import celery
 logger = logging.getLogger(__name__)
 
 
-@celery.task(bind=True, name='tasks.detail_page_task.generate_plan', max_retries=1,
-             soft_time_limit=300, time_limit=360)
-def generate_plan(
-    self,
-    plan_id: str,
-    user_id: str,
-    operator_id,
-    brand: dict,
-    input_data: dict,
-    cost: int,
-    supabase_url: str,
-    supabase_key: str,
-    anthropic_api_key: str,
-):
-    """Celery 워커에서 Claude 3타입 상세페이지 기획 생성."""
+def _setup():
     import os, sys
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+
+# ── Phase 1: 3타입 미리보기 생성 ────────────────────────────
+@celery.task(bind=True, name='tasks.detail_page_task.generate_plan',
+             max_retries=1, soft_time_limit=120, time_limit=150)
+def generate_plan(self, plan_id, user_id, operator_id, brand, input_data,
+                  cost, supabase_url, supabase_key, anthropic_api_key):
+    _setup()
+    import os
     from supabase import create_client
     supabase = create_client(supabase_url, supabase_key)
+    os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
 
     try:
-        from services.prompts.detail_page import build_single_plan_prompt, _PLAN_TYPES
+        from services.prompts.detail_page import build_preview_prompt
         from services.claude_service import generate_text
 
-        os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
+        system, user_prompt = build_preview_prompt(brand, input_data)
+        raw = generate_text(system, user_prompt, max_tokens=3000,
+                            model='claude-sonnet-4-6')
 
-        plans = []
-        for type_name in _PLAN_TYPES:
-            system, user_prompt = build_single_plan_prompt(brand, input_data, type_name)
-            raw = generate_text(system, user_prompt, max_tokens=3000,
-                                model='claude-sonnet-4-6')
-            cleaned = raw.strip()
-            if cleaned.startswith('```'):
-                cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-            plan = json.loads(cleaned)
-            plans.append(plan)
-            logger.info('[dp_plan_task] plan "%s" 완료', type_name)
+        cleaned = raw.strip()
+        if cleaned.startswith('```'):
+            cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        data = json.loads(cleaned)
 
-        plans_data = {'plans': plans}
+        supabase.table('creations').update(
+            {'output_data': data, 'status': 'done'}
+        ).eq('id', plan_id).execute()
 
-        supabase.table('creations').update({
-            'output_data': plans_data,
-            'status': 'done',
-        }).eq('id', plan_id).execute()
-
-        logger.info('[dp_plan_task] 전체 완료 plan_id=%s', plan_id)
+        logger.info('[dp_plan] 미리보기 완료 plan_id=%s', plan_id)
 
     except Exception as e:
-        logger.error('[dp_plan_task] 오류 plan_id=%s: %s', plan_id, e, exc_info=True)
+        logger.error('[dp_plan] 오류 plan_id=%s: %s', plan_id, e, exc_info=True)
         try:
-            err_msg = str(e)[:200]
             supabase.table('creations').update({
                 'status': 'failed',
-                'output_data': {'error': err_msg},
+                'output_data': {'error': str(e)[:200]},
             }).eq('id', plan_id).execute()
+        except Exception:
+            pass
+        raise
+
+
+# ── Phase 2: 선택된 타입 카피 생성 ──────────────────────────
+@celery.task(bind=True, name='tasks.detail_page_task.generate_copy',
+             max_retries=1, soft_time_limit=120, time_limit=150)
+def generate_copy(self, draft_id, brand, input_data, plan_preview,
+                  supabase_url, supabase_key, anthropic_api_key):
+    _setup()
+    import os
+    from supabase import create_client
+    supabase = create_client(supabase_url, supabase_key)
+    os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
+
+    try:
+        from services.prompts.detail_page import build_copy_prompt
+        from services.claude_service import generate_text
+
+        system, user_prompt = build_copy_prompt(brand, input_data, plan_preview)
+        raw = generate_text(system, user_prompt, max_tokens=2000,
+                            model='claude-sonnet-4-6')
+
+        cleaned = raw.strip()
+        if cleaned.startswith('```'):
+            cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        result = json.loads(cleaned)
+
+        # copies를 sections에 병합
+        copies = {c['no']: c['copy'] for c in result.get('copies', [])}
+        r = supabase.table('creations').select('output_data').eq('id', draft_id).single().execute()
+        od = r.data.get('output_data') or {}
+        for sec in od.get('sections', []):
+            if sec['no'] in copies:
+                sec['copy'] = copies[sec['no']]
+        od['copy_status'] = 'done'
+
+        supabase.table('creations').update(
+            {'output_data': od, 'status': 'done'}
+        ).eq('id', draft_id).execute()
+
+        logger.info('[dp_copy] 카피 완료 draft_id=%s', draft_id)
+
+    except Exception as e:
+        logger.error('[dp_copy] 오류 draft_id=%s: %s', draft_id, e, exc_info=True)
+        try:
+            r = supabase.table('creations').select('output_data').eq('id', draft_id).single().execute()
+            od = r.data.get('output_data') or {}
+            od['copy_status'] = 'failed'
+            od['copy_error'] = str(e)[:200]
+            supabase.table('creations').update({'output_data': od}).eq('id', draft_id).execute()
         except Exception:
             pass
         raise

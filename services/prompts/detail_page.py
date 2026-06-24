@@ -28,93 +28,65 @@ def build_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
 핵심 기능/특징: {features}
 타겟 고객: {target_customer or '브랜드 프로필 기준'}
 가격대: {price_range or '미입력'}
-경쟁 대비 차별점: {differentiator or '미입력'}
-
-[작성 기준]
-1. 소비자가 상세페이지를 위에서 아래로 스크롤할 때 느끼는 감정·심리 흐름을 설계하세요.
-2. 각 섹션은 "왜 이 순서여야 하는가"를 분명히 알 수 있도록 purpose를 작성하세요.
-3. scene은 디자이너·촬영팀에게 전달하는 비주얼 디렉션입니다. 배경색/분위기/구도/소품/모델 사용 여부까지 구체적으로 쓰세요.
-4. copy는 실제 상세페이지에 그대로 올릴 수 있는 카피를 쓰세요. 헤드라인+서브 또는 짧은 문단 형태로요.
-5. 섹션 수는 6~8개로 구성하세요.
-
-아래 JSON 형식으로만 출력하세요:
-
-{{
-  "appeal_analysis": {{
-    "target_customer": "이 상품을 살 가능성이 가장 높은 고객 페르소나 (1~2줄, 구체적인 상황/나이대/라이프스타일 포함)",
-    "core_pain": "이 고객이 실제로 느끼는 핵심 불편함 또는 욕구",
-    "buy_trigger": "이 고객이 구매 버튼을 누르게 만드는 결정적 요인",
-    "appeal_points": ["소구포인트1", "소구포인트2", "소구포인트3", "소구포인트4"]
-  }},
-  "sections": [
-    {{
-      "no": 1,
-      "name": "섹션 이름 (예: 첫인상·훅)",
-      "purpose": "이 섹션이 고객 심리에서 하는 역할 — 1문장",
-      "scene": "디자이너 디렉션: 어떤 장면을 어떻게 만들어야 하는지 구체적으로 (배경, 분위기, 구도, 소품, 조명 등)",
-      "copy": "이 섹션에 들어갈 실제 카피 (헤드라인+서브 또는 문단 형태)"
-    }}
-  ]
-}}"""
+경쟁 차별점: {differentiator or '미입력'}"""
 
     return system, user
 
 
-# ── 초안 제안서 — 1개 타입씩 생성 (3번 호출) ───────────────
-_PLAN_SYSTEM = """You are a senior Korean e-commerce marketing strategist.
-Generate ONE detail page draft proposal with 6 sections.
+# ── Phase 1: 3타입 미리보기 (섹션명만, 카피 없음) ────────────
+_PREVIEW_SYSTEM = """You are a Korean e-commerce marketing strategist.
+Output ONLY valid JSON. No markdown, no explanation.
+Korean for all fields except type_name keys."""
 
-CRITICAL OUTPUT RULES:
-- Output ONLY valid JSON. No markdown, no explanation, no code fences.
-- copy/name/purpose fields: Korean only.
-- image_prompt fields: English only (for FLUX AI image generation).
-- Keep all text SHORT to avoid truncation.
-"""
-
-_PLAN_TYPES = {
-    '공감·문제해결형': 'Lead with customer pain empathy → problem cause → solution reveal → proof → benefit → CTA',
-    '스토리·라이프스타일형': 'Brand/product story → aspiration lifestyle → product as enabler → testimonial → value → CTA',
-    '데이터·전문가형': 'Hard data/stats → ingredient/tech proof → expert endorsement → social proof → value → CTA',
-}
+_PLAN_TYPES = ['공감·문제해결형', '스토리·라이프스타일형', '데이터·전문가형']
 
 
-def build_single_plan_prompt(brand: dict, input_data: dict, type_name: str) -> tuple[str, str]:
-    """1개 타입 상세페이지 초안 생성."""
+def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
+    """3타입 미리보기 — 섹션 이름 목록 + 소구 요약만 생성. 빠르고 작음."""
     brand_ctx = build_brand_context(brand)
-    strategy = _PLAN_TYPES.get(type_name, '')
 
-    system = f"""{_PLAN_SYSTEM}
+    system = f"{_PREVIEW_SYSTEM}\n\nBrand: {brand_ctx}"
 
-Brand context:
-{brand_ctx}"""
+    user = f"""Product: {input_data.get('product_name','')}
+Features: {input_data.get('features','')}
+Target: {input_data.get('target_customer') or 'brand default'}
+Price: {input_data.get('price_range') or '-'}
+Differentiator: {input_data.get('differentiator') or '-'}
 
-    user = f"""Product: {input_data.get('product_name', '')}
-Features: {input_data.get('features', '')}
-Target: {input_data.get('target_customer') or 'brand profile default'}
-Price: {input_data.get('price_range') or 'not specified'}
-Differentiator: {input_data.get('differentiator') or 'not specified'}
+Generate previews for 3 plan types. Each has 6 section NAMES only (no copy).
 
-Generate ONE plan with type_name "{type_name}".
-Narrative strategy: {strategy}
-
-6 sections required. Section names suggestion: 첫인상·훅 / 고객 공감 / 솔루션 소개 / 핵심 기능 / 신뢰 증거 / 구매 유도
-
-Output ONLY this JSON (no other text):
+Output ONLY this JSON:
 {{
-  "type_name": "{type_name}",
-  "appeal_analysis": {{
-    "target_customer": "Korean, max 30 chars",
-    "core_pain": "Korean, max 30 chars",
-    "buy_trigger": "Korean, max 30 chars",
-    "appeal_points": ["point1", "point2", "point3"]
-  }},
-  "sections": [
+  "plans": [
     {{
-      "no": 1,
-      "name": "Korean, max 10 chars",
-      "purpose": "Korean, max 40 chars",
-      "copy": "Korean headline (max 20 chars)\\n supporting sentence (max 50 chars)",
-      "image_prompt": "English, max 20 words, photographic, no text in image"
+      "type_name": "공감·문제해결형",
+      "hook": "이 타입의 핵심 전략을 한 줄로 (Korean, max 40자)",
+      "appeal_analysis": {{
+        "target_customer": "Korean, max 25자",
+        "core_pain": "Korean, max 25자",
+        "buy_trigger": "Korean, max 25자",
+        "appeal_points": ["point1", "point2", "point3"]
+      }},
+      "sections": [
+        {{"no": 1, "name": "Korean section name, max 8자", "purpose": "Korean, max 30자"}},
+        {{"no": 2, "name": "...", "purpose": "..."}},
+        {{"no": 3, "name": "...", "purpose": "..."}},
+        {{"no": 4, "name": "...", "purpose": "..."}},
+        {{"no": 5, "name": "...", "purpose": "..."}},
+        {{"no": 6, "name": "...", "purpose": "..."}}
+      ]
+    }},
+    {{
+      "type_name": "스토리·라이프스타일형",
+      "hook": "...",
+      "appeal_analysis": {{ ... }},
+      "sections": [ ... 6 sections ... ]
+    }},
+    {{
+      "type_name": "데이터·전문가형",
+      "hook": "...",
+      "appeal_analysis": {{ ... }},
+      "sections": [ ... 6 sections ... ]
     }}
   ]
 }}"""
@@ -122,6 +94,81 @@ Output ONLY this JSON (no other text):
     return system, user
 
 
-def build_plan_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
-    """호환성 유지용 — 첫 번째 타입 프롬프트 반환."""
-    return build_single_plan_prompt(brand, input_data, '공감·문제해결형')
+# ── Phase 2: 선택된 1타입 카피 생성 ─────────────────────────
+def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tuple[str, str]:
+    """선택된 플랜의 섹션별 카피 생성. 이미지 프롬프트 없음."""
+    brand_ctx = build_brand_context(brand)
+    type_name = plan_preview.get('type_name', '')
+    hook      = plan_preview.get('hook', '')
+    sections  = plan_preview.get('sections', [])
+    sec_list  = '\n'.join(f"{s['no']}. {s['name']} — {s.get('purpose','')}" for s in sections)
+
+    system = f"""당신은 한국 온라인 커머스 카피라이터입니다.
+결과는 순수 JSON만 출력합니다. 마크다운 없음.
+
+브랜드: {brand_ctx}"""
+
+    user = f"""상품: {input_data.get('product_name','')}
+특징: {input_data.get('features','')}
+타겟: {input_data.get('target_customer') or '브랜드 기준'}
+가격: {input_data.get('price_range') or '-'}
+차별점: {input_data.get('differentiator') or '-'}
+
+기획 방향: {type_name} — {hook}
+
+아래 6개 섹션의 카피를 작성하세요:
+{sec_list}
+
+각 섹션 카피 규칙:
+- 헤드라인: 15자 이내 (임팩트 있는 짧은 문구)
+- 본문: 2~3줄, 각 줄 30자 이내
+- 이모지나 특수기호 없이 순수 텍스트
+
+Output ONLY this JSON:
+{{
+  "copies": [
+    {{"no": 1, "copy": "헤드라인\\n본문 첫줄\\n본문 둘째줄"}},
+    {{"no": 2, "copy": "..."}},
+    {{"no": 3, "copy": "..."}},
+    {{"no": 4, "copy": "..."}},
+    {{"no": 5, "copy": "..."}},
+    {{"no": 6, "copy": "..."}}
+  ]
+}}"""
+
+    return system, user
+
+
+# ── Phase 3: 섹션별 이미지 프롬프트 생성 ────────────────────
+def build_image_prompt_for_section(section: dict, product_name: str) -> str:
+    """섹션 정보로 FLUX용 영문 이미지 프롬프트 생성 (규칙 기반, API 호출 없음)."""
+    name    = section.get('name', '')
+    purpose = section.get('purpose', '')
+    copy    = (section.get('copy') or '').split('\n')[0][:30]  # 헤드라인만
+
+    # 섹션 이름 → 장면 패턴 매핑
+    scene_map = {
+        '첫인상': 'hero product shot, dramatic lighting, clean white background, premium feel',
+        '훅':     'striking close-up product detail, macro photography, shallow depth of field',
+        '공감':   'person looking concerned or thoughtful, soft natural light, lifestyle photo',
+        '문제':   'before scenario, muted colors, person experiencing discomfort, documentary style',
+        '솔루션': 'product in use, bright clean environment, hands interacting with product',
+        '소개':   'product reveal shot, elegant styling, studio lighting, premium composition',
+        '기능':   'product feature close-up, technical beauty shot, clean background, sharp focus',
+        '성분':   'ingredient flat lay, natural materials, marble surface, overhead shot',
+        '증거':   'before and after split composition, clinical clean aesthetic, data visualization style',
+        '신뢰':   'award or certification display, professional setting, credible clean design',
+        '후기':   'happy customer lifestyle photo, natural light, genuine smile, product in hand',
+        '구매':   'product packaging beauty shot, gift-ready styling, warm inviting light',
+        '라이프': 'aspirational lifestyle scene, bright airy environment, product naturally placed',
+        '스토리': 'behind the scenes craftsmanship, warm natural light, authentic documentary feel',
+        '데이터': 'scientific lab aesthetic, clean white environment, precise technical photography',
+    }
+
+    scene = 'professional product photography, clean background, commercial style'
+    for key, val in scene_map.items():
+        if key in name or key in purpose:
+            scene = val
+            break
+
+    return f"{product_name} product, {scene}, high resolution, no text no words no letters"
