@@ -674,6 +674,7 @@ async function genImage(secNo) {
       const sec = (_draftData.sections || []).find(s => s.no === secNo);
       if (sec) { sec.image_url = result.image_url; sec.img_status = 'done'; }
       _setSecImg(secNo, result.image_url);
+      window._hasRegenerated = true;  // 내보내기 시 캐시 무효화 플래그
     } else {
       _setSecImgBtn(secNo, result.message || '실패');
     }
@@ -743,7 +744,9 @@ async function startExport(fmt) {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>생성 중…';
 
   try {
-    const r = await fetch(`/create/detail-page/draft/${_draftId}/export/${fmt}`, {
+    // 이미지 재생성 후에는 캐시 무시하고 새로 만들기
+    const forceParam = window._hasRegenerated ? '?force=1' : '';
+    const r = await fetch(`/create/detail-page/draft/${_draftId}/export/${fmt}${forceParam}`, {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
     });
     const d = await r.json();

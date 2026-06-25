@@ -603,9 +603,18 @@ def detail_page_draft_export(draft_id: str, fmt: str):
         return jsonify(ok=False, message='초안을 찾을 수 없습니다.')
 
     od = row.get('output_data') or {}
+
+    # 이미지 재생성 후 내보내기 시 캐시된 이전 URL을 무조건 삭제 후 재생성
+    force = request.args.get('force') == '1'
     cached = od.get(f'export_{fmt}_url')
-    if cached:
+    if cached and not force:
         return jsonify(ok=True, status='done', url=cached)
+
+    # 캐시 초기화 후 재생성
+    if cached:
+        od.pop(f'export_{fmt}_url', None)
+        od.pop(f'export_{fmt}_error', None)
+        supabase.table('creations').update({'output_data': od}).eq('id', draft_id).execute()
 
     supabase_url = os.environ.get('SUPABASE_URL', '')
     supabase_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
