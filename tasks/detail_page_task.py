@@ -148,4 +148,12 @@ def export_draft(self, draft_id, fmt, supabase_url, supabase_key):
 
     except Exception as e:
         logger.error('[dp_export] 오류 draft_id=%s: %s', draft_id, e, exc_info=True)
+        # 실패 상태를 output_data에 기록해서 폴링이 감지할 수 있게
+        try:
+            r2 = supabase.table('creations').select('output_data').eq('id', draft_id).single().execute()
+            od2 = r2.data.get('output_data') or {}
+            od2[f'export_{fmt}_error'] = str(e)[:200]
+            supabase.table('creations').update({'output_data': od2}).eq('id', draft_id).execute()
+        except Exception:
+            pass
         raise

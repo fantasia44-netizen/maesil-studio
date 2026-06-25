@@ -497,4 +497,7 @@ def detail_page_draft_export_status(draft_id: str, fmt: str):
     url = od.get(f'export_{fmt}_url')
     if url:
         return jsonify(ok=True, status='done', url=url)
+    err = od.get(f'export_{fmt}_error')
+    if err:
+        return jsonify(ok=False, status='failed', message=f'내보내기 실패: {err}')
     return jsonify(ok=True, status='generating')

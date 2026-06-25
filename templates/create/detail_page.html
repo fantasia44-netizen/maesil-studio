@@ -553,6 +553,10 @@ async function startExport(fmt) {
           clearInterval(timer);
           _triggerDownload(s.url, fmt);
           btn.disabled = false; btn.innerHTML = origHtml;
+        } else if (s.status === 'failed') {
+          clearInterval(timer);
+          btn.disabled = false; btn.innerHTML = origHtml;
+          alert(s.message || '내보내기 실패');
         }
       } catch(_) {}
     }, 3000);
