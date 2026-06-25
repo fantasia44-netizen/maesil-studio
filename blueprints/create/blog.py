@@ -38,7 +38,8 @@ def _accessible_products(supabase, brand_id: str | None = None) -> list:
                 'id,name,category,price,avoid_words,brand_id,image_url,images'
             ).eq('user_id', user.id)
         if brand_id:
-            q = q.eq('brand_id', brand_id)
+            # brand_id 일치 OR brand_id가 NULL인 상품도 포함 (브랜드 미매핑 상품 누락 방지)
+            q = q.or_(f'brand_id.eq.{brand_id},brand_id.is.null')
         # 활성만
         try:
             q = q.eq('is_active', True)

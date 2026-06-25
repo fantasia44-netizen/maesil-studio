@@ -45,7 +45,7 @@ def _accessible_products(supabase, brand_id=None) -> list:
                 'id,name,category,image_url,images'
             ).eq('user_id', user.id)
         if brand_id:
-            q = q.eq('brand_id', brand_id)
+            q = q.or_(f'brand_id.eq.{brand_id},brand_id.is.null')
         try:
             q = q.eq('is_active', True)
         except Exception:
