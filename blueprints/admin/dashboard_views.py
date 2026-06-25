@@ -166,7 +166,6 @@ def dashboard():
                     if not expires and sub.get('status') == 'trial':
                         created = sub.get('created_at') or u.get('created_at', '')
                         if created:
-                            from datetime import datetime, timedelta, timezone
                             try:
                                 dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
                                 expires = (dt + timedelta(days=30)).isoformat()
