@@ -298,54 +298,6 @@ def generate_one(product_id):
     return jsonify(result)
 
 
-# ── 인사이트 이미지 가져오기 ─────────────────────────────
-@product_bp.route('/<product_id>/insight-images', methods=['POST'])
-@login_required
-def insight_images(product_id):
-    """인사이트 외부 API로 상품 이미지를 가져와 Supabase Storage에 저장."""
-    supabase = current_app.supabase
-    product = _get_product(supabase, product_id)
-    if not product:
-        return jsonify(ok=False, message='상품을 찾을 수 없습니다.')
-
-    source_ref = product.get('source_ref') or ''
-    if not source_ref:
-        return jsonify(ok=False, message='인사이트 연동 상품이 아닙니다 (source_ref 없음).')
-
-    try:
-        from services.maesil_insight_connection import get_client_for_user
-        from blueprints.integrations import _collect_all_image_urls, _download_and_store_images
-        client = get_client_for_user(current_user.id, operator_id=current_user.operator_id)
-        if not client:
-            return jsonify(ok=False, message='인사이트 연동이 설정되지 않았습니다.')
-
-        detail = client.get_product(source_ref)
-        urls = _collect_all_image_urls(detail)
-        if not urls:
-            return jsonify(ok=False, message='인사이트에서 이미지를 찾을 수 없습니다.')
-
-        images = _download_and_store_images(supabase, str(current_user.id), source_ref, urls)
-
-        # 기존 이미지와 합쳐서 중복 제거
-        existing = list(product.get('images') or [])
-        merged = existing + [u for u in images if u not in existing]
-        image_url = merged[0] if merged else product.get('image_url') or ''
-
-        supabase.table('products').update({
-            'images': merged,
-            'image_url': image_url,
-            'updated_at': now_kst().isoformat(),
-        }).eq('id', product_id).execute()
-
-        new_images = [u for u in images if u not in existing]
-        return jsonify(ok=True, images=new_images,
-                       message=f'{len(new_images)}장 추가됨 (총 {len(merged)}장)')
-
-    except Exception as e:
-        logger.error(f'[PRODUCT] insight_images error: {e}')
-        return jsonify(ok=False, message=f'오류: {str(e)[:100]}')
-
-
 # ── 상품 이미지: URL 가져오기 ────────────────────────────
 @product_bp.route('/<product_id>/import-url', methods=['POST'])
 @login_required
