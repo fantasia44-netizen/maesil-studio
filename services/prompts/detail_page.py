@@ -74,10 +74,22 @@ _PREVIEW_SYSTEM = """당신은 대한민국 최고 수준의 온라인 커머스
 고객 심리 기반의 상세페이지 시나리오를 설계합니다.
 
 핵심 원칙:
-- 상세페이지는 '우리 제품이 좋다'가 아니라 '고객의 고민을 우리가 해결한다'가 중심
+- 상세페이지는 예쁜 스토리 페이지가 아니라 구매를 설득하는 페이지다
 - 고객은 스크롤하며 자신의 이야기를 찾는다 — 첫 3초에 공감을 얻어야 함
-- 각 섹션은 구매 심리 여정의 한 단계: 공감 → 문제인식 → 해결책 → 신뢰 → 결심
+- 각 섹션은 구매전환 역할을 담당: hook → pain → solution → comparison → proof → review → cta
+- 반드시 7개 섹션 구조. 비교(comparison) 섹션 없이는 구매전환이 완성되지 않는다
 - 결과는 순수 JSON만 출력. 마크다운 없음."""
+
+# 전환 역할 정의 (Phase 1 JSON에 삽입, Phase 2 카피 규칙 연동)
+_CONVERSION_ROLES = {
+    'hook':       ('공감 훅',   'medium', '첫 3초 안에 고객이 "나 얘기네"를 느껴야 함. 제품 등장 가능'),
+    'pain':       ('문제 심화', 'none',   '고객이 혼자 힘든 게 아님을 증명. 제품 노출 최소화, 공감에 집중'),
+    'solution':   ('해결책',    'large',  '제품이 주인공으로 등장. 기능이 아닌 고객이 얻는 결과 중심'),
+    'comparison': ('비교',      'medium', '직접 하는 것/경쟁 제품 대비 차이를 시간·번거로움·결과로 보여줌'),
+    'proof':      ('신뢰 근거', 'large',  '인증·공정·수치·원재료 중 최소 2개 이상. "믿어도 될까?" 해소'),
+    'review':     ('사용 후기', 'medium', '실제 고객 언어로 변화 스토리. "나도 저렇게 될 수 있겠다"'),
+    'cta':        ('구매 유도', 'large',  '반론 제거 + 구체적 행동 문구 + 안심 요소. 감성 마무리만 하면 실패'),
+}
 
 _TYPE_STRATEGIES = {
     '공감·문제해결형': {
@@ -204,20 +216,22 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
 {type_block_str}
 
 [설계 원칙 — 반드시 준수]
-1. 섹션명은 마케터 시선이 아닌 고객 시선으로
+1. 섹션은 반드시 7개. conversion_role 순서: hook → pain → solution → comparison → proof → review → cta
+   - comparison 섹션 없이는 구매전환 불완전. 반드시 포함할 것.
+
+2. 섹션명은 마케터 시선이 아닌 고객 시선으로
    - 금지: "제품 소개", "특징 설명", "구성품 안내", "브랜드 스토리"
    - 허용: 고객이 그 순간 느끼는 감정/의문/상황을 담은 표현
-   - 예시(이유식 제품): "매일 밤 고민하셨죠?", "이걸 먹여도 될까요?", "엄마들이 먼저 알아봤습니다"
+   - 예시: "매일 밤 고민하셨죠?", "직접 만드는 게 맞는 걸까요?", "엄마들이 먼저 알아봤습니다"
 
-2. purpose는 "이 섹션에서 고객 머릿속에 심어야 할 생각" — 마케터의 의도가 아님
-   - 금지: "제품 특징을 설명한다", "브랜드를 소개한다"
-   - 허용: "'나도 이 문제 있는데' 공감 유발", "'이게 정말 다른 건가?' 호기심 자극"
+3. purpose는 "이 섹션에서 고객 머릿속에 심어야 할 생각"
+   - 금지: "제품 특징을 설명한다"
+   - 허용: "'나도 이 문제 있는데' 공감 유발", "'직접 하는 것보다 낫구나' 비교 납득"
 
-3. appeal_analysis — 이 상품·이 타입으로 구매를 이끌어내는 전략 핵심
-   - target_customer: 실제 이 상품을 살 사람의 구체적 상황 묘사 (직업·나이 말고 상황으로)
-   - core_pain: 고객이 매일 겪는 가장 구체적인 불편 — 고객이 직접 할 말투로
-   - buy_trigger: 구매 버튼을 누르게 만드는 심리적 마지막 한 마디
-   - appeal_points: 이 타입 전략에서 가장 강하게 쓸 소구 포인트 3가지
+4. appeal_analysis — 이 상품·타입으로 구매를 이끄는 전략 핵심
+
+5. product_visibility — 섹션 이미지에서 제품 노출 강도 (none/small/medium/large)
+   기본값: hook=medium, pain=none, solution=large, comparison=medium, proof=large, review=medium, cta=large
 
 Output ONLY this JSON (no markdown, no explanation):
 {{
@@ -232,25 +246,42 @@ Output ONLY this JSON (no markdown, no explanation):
         "appeal_points": ["포인트1", "포인트2", "포인트3"]
       }},
       "sections": [
-        {{"no": 1, "name": "고객 감정/의문 중심 섹션명 (12자 이내)", "purpose": "이 섹션에서 고객 머릿속에 심어야 할 생각 (35자 이내)"}},
-        {{"no": 2, "name": "...", "purpose": "..."}},
-        {{"no": 3, "name": "...", "purpose": "..."}},
-        {{"no": 4, "name": "...", "purpose": "..."}},
-        {{"no": 5, "name": "...", "purpose": "..."}},
-        {{"no": 6, "name": "...", "purpose": "..."}}
+        {{"no": 1, "conversion_role": "hook",       "product_visibility": "medium", "name": "섹션명 (12자 이내)", "purpose": "고객 머릿속에 심어야 할 생각 (35자 이내)"}},
+        {{"no": 2, "conversion_role": "pain",       "product_visibility": "none",   "name": "...", "purpose": "..."}},
+        {{"no": 3, "conversion_role": "solution",   "product_visibility": "large",  "name": "...", "purpose": "..."}},
+        {{"no": 4, "conversion_role": "comparison", "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 5, "conversion_role": "proof",      "product_visibility": "large",  "name": "...", "purpose": "..."}},
+        {{"no": 6, "conversion_role": "review",     "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 7, "conversion_role": "cta",        "product_visibility": "large",  "name": "...", "purpose": "..."}}
       ]
     }},
     {{
       "type_name": "스토리·라이프스타일형",
       "hook": "...",
       "appeal_analysis": {{"target_customer": "...", "core_pain": "...", "buy_trigger": "...", "appeal_points": ["...", "...", "..."]}},
-      "sections": [{{"no": 1, "name": "...", "purpose": "..."}}, {{"no": 2, "name": "...", "purpose": "..."}}, {{"no": 3, "name": "...", "purpose": "..."}}, {{"no": 4, "name": "...", "purpose": "..."}}, {{"no": 5, "name": "...", "purpose": "..."}}, {{"no": 6, "name": "...", "purpose": "..."}}]
+      "sections": [
+        {{"no": 1, "conversion_role": "hook",       "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 2, "conversion_role": "pain",       "product_visibility": "none",   "name": "...", "purpose": "..."}},
+        {{"no": 3, "conversion_role": "solution",   "product_visibility": "large",  "name": "...", "purpose": "..."}},
+        {{"no": 4, "conversion_role": "comparison", "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 5, "conversion_role": "proof",      "product_visibility": "large",  "name": "...", "purpose": "..."}},
+        {{"no": 6, "conversion_role": "review",     "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 7, "conversion_role": "cta",        "product_visibility": "large",  "name": "...", "purpose": "..."}}
+      ]
     }},
     {{
       "type_name": "데이터·전문가형",
       "hook": "...",
       "appeal_analysis": {{"target_customer": "...", "core_pain": "...", "buy_trigger": "...", "appeal_points": ["...", "...", "..."]}},
-      "sections": [{{"no": 1, "name": "...", "purpose": "..."}}, {{"no": 2, "name": "...", "purpose": "..."}}, {{"no": 3, "name": "...", "purpose": "..."}}, {{"no": 4, "name": "...", "purpose": "..."}}, {{"no": 5, "name": "...", "purpose": "..."}}, {{"no": 6, "name": "...", "purpose": "..."}}]
+      "sections": [
+        {{"no": 1, "conversion_role": "hook",       "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 2, "conversion_role": "pain",       "product_visibility": "none",   "name": "...", "purpose": "..."}},
+        {{"no": 3, "conversion_role": "solution",   "product_visibility": "large",  "name": "...", "purpose": "..."}},
+        {{"no": 4, "conversion_role": "comparison", "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 5, "conversion_role": "proof",      "product_visibility": "large",  "name": "...", "purpose": "..."}},
+        {{"no": 6, "conversion_role": "review",     "product_visibility": "medium", "name": "...", "purpose": "..."}},
+        {{"no": 7, "conversion_role": "cta",        "product_visibility": "large",  "name": "...", "purpose": "..."}}
+      ]
     }}
   ]
 }}"""
@@ -289,12 +320,16 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
     sec_guides = []
     for i, sec in enumerate(sections):
         j_role, j_angle, j_psych = journey[i] if i < len(journey) else ('', '', '')
+        role = sec.get('conversion_role', '')
+        visibility = sec.get('product_visibility', 'medium')
+        _, _, role_desc = _CONVERSION_ROLES.get(role, ('', '', ''))
         sec_guides.append(
-            f"섹션 {sec['no']} [{sec['name']}]\n"
-            f"  이 섹션의 역할: {j_role}\n"
+            f"섹션 {sec['no']} [{sec['name']}] — conversion_role: {role}\n"
+            f"  역할 요건: {role_desc}\n"
             f"  고객의 내면 목소리: {j_psych}\n"
             f"  섹션 목적: {sec.get('purpose', '')}\n"
             f"  카피 각도: {j_angle}\n"
+            f"  제품 노출 강도: {visibility}\n"
             f"  → 카피는 고객의 내면 목소리에 먼저 공감/응답한 뒤 제품으로 연결할 것"
         )
     sec_block = '\n\n'.join(sec_guides)
@@ -303,16 +338,27 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
 전환율 최적화(CRO) 전문가로서 고객 구매 심리 기반의 상세페이지 카피를 작성합니다.
 
 [카피라이팅 핵심 철학]
-상세페이지 카피의 목적은 제품을 설명하는 게 아니라,
-고객이 "맞아, 나 얘기네" → "이게 해결책이구나" → "사야겠다"로
-자연스럽게 이동하도록 이끄는 것입니다.
+상세페이지는 예쁜 스토리 페이지가 아니라 구매를 설득하는 페이지다.
+고객이 "맞아, 나 얘기네" → "이게 해결책이구나" → "직접 하는 것보다 낫네" → "사야겠다"로
+자연스럽게 이동하도록 이끄는 것이 목적입니다.
 
-규칙:
-- 제품 기능을 말하기 전에 반드시 고객 감정/상황부터 건드릴 것
-- 모든 기능은 고객 편익으로 변환: "A 기능이 있습니다" → "A 덕분에 당신은 B를 얻습니다"
+[공통 규칙]
+- 제품 기능보다 고객 감정/상황을 먼저 건드릴 것
+- 모든 기능은 편익으로: "A 기능이 있습니다" → "A 덕분에 당신은 B를 얻습니다"
 - 고객이 후기에 쓸 법한 진짜 언어 사용 (브로셔 문체 금지)
-- 6개 섹션은 하나의 단편 드라마다: 각 섹션이 이전 섹션의 감정을 이어받아 자연스럽게 흘러야 함
-  섹션1에서 생긴 공감이 섹션2에서 심화되고, 섹션3에서 전환점이 오고, 섹션4-5에서 납득되고, 섹션6에서 결심으로 닫혀야 함
+- 7개 섹션은 하나의 드라마: 각 섹션이 이전 섹션의 감정을 이어받아 흘러야 함
+  → 각 섹션 첫 문장은 이전 섹션 마지막 감정에 대한 답처럼 시작할 것
+
+[conversion_role별 필수 규칙]
+- hook:       첫 3초. 고객 상황을 정확히 묘사해 "나 얘기네" 유발. 제품 이름 언급 가능
+- pain:       왜 직접 해결이 힘든지. 기존 방법의 한계를 고객 언어로. 공감에만 집중
+- solution:   제품이 주인공. 기능→편익 전환 필수. "덕분에 당신은 ~을 얻습니다" 구조
+- comparison: 직접 하는 경우 vs 이 제품. 시간·번거로움·결과 3가지 비교. 숫자 활용 우선
+              예: "직접 만들면 1시간 → 꺼내면 10초" / "4단계 → 1단계"
+- proof:      인증·공정·수치·원재료 중 최소 2개 이상. "믿어도 될까?" 질문에 팩트로 답할 것
+- review:     실제 고객 후기 말투로. "~한 엄마들이" / "처음엔 반신반의했는데" 같은 진짜 언어
+- cta:        감성 마무리만 하면 실패. 구체적 행동 문구 + 손실회피 + 안심 요소 필수
+              예: "오늘 안 사면 오늘 밤도 똑같이 1시간입니다" 같은 기회비용 자극
 
 결과는 순수 JSON만 출력합니다. 마크다운 없음.
 브랜드 컨텍스트: {brand_ctx}"""
@@ -366,45 +412,45 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
   줄2: 이 제품이 어떻게 그걸 해결하는지 — 기능이 아닌 고객이 얻는 결과
   줄3(선택): 구체적 근거(수치/성분/후기) 또는 다음 섹션으로 자연스럽게 이어지는 여운
 
-■ 섹션6 (마지막) 전용 규칙 — 결심 유도:
-  헤드라인: 지금 결정해도 되는 이유를 한 줄로 — 반론 제거 또는 기회비용 자극
-    예: "한 번 써보면 다시 직접 만들기 싫어집니다" / "후회는 안 사고 나서 했을 때만"
-  본문: 구체적 행동(첫 주문, 시작하기 등) + 안심 요소(교환/환불/인증) + 브랜드명 1회 자연스럽게 노출
-  절대 금지: "오늘 선택해도 괜찮아요" 같은 힘없는 마무리
+■ cta 섹션(마지막) 전용 규칙:
+  헤드라인: 기회비용 자극 또는 반론 제거 한 줄 — 감성 마무리만 하면 실패
+    예: "오늘 안 사면 오늘 밤도 똑같이 1시간입니다" / "후회는 안 사고 나서 했을 때만"
+  본문: 구체적 행동 문구 + 안심 요소(교환/환불/인증) + 브랜드명 1회
 
 ■ 절대 금지 표현:
   "최고", "최상", "최저가", "품질 좋은", "믿을 수 있는", "정성껏 만든",
-  "특별한", "엄선된", "프리미엄", "합리적인", "괜찮아요" — 이런 단어는 아무 의미가 없음
+  "특별한", "엄선된", "프리미엄", "합리적인", "괜찮아요"
 
-■ 기능→편익 변환 필수 (예시):
+■ 기능→편익 변환 필수:
   X: "HACCP 인증을 받았습니다"
   O: "아이 입에 들어가는 거, 인증 없는 건 이제 못 사겠더라고요 — HACCP 통과"
-  X: "냉동 큐브 30개 구성"
-  O: "30분에 한 달치 이유식 완성. 그 시간에 아이 옆에 있어주세요"
 
 ■ 이모지·특수기호·별표 없이 순수 텍스트만
 
-[image_prompt 규칙 — FLUX AI 전송용 영어만]
-- 반드시 {product_name} 실제 제품이 화면에 등장해야 함 (사람 단독 컷 금지)
-- 섹션별 제품 등장 방식:
-  섹션1~2 (공감/문제): product subtly placed in background, person in foreground showing emotion
-  섹션3~4 (해결/증거): product as hero, hands interacting with product, clean environment
-  섹션5 (후기/변화): product in use, lifestyle context, authentic natural setting
-  섹션6 (결심): product packaging beauty shot, gift-ready or ready-to-use styling, warm light
-- Scene과 Composition을 분리해서 작성:
-  scene: [장면 묘사 — 어디서, 누가, 무엇을]
-  composition: [촬영 스타일 — 빛, 각도, 렌즈, 분위기]
-- no text no words no letters in the image
+[이미지 프롬프트 규칙 — FLUX AI 전송용 영어]
+각 섹션 이미지는 분위기만 만들면 안 됨. 판매를 위한 이미지임.
+
+product_visibility별 제품 노출 규칙:
+  none:   사람/상황 중심. 제품 등장 최소화 또는 생략
+  small:  product subtly placed in background
+  medium: product clearly visible alongside person or scene
+  large:  product package as hero in foreground, clearly readable packaging shape (NO text/labels on surface)
+
+scene_prompt: 어떤 장면인가 (장소, 인물, 상황)
+commerce_prompt: 제품 노출 방식 + 촬영 스타일 (빛, 각도, 구도)
 
 Output ONLY this JSON:
 {{
   "copies": [
-    {{"no": 1, "copy": "헤드라인\\n본문줄1\\n본문줄2", "image_prompt": "scene: [장면]. composition: [스타일]"}},
-    {{"no": 2, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
-    {{"no": 3, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
-    {{"no": 4, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
-    {{"no": 5, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
-    {{"no": 6, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}}
+    {{"no": 1, "copy": "헤드라인\\n본문줄1\\n본문줄2",
+      "scene_prompt": "A tired Korean mother in dim kitchen at night, looking exhausted while preparing baby food",
+      "commerce_prompt": "baby food cube package medium visible on counter, warm dim light, lifestyle photography, 35mm lens"}},
+    {{"no": 2, "copy": "...", "scene_prompt": "...", "commerce_prompt": "..."}},
+    {{"no": 3, "copy": "...", "scene_prompt": "...", "commerce_prompt": "..."}},
+    {{"no": 4, "copy": "...", "scene_prompt": "...", "commerce_prompt": "..."}},
+    {{"no": 5, "copy": "...", "scene_prompt": "...", "commerce_prompt": "..."}},
+    {{"no": 6, "copy": "...", "scene_prompt": "...", "commerce_prompt": "..."}},
+    {{"no": 7, "copy": "...", "scene_prompt": "...", "commerce_prompt": "..."}}
   ]
 }}"""
 
@@ -448,13 +494,15 @@ def build_image_prompt_for_section(section: dict, product_name: str) -> str:
 
 # ── Phase 2.5: AI 자기검수 ──────────────────────────────────
 _REVIEW_CHECKLIST = [
-    ('empathy',     '섹션1: 고객 감정/상황 공감이 충분한가? 고객이 "나 얘기네"라고 느낄 수 있는가?'),
-    ('problem',     '섹션2: 기존 해결책의 한계 or 문제 심화가 구체적인가? 추상적이지 않은가?'),
-    ('solution',    '섹션3: 제품이 해결책으로 등장하는가? 기능 설명이 아닌 고객 편익으로 표현됐는가?'),
-    ('proof',       '섹션4~5: 신뢰 근거(인증/수치/후기)가 포함됐는가? "믿어도 될까?" 질문에 답하는가?'),
-    ('cta',         '섹션6: 구매 결심을 유도하는가? 반론 제거 + 행동 문구 + 안심 요소가 있는가?'),
-    ('voice',       '전체: 고객이 후기에 쓸 법한 진짜 언어인가? 브로셔 문체가 섞이지 않았는가?'),
-    ('story_flow',  '전체: 6개 섹션이 하나의 스토리로 자연스럽게 이어지는가? 각 섹션이 이전 감정을 받아서 진행하는가?'),
+    ('empathy',     '섹션1(hook): 고객이 "나 얘기네"를 느낄 수 있는가? 첫 3초 공감이 충분한가?'),
+    ('problem',     '섹션2(pain): 직접 해결이 힘든 이유가 구체적인가? 추상적이지 않은가?'),
+    ('solution',    '섹션3(solution): 제품이 해결책으로 등장하는가? 기능이 아닌 편익으로 표현됐는가?'),
+    ('comparison',  '섹션4(comparison): 직접 하는 것 vs 이 제품 비교가 명확한가? 시간/번거로움/결과 중 최소 1개 수치 있는가?'),
+    ('proof',       '섹션5(proof): 인증·공정·수치·원재료 중 최소 2개 이상 포함됐는가?'),
+    ('review',      '섹션6(review): 실제 고객 후기 말투인가? 브랜드가 말하는 것처럼 들리면 실패'),
+    ('cta',         '섹션7(cta): 반론 제거 + 구체적 행동 문구 + 안심 요소가 있는가? 감성 마무리만이면 실패'),
+    ('voice',       '전체: 브로셔 문체 없는가? 고객이 쓸 법한 진짜 언어인가?'),
+    ('story_flow',  '전체: 7개 섹션이 하나의 설득 흐름으로 이어지는가? 각 섹션이 이전 감정을 받아 시작하는가?'),
     ('forbidden',   '전체: 금지 표현(최고/프리미엄/정성껏/괜찮아요 등) 없는가?'),
 ]
 
@@ -505,18 +553,21 @@ Output ONLY this JSON:
 {{
   "overall_pass": true,
   "checks": [
-    {{"key": "empathy", "pass": true, "issue": ""}},
-    {{"key": "problem", "pass": true, "issue": ""}},
-    {{"key": "solution", "pass": false, "issue": "3섹션 본문이 기능 설명에 그침. '덕분에 당신은' 표현 없음"}},
-    {{"key": "proof", "pass": true, "issue": ""}},
-    {{"key": "cta", "pass": false, "issue": "섹션6 마무리가 약함. 행동 문구 없음"}},
-    {{"key": "voice", "pass": true, "issue": ""}},
-    {{"key": "story_flow", "pass": true, "issue": ""}},
-    {{"key": "forbidden", "pass": true, "issue": ""}}
+    {{"key": "empathy",    "pass": true,  "issue": ""}},
+    {{"key": "problem",    "pass": true,  "issue": ""}},
+    {{"key": "solution",   "pass": false, "issue": "3섹션 본문이 기능 설명에 그침. '덕분에 당신은' 표현 없음"}},
+    {{"key": "comparison", "pass": false, "issue": "4섹션에 비교 수치 없음. 직접 vs 제품 차이가 구체적이지 않음"}},
+    {{"key": "proof",      "pass": true,  "issue": ""}},
+    {{"key": "review",     "pass": true,  "issue": ""}},
+    {{"key": "cta",        "pass": false, "issue": "7섹션 마무리가 감성에 그침. 손실회피 문구 없음"}},
+    {{"key": "voice",      "pass": true,  "issue": ""}},
+    {{"key": "story_flow", "pass": true,  "issue": ""}},
+    {{"key": "forbidden",  "pass": true,  "issue": ""}}
   ],
   "revisions": [
     {{"no": 3, "copy": "개선된 섹션3 카피\\n본문줄1\\n본문줄2"}},
-    {{"no": 6, "copy": "개선된 섹션6 카피\\n본문줄1\\n본문줄2"}}
+    {{"no": 4, "copy": "개선된 섹션4 카피\\n본문줄1\\n본문줄2"}},
+    {{"no": 7, "copy": "개선된 섹션7 카피\\n본문줄1\\n본문줄2"}}
   ]
 }}"""
 

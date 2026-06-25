@@ -151,8 +151,37 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             logger.warning('[dp_copy] 검수 실패 (무시): %s', rev_e)
             result['review'] = {'overall_pass': True, 'checks': [], 'revised_sections': []}
 
+        # scene_prompt + commerce_prompt → image_prompt 합성 (FLUX 전송용)
+        _FLUX_SUFFIX = (
+            'high-end commercial photography, 8k resolution, photorealistic, '
+            'NO text NO labels NO writing on any surface, blank clean package branding, '
+            'sharp focus, shot on 35mm lens'
+        )
+        _VISIBILITY_PREFIX = {
+            'none':   'Warm natural lifestyle photography, emotional atmosphere, authentic feel, soft bokeh,',
+            'small':  'Warm natural lifestyle photography, product subtly placed in background, soft bokeh,',
+            'medium': 'Commercial lifestyle photography, product clearly visible alongside person,',
+            'large':  'Minimalist product studio lighting, product package as hero in foreground, bright clean background,',
+        }
+
+        def _build_flux_prompt(c: dict, sec: dict) -> str:
+            scene    = c.get('scene_prompt') or ''
+            commerce = c.get('commerce_prompt') or ''
+            legacy   = c.get('image_prompt') or ''   # 이전 포맷 호환
+            visibility = sec.get('product_visibility', 'medium')
+            prefix = _VISIBILITY_PREFIX.get(visibility, _VISIBILITY_PREFIX['medium'])
+            body = f"{scene}, {commerce}" if scene or commerce else legacy
+            return f"{prefix} {body}, {_FLUX_SUFFIX}"
+
         # copies + image_prompt를 sections에 병합
-        copies = {c['no']: (c['copy'], c.get('image_prompt', '')) for c in raw_copies}
+        sec_map = {sec['no']: sec for sec in
+                   (supabase.table('creations').select('output_data')
+                    .eq('id', draft_id).single().execute().data or {}).get('output_data', {}).get('sections', [])}
+        copies = {}
+        for c in raw_copies:
+            sec = sec_map.get(c['no'], {})
+            copies[c['no']] = (c['copy'], _build_flux_prompt(c, sec))
+
         r = supabase.table('creations').select('output_data').eq('id', draft_id).single().execute()
         od = r.data.get('output_data') or {}
         for sec in od.get('sections', []):
