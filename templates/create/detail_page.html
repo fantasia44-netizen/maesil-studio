@@ -355,14 +355,19 @@ async function runDiagnosis() {
 
     const diagId = submit.diag_id;
     let elapsed = 0;
+    let diagDone = false;
     while (elapsed < 60) {
       await new Promise(r => setTimeout(r, 2000));
       elapsed += 2;
-      const poll = await fetch(`/create/detail-page/diagnose/${diagId}/status`);
-      const st = await poll.json();
-      if (st.status === 'done') { renderDiagnosis(st.data); break; }
-      if (st.status === 'failed') { alert('진단 중 오류가 발생했습니다.'); break; }
+      try {
+        const poll = await fetch(`/create/detail-page/diagnose/${diagId}/status`);
+        if (!poll.ok) continue;
+        const st = await poll.json();
+        if (st.status === 'done') { renderDiagnosis(st.data); diagDone = true; break; }
+        if (st.status === 'failed') { alert('진단 중 오류가 발생했습니다.'); diagDone = true; break; }
+      } catch(_) { /* 네트워크 일시오류 무시, 재시도 */ }
     }
+    if (!diagDone) alert('진단 시간이 초과됐습니다. 다시 시도해 주세요.');
   } catch(e) { alert('진단 실패: ' + e); }
   finally {
     btn.querySelector('.normal-text').classList.remove('d-none');
@@ -412,7 +417,6 @@ function setMode(mode) {
     document.getElementById('inputProductName').value = '';
     document.getElementById('inputFeatures').value = '';
     document.getElementById('inputPriceRange').value = '';
-    document.getElementById('hiddenRenewalUrl').value = '';
   }
 }
 
@@ -432,23 +436,8 @@ function fillFromProduct(productId) {
     document.getElementById('inputPriceRange').value = wan > 0 ? wan + '만원대' : price + '원';
   }
 
-  // 상품 URL이 있으면 리뉴얼 URL 입력란 노출
-  const productUrl = opt.dataset.url || '';
-  const renewalWrap = document.getElementById('renewalUrlWrap');
-  if (renewalWrap) {
-    renewalWrap.classList.remove('d-none');
-    if (productUrl) document.getElementById('renewalUrl').value = productUrl;
-  }
 }
 
-// 폼 제출 시 renewal_url 동기화
-document.addEventListener('DOMContentLoaded', () => {
-  const renewalInput = document.getElementById('renewalUrl');
-  const hidden = document.getElementById('hiddenRenewalUrl');
-  if (renewalInput && hidden) {
-    renewalInput.addEventListener('input', () => { hidden.value = renewalInput.value; });
-  }
-});
 
 let _plans      = [];     // 3가지 플랜 (Step 2)
 let _selPlanIdx = -1;     // 선택된 플랜 인덱스
