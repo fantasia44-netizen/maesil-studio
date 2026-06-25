@@ -372,7 +372,7 @@ async function runDiagnosis() {
 }
 
 function renderDiagnosis(data) {
-  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+  const stars = n => { const s = Math.max(0, Math.min(5, parseInt(n) || 0)); return '★'.repeat(s) + '☆'.repeat(5 - s); };
   document.getElementById('diagProductType').textContent = data.product_type || '';
   document.getElementById('diagPurchaseReason').textContent = data.key_purchase_reason || '';
   document.getElementById('diagHesitation').textContent = data.key_hesitation || '';
