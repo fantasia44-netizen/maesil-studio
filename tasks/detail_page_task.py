@@ -229,6 +229,20 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             'large':  'Minimalist product studio lighting, product package as hero in foreground, bright clean background,',
         }
 
+        # comparison 섹션은 FLUX가 "비교 장면" 묘사를 못 그림 → 단순 제품 샷으로 강제
+        _ROLE_OVERRIDE = {
+            'comparison': (
+                'Clean product studio shot, baby food product package centered on white marble surface, '
+                'bright professional lighting, minimalist background, '
+            ),
+        }
+
+        # 사람 포함 프롬프트에 구도 지정 — 신체 잘림 방지
+        _PERSON_FRAMING = (
+            'full person visible in frame, upper body shot, waist-up composition, '
+            'person not cropped, complete figure,'
+        )
+
         def _sanitize(text: str) -> str:
             """한글·한자·일어 제거 — FLUX가 아시아 문자를 이미지에 그려넣는 원인"""
             return _re.sub(r'[가-힣一-鿿぀-ヿ㐀-䶿]', '', text).strip(' ,')
@@ -237,11 +251,24 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             scene    = _sanitize(c.get('scene_prompt') or '')
             commerce = _sanitize(c.get('commerce_prompt') or '')
             legacy   = _sanitize(c.get('image_prompt') or '')
+            role       = sec.get('conversion_role', '')
             visibility = sec.get('product_visibility', 'medium')
-            prefix = _VISIBILITY_PREFIX.get(visibility, _VISIBILITY_PREFIX['medium'])
-            body = f"{scene}, {commerce}" if (scene or commerce) else legacy
-            # NO TEXT → 스타일 prefix → 장면 → 품질 순서
-            return f"{_FLUX_NO_TEXT} {prefix} {body}, {_FLUX_QUALITY}"
+
+            # comparison → 복잡한 장면 대신 단순 제품 샷 강제
+            if role in _ROLE_OVERRIDE:
+                body = _ROLE_OVERRIDE[role]
+                prefix = ''
+            else:
+                prefix = _VISIBILITY_PREFIX.get(visibility, _VISIBILITY_PREFIX['medium'])
+                body = f"{scene}, {commerce}" if (scene or commerce) else legacy
+
+            # 사람 묘사가 있으면 구도 지정 추가
+            person_hint = ''
+            if any(w in (scene + commerce + legacy).lower()
+                   for w in ('person', 'woman', 'man', 'mother', 'baby', 'people')):
+                person_hint = _PERSON_FRAMING
+
+            return f"{_FLUX_NO_TEXT} {prefix} {person_hint} {body}, {_FLUX_QUALITY}"
 
         # copies + image_prompt를 sections에 병합
         sec_map = {sec['no']: sec for sec in

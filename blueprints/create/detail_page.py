@@ -473,7 +473,7 @@ def detail_page_draft_gen_image():
     try:
         use_points(current_user, 'detail_page_draft_image', gen_id, cost_override=cost)
 
-        # FLUX: NO TEXT를 맨 앞에, 한글/한자 제거 후 전송
+        # FLUX: NO TEXT 맨 앞, 한글/한자 제거, 사람 구도 지정
         import re as _re
         _no_text = (
             'Plain unbranded packaging with completely blank surfaces, '
@@ -483,12 +483,31 @@ def detail_page_draft_gen_image():
             'Packaging surface is solid color only, completely empty.'
         )
         clean_prompt = _re.sub(r'[가-힣一-鿿぀-ヿ㐀-䶿]', '', image_prompt).strip(' ,')
+
+        # 사람 묘사 있으면 구도 지정 (신체 잘림 방지)
+        person_hint = ''
+        if any(w in clean_prompt.lower()
+               for w in ('person', 'woman', 'man', 'mother', 'baby', 'people')):
+            person_hint = 'full person visible in frame, upper body shot, waist-up composition, '
+
         full_prompt = (
-            f"{_no_text} {clean_prompt}, "
+            f"{_no_text} {person_hint}{clean_prompt}, "
             'editorial photography, professional commercial photo, clean composition, '
             'high-end photography, photorealistic, 8k resolution'
         )
-        image_url, _ = generate_image(full_prompt, engine='flux_preview')
+
+        # 실패 시 1회 재시도 (단순화된 폴백 프롬프트)
+        image_url = None
+        for attempt, prompt in enumerate([full_prompt,
+                                          f"{_no_text} product package on clean white surface, "
+                                          f"studio lighting, minimalist, photorealistic"]):
+            try:
+                image_url, _ = generate_image(prompt, engine='flux_preview')
+                break
+            except Exception as img_e:
+                logger.warning('[dp_draft_gen_image] attempt=%d 실패: %s', attempt + 1, img_e)
+                if attempt == 1:
+                    raise
 
         # Supabase 업로드
         stable_url = upload_to_supabase(image_url, current_user.id, f'dp_draft_{draft_id}_{sec_no}.jpg')
