@@ -15,6 +15,49 @@ def _setup():
         sys.path.insert(0, _root)
 
 
+# ── Phase 0: 상품 진단 ──────────────────────────────────────
+@celery.task(bind=True, name='tasks.detail_page_task.diagnose_product',
+             max_retries=1, soft_time_limit=60, time_limit=90)
+def diagnose_product(self, diag_id, brand, input_data,
+                     supabase_url, supabase_key, anthropic_api_key):
+    """상품 진단 — 타입 추천(★점수) + 핵심 구매이유/망설임 추출."""
+    _setup()
+    import os
+    from supabase import create_client
+    supabase = create_client(supabase_url, supabase_key)
+    os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
+
+    try:
+        from services.prompts.detail_page import build_diagnosis_prompt
+        from services.claude_service import generate_text
+
+        system, user_prompt = build_diagnosis_prompt(brand, input_data)
+        raw = generate_text(system, user_prompt, max_tokens=1000,
+                            model='claude-haiku-4-5-20251001')
+
+        cleaned = raw.strip()
+        if cleaned.startswith('```'):
+            cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        data = json.loads(cleaned)
+
+        supabase.table('creations').update(
+            {'output_data': data, 'status': 'done'}
+        ).eq('id', diag_id).execute()
+
+        logger.info('[dp_diag] 진단 완료 diag_id=%s', diag_id)
+
+    except Exception as e:
+        logger.error('[dp_diag] 오류 diag_id=%s: %s', diag_id, e, exc_info=True)
+        try:
+            supabase.table('creations').update({
+                'status': 'failed',
+                'output_data': {'error': str(e)[:200]},
+            }).eq('id', diag_id).execute()
+        except Exception:
+            pass
+        raise
+
+
 # ── Phase 1: 3타입 미리보기 생성 ────────────────────────────
 @celery.task(bind=True, name='tasks.detail_page_task.generate_plan',
              max_retries=1, soft_time_limit=120, time_limit=150)

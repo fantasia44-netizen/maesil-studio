@@ -137,11 +137,65 @@
             <label class="form-label fw-semibold small">가격대 <span class="text-muted">(선택)</span></label>
             <input type="text" name="price_range" id="inputPriceRange" class="form-control form-control-sm" placeholder="예: 2만원대">
           </div>
-          <div class="mb-4">
+          <div class="mb-3">
             <label class="form-label fw-semibold small">경쟁 대비 차별점 <span class="text-muted">(선택)</span></label>
             <input type="text" name="differentiator" class="form-control form-control-sm"
                    placeholder="예: 국내 최초 특허 성분 함유">
           </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">인증·수치 <span class="text-muted">(선택)</span></label>
+            <input type="text" name="certifications" class="form-control form-control-sm"
+                   placeholder="예: HACCP 인증, 판매량 30만개, 재구매율 72%">
+          </div>
+
+          <!-- 고급 정보 토글 -->
+          <div class="mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary w-100" style="border-radius:8px"
+                    onclick="toggleAdvanced()" id="advancedToggleBtn">
+              <i class="bi bi-chevron-down me-1" id="advancedChevron"></i>고객 목소리 추가 입력 <span class="text-muted fw-normal">(카피 품질 향상)</span>
+            </button>
+          </div>
+          <div id="advancedFields" class="d-none">
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">고객이 자주 묻는 질문 <span class="text-muted">(선택)</span></label>
+              <textarea name="customer_questions" class="form-control form-control-sm" rows="3"
+                        placeholder="예: 냉동이라 영양 괜찮나요?&#10;언제부터 먹일 수 있나요?&#10;한 번 사면 얼마나 먹나요?"></textarea>
+              <div class="form-text">구매 전 망설임 포인트 — AI가 카피에서 선제적으로 해소합니다</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">실제 고객 후기 <span class="text-muted">(선택)</span></label>
+              <textarea name="customer_reviews" class="form-control form-control-sm" rows="4"
+                        placeholder="실제 구매 후기를 그대로 붙여넣으세요 (2~5개 권장)&#10;예: &quot;매일 밤 야채 다지다 손목 나가는 줄 알았는데 이거 쓰고 광명 찾았어요&quot;"></textarea>
+              <div class="form-text">후기 언어를 분석해 카피에 진짜 고객 목소리를 반영합니다</div>
+            </div>
+          </div>
+
+          <!-- Phase 0 진단 결과 -->
+          <div id="diagResultWrap" class="d-none mb-3">
+            <div class="rounded-3 p-3" style="background:#f0fdf4;border:1px solid #86efac;font-size:.8rem">
+              <div class="fw-semibold mb-2" style="color:#166534"><i class="bi bi-clipboard2-pulse me-1"></i>상품 진단 결과</div>
+              <div id="diagProductType" class="text-muted small mb-2"></div>
+              <div class="mb-2">
+                <span class="fw-semibold" style="color:#166534">구매 이유:</span>
+                <span id="diagPurchaseReason"></span>
+              </div>
+              <div class="mb-3">
+                <span class="fw-semibold" style="color:#dc2626">주요 망설임:</span>
+                <span id="diagHesitation"></span>
+              </div>
+              <div id="diagRecommendations"></div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mb-2">
+            <button type="button" id="diagBtn" class="btn btn-sm fw-semibold flex-fill"
+                    style="border-radius:8px;border:1.5px solid #4b5cde;color:#4b5cde;background:#fff"
+                    onclick="runDiagnosis()">
+              <span class="normal-text"><i class="bi bi-clipboard2-pulse me-1"></i>상품 진단 (무료)</span>
+              <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-1"></span>진단 중...</span>
+            </button>
+          </div>
+
           <button type="submit" id="planBtn" class="btn w-100 fw-semibold py-2" style="background:#4b5cde;color:#fff">
             <span class="normal-text"><i class="bi bi-magic me-1"></i>3가지 초안 기획 시작 (150P)</span>
             <span class="loading-text d-none"><span class="spinner-border spinner-border-sm me-2"></span>기획 중 (30~60초)...</span>
@@ -276,6 +330,74 @@ const CSRF = document.querySelector('[name=csrf_token]').value;
 
 // ── 신규 / 기존 상품 모드 전환 ────────────────────────────
 let _currentMode = 'new';
+
+async function runDiagnosis() {
+  const fd = new FormData(document.getElementById('planForm'));
+  const body = {};
+  fd.forEach((v, k) => { body[k] = v; });
+
+  if (!body.product_name) { alert('상품명을 입력해 주세요.'); return; }
+
+  const btn = document.getElementById('diagBtn');
+  btn.querySelector('.normal-text').classList.add('d-none');
+  btn.querySelector('.loading-text').classList.remove('d-none');
+  btn.disabled = true;
+  document.getElementById('diagResultWrap').classList.add('d-none');
+
+  try {
+    const res = await fetch('{{ url_for("create.detail_page_diagnose") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify(body),
+    });
+    const submit = await res.json();
+    if (!submit.ok) { alert('오류: ' + submit.message); return; }
+
+    const diagId = submit.diag_id;
+    let elapsed = 0;
+    while (elapsed < 60) {
+      await new Promise(r => setTimeout(r, 2000));
+      elapsed += 2;
+      const poll = await fetch(`/create/detail-page/diagnose/${diagId}/status`);
+      const st = await poll.json();
+      if (st.status === 'done') { renderDiagnosis(st.data); break; }
+      if (st.status === 'failed') { alert('진단 중 오류가 발생했습니다.'); break; }
+    }
+  } catch(e) { alert('진단 실패: ' + e); }
+  finally {
+    btn.querySelector('.normal-text').classList.remove('d-none');
+    btn.querySelector('.loading-text').classList.add('d-none');
+    btn.disabled = false;
+  }
+}
+
+function renderDiagnosis(data) {
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+  document.getElementById('diagProductType').textContent = data.product_type || '';
+  document.getElementById('diagPurchaseReason').textContent = data.key_purchase_reason || '';
+  document.getElementById('diagHesitation').textContent = data.key_hesitation || '';
+
+  const recs = (data.recommendations || []).sort((a, b) => b.score - a.score);
+  document.getElementById('diagRecommendations').innerHTML = recs.map((r, i) => `
+    <div class="mb-1 p-2 rounded" style="background:${i===0?'#dcfce7':'#f9fafb'};border:1px solid ${i===0?'#86efac':'#e5e7eb'}">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        ${i===0 ? '<span class="badge" style="background:#16a34a;font-size:.65rem">추천</span>' : ''}
+        <span class="fw-semibold" style="font-size:.82rem">${r.type_name}</span>
+        <span style="color:#f59e0b;font-size:.85rem">${stars(r.score)}</span>
+      </div>
+      <div style="font-size:.75rem;color:#374151">${r.reason}</div>
+    </div>`).join('');
+
+  document.getElementById('diagResultWrap').classList.remove('d-none');
+}
+
+function toggleAdvanced() {
+  const fields = document.getElementById('advancedFields');
+  const chevron = document.getElementById('advancedChevron');
+  const isOpen = !fields.classList.contains('d-none');
+  fields.classList.toggle('d-none', isOpen);
+  chevron.className = isOpen ? 'bi bi-chevron-down me-1' : 'bi bi-chevron-up me-1';
+}
 
 function setMode(mode) {
   _currentMode = mode;

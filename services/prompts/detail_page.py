@@ -7,6 +7,67 @@ def build_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
     return build_preview_prompt(brand, input_data)
 
 
+# ── Phase 0: 상품 진단 ───────────────────────────────────────
+def build_diagnosis_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
+    """상품 진단 — 3가지 타입 추천 점수 + 구매이유/망설임 추출."""
+    brand_ctx    = build_brand_context(brand)
+    product_name = input_data.get('product_name', '')
+    features     = input_data.get('features', '')
+    target       = input_data.get('target_customer') or ''
+    diff         = input_data.get('differentiator') or ''
+    price        = input_data.get('price_range') or ''
+    certs        = input_data.get('certifications') or ''
+    questions    = input_data.get('customer_questions') or ''
+    reviews      = input_data.get('customer_reviews') or ''
+
+    extra_lines = []
+    if certs:      extra_lines.append(f'인증·수치: {certs}')
+    if questions:  extra_lines.append(f'고객 자주 묻는 질문:\n{questions}')
+    if reviews:    extra_lines.append(f'실제 후기:\n{reviews}')
+    extra_str = ('\n' + '\n\n'.join(extra_lines)) if extra_lines else ''
+
+    system = """당신은 온라인 커머스 전환율 전략가입니다.
+상품 정보를 보고 어떤 상세페이지 전략이 가장 구매전환에 효과적인지 진단합니다.
+결과는 순수 JSON만 출력합니다. 마크다운 없음."""
+
+    user = f"""아래 상품을 진단하고 최적 상세페이지 전략을 추천해 주세요.
+
+[브랜드]
+{brand_ctx}
+
+[상품 정보]
+상품명: {product_name}
+핵심 특징: {features}
+타겟 고객: {target or '-'}
+가격대: {price or '-'}
+차별점: {diff or '-'}{extra_str}
+
+[진단 대상 타입]
+- 공감·문제해결형 (PAS): 고객 불편 공감 → 해결책 제시
+- 스토리·라이프스타일형 (BAB): 원하는 삶 먼저 → 제품은 다리
+- 데이터·전문가형 (ACCA): 수치·인증·비교로 이성 납득
+
+[판단 기준]
+- 후기·입소문이 강한 상품 → 공감형 유리
+- 감성/라이프스타일 브랜드 → 스토리형 유리
+- 기능 차이가 명확하거나 건강/전문성 상품 → 데이터형 유리
+
+Output ONLY this JSON:
+{{
+  "product_type": "이 상품의 성격 한 줄 (예: 육아맘 대상 간편 이유식)",
+  "key_purchase_reason": "이 상품을 사는 가장 큰 이유 (고객 언어로)",
+  "key_hesitation": "가장 큰 구매 망설임 (고객 언어로)",
+  "recommendations": [
+    {{"type_name": "공감·문제해결형", "score": 5, "reason": "이 타입을 추천/비추천하는 이유 1~2줄"}},
+    {{"type_name": "스토리·라이프스타일형", "score": 3, "reason": "..."}},
+    {{"type_name": "데이터·전문가형", "score": 2, "reason": "..."}}
+  ],
+  "top_appeal_points": ["이 상품의 핵심 소구포인트1", "포인트2", "포인트3"]
+}}"""
+
+    return system, user
+
+
 # ── Phase 1: 3타입 미리보기 (섹션 구조만, 카피 없음) ──────────
 _PREVIEW_SYSTEM = """당신은 대한민국 최고 수준의 온라인 커머스 마케팅 전략가입니다.
 쿠팡·네이버스마트스토어 전환율 최적화 전문가로서,
@@ -66,7 +127,9 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
     target       = input_data.get('target_customer') or ''
     diff         = input_data.get('differentiator') or ''
     price        = input_data.get('price_range') or ''
-    renewal_url  = input_data.get('renewal_url') or ''
+    certs        = input_data.get('certifications') or ''
+    questions    = input_data.get('customer_questions') or ''
+    reviews      = input_data.get('customer_reviews') or ''
 
     # 타입별 여정 블록 생성
     type_blocks = []
@@ -98,6 +161,15 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
   appeal_analysis.core_pain과 buy_trigger에 기존 상세페이지의 미충족 요소를 명시해 주세요.
 """
 
+    extra_blocks = []
+    if certs:
+        extra_blocks.append(f'인증·수치: {certs}')
+    if questions:
+        extra_blocks.append(f'고객 자주 묻는 질문 (구매 망설임 포인트):\n{questions}')
+    if reviews:
+        extra_blocks.append(f'실제 고객 후기 (이 언어를 appeal_analysis 작성에 적극 반영):\n{reviews}')
+    extra_str = ('\n\n[고객 목소리 데이터]\n' + '\n\n'.join(extra_blocks)) if extra_blocks else ''
+
     user = f"""아래 상품에 대해 3가지 상세페이지 타입의 섹션 구조를 설계해 주세요.{renewal_block}
 
 [상품 정보]
@@ -105,7 +177,7 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
 핵심 특징: {features}
 타겟 고객: {target or '브랜드 프로필 기준'}
 가격대: {price or '-'}
-경쟁 차별점: {diff or '-'}
+경쟁 차별점: {diff or '-'}{extra_str}
 
 [3가지 타입과 구매 여정]
 {type_block_str}
@@ -179,7 +251,9 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
     target       = input_data.get('target_customer') or appeal.get('target_customer', '')
     diff         = input_data.get('differentiator') or ''
     price        = input_data.get('price_range') or ''
-    renewal_url  = input_data.get('renewal_url') or ''
+    certs        = input_data.get('certifications') or ''
+    questions    = input_data.get('customer_questions') or ''
+    reviews      = input_data.get('customer_reviews') or ''
     pain         = appeal.get('core_pain', '')
     trigger      = appeal.get('buy_trigger', '')
     ap_points    = appeal.get('appeal_points', [])
@@ -215,7 +289,8 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
 - 제품 기능을 말하기 전에 반드시 고객 감정/상황부터 건드릴 것
 - 모든 기능은 고객 편익으로 변환: "A 기능이 있습니다" → "A 덕분에 당신은 B를 얻습니다"
 - 고객이 후기에 쓸 법한 진짜 언어 사용 (브로셔 문체 금지)
-- 6개 섹션 전체가 하나의 설득 스토리로 읽혀야 함
+- 6개 섹션은 하나의 단편 드라마다: 각 섹션이 이전 섹션의 감정을 이어받아 자연스럽게 흘러야 함
+  섹션1에서 생긴 공감이 섹션2에서 심화되고, 섹션3에서 전환점이 오고, 섹션4-5에서 납득되고, 섹션6에서 결심으로 닫혀야 함
 
 결과는 순수 JSON만 출력합니다. 마크다운 없음.
 브랜드 컨텍스트: {brand_ctx}"""
@@ -236,11 +311,14 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
 타겟 고객: {target}
 가격대: {price or '-'}
 경쟁 차별점: {diff or '-'}
+인증·수치: {certs or '-'}
 
 [고객 심리 분석 — 카피 작성의 핵심 나침반]
 핵심 고통 (고객의 언어 그대로): {pain}
 구매 결심 트리거: {trigger}
 강조할 소구 포인트: {', '.join(ap_points)}
+{f"고객 자주 묻는 질문 (카피에서 선제 해소할 것):{chr(10)}{questions}" if questions else ''}
+{f"실제 고객 후기 (이 언어톤과 감정을 카피에 직접 살릴 것):{chr(10)}{reviews}" if reviews else ''}
 
 [선택 타입: {type_name}]
 프레임워크: {framework}
@@ -253,22 +331,28 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
 [카피 작성 규칙]
 ■ 구조: 헤드라인(1줄) + 본문(2~3줄)
 
-■ 헤드라인 (12자 이내) — 타입별 패턴:
-  공감형 → 고객 상황/고통을 직접 꼬집는 문장
-    예: "매번 사고 후회했어요" / "아이가 거부할까 두려웠어요"
+■ 헤드라인 (18자 이내) — 타입별 패턴:
+  공감형 → 고객 상황/고통을 직접 꼬집는 문장. 감정이 충분히 실려야 함
+    예: "매일 밤 지쳐서 쓰러지기 직전이었어요" / "아이가 거부할까봐 겁이 났어요"
   스토리형 → 장면·감정이 담긴 감각적 한 줄
-    예: "그 아침이 달라졌습니다" / "처음엔 반신반의했어요"
+    예: "그 아침이 달라졌습니다" / "처음엔 반신반의했는데 지금은"
   데이터형 → 숫자·사실로 시작하는 임팩트 문장
-    예: "4,200명 중 98%가 재구매" / "일반 제품과 성분 비교해보면"
+    예: "4,200명 중 98%가 재구매한 이유" / "일반 제품과 성분 직접 비교해봤습니다"
 
-■ 본문 (각 줄 28자 이내, 2~3줄):
+■ 본문 (각 줄 30자 이내, 2~3줄):
   줄1: 고객 상황 공감 또는 문제 구체화 — "~하셨죠?" / "~때문에 ~하셨을 거예요"
   줄2: 이 제품이 어떻게 그걸 해결하는지 — 기능이 아닌 고객이 얻는 결과
-  줄3(선택): 구체적 근거(수치/성분/후기) 또는 다음 섹션으로 이어지는 여운
+  줄3(선택): 구체적 근거(수치/성분/후기) 또는 다음 섹션으로 자연스럽게 이어지는 여운
+
+■ 섹션6 (마지막) 전용 규칙 — 결심 유도:
+  헤드라인: 지금 결정해도 되는 이유를 한 줄로 — 반론 제거 또는 기회비용 자극
+    예: "한 번 써보면 다시 직접 만들기 싫어집니다" / "후회는 안 사고 나서 했을 때만"
+  본문: 구체적 행동(첫 주문, 시작하기 등) + 안심 요소(교환/환불/인증) + 브랜드명 1회 자연스럽게 노출
+  절대 금지: "오늘 선택해도 괜찮아요" 같은 힘없는 마무리
 
 ■ 절대 금지 표현:
   "최고", "최상", "최저가", "품질 좋은", "믿을 수 있는", "정성껏 만든",
-  "특별한", "엄선된", "프리미엄", "합리적인" — 이런 단어는 아무 의미가 없음
+  "특별한", "엄선된", "프리미엄", "합리적인", "괜찮아요" — 이런 단어는 아무 의미가 없음
 
 ■ 기능→편익 변환 필수 (예시):
   X: "HACCP 인증을 받았습니다"
@@ -279,22 +363,26 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
 ■ 이모지·특수기호·별표 없이 순수 텍스트만
 
 [image_prompt 규칙 — FLUX AI 전송용 영어만]
-- {product_name} 실제 제품이 화면 중심에 있는 장면
-- 섹션 감정과 일치하는 분위기:
-  공감/스토리 섹션 → warm natural light, lifestyle, authentic feel
-  증거/데이터 섹션 → clean studio, clinical, precise, overhead shot
-  감성/결심 섹션 → soft bokeh, warm tones, emotional
-- 20단어 이내, no text no words no letters in the image
+- 반드시 {product_name} 실제 제품이 화면에 등장해야 함 (사람 단독 컷 금지)
+- 섹션별 제품 등장 방식:
+  섹션1~2 (공감/문제): product subtly placed in background, person in foreground showing emotion
+  섹션3~4 (해결/증거): product as hero, hands interacting with product, clean environment
+  섹션5 (후기/변화): product in use, lifestyle context, authentic natural setting
+  섹션6 (결심): product packaging beauty shot, gift-ready or ready-to-use styling, warm light
+- Scene과 Composition을 분리해서 작성:
+  scene: [장면 묘사 — 어디서, 누가, 무엇을]
+  composition: [촬영 스타일 — 빛, 각도, 렌즈, 분위기]
+- no text no words no letters in the image
 
 Output ONLY this JSON:
 {{
   "copies": [
-    {{"no": 1, "copy": "헤드라인\\n본문줄1\\n본문줄2", "image_prompt": "English scene"}},
-    {{"no": 2, "copy": "...", "image_prompt": "..."}},
-    {{"no": 3, "copy": "...", "image_prompt": "..."}},
-    {{"no": 4, "copy": "...", "image_prompt": "..."}},
-    {{"no": 5, "copy": "...", "image_prompt": "..."}},
-    {{"no": 6, "copy": "...", "image_prompt": "..."}}
+    {{"no": 1, "copy": "헤드라인\\n본문줄1\\n본문줄2", "image_prompt": "scene: [장면]. composition: [스타일]"}},
+    {{"no": 2, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
+    {{"no": 3, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
+    {{"no": 4, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
+    {{"no": 5, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}},
+    {{"no": 6, "copy": "...", "image_prompt": "scene: [...]. composition: [...]"}}
   ]
 }}"""
 

@@ -193,6 +193,85 @@ def detail_page_result(creation_id: str):
     return jsonify(ok=True, data=parsed, creation_type=row.get('creation_type'))
 
 
+# ── Phase 0: 상품 진단 ────────────────────────────────────
+@create_bp.route('/detail-page/diagnose', methods=['POST'])
+@login_required
+def detail_page_diagnose():
+    """상품 진단 — 타입 추천 + 구매이유/망설임 (Haiku, 빠름, 무료)."""
+    from services.config_service import get_config
+    import os
+
+    supabase = current_app.supabase
+    data     = request.get_json(silent=True) or {}
+    brand_id = (data.get('brand_id') or '').strip()
+    brand    = get_brand_by_id(supabase, brand_id) if brand_id else get_default_brand(supabase)
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+
+    input_data = {
+        'product_name':       (data.get('product_name')       or '').strip(),
+        'features':           (data.get('features')           or '').strip(),
+        'target_customer':    (data.get('target_customer')    or '').strip(),
+        'price_range':        (data.get('price_range')        or '').strip(),
+        'differentiator':     (data.get('differentiator')     or '').strip(),
+        'certifications':     (data.get('certifications')     or '').strip(),
+        'customer_questions': (data.get('customer_questions') or '').strip(),
+        'customer_reviews':   (data.get('customer_reviews')   or '').strip(),
+    }
+    if not input_data['product_name']:
+        return jsonify(ok=False, message='상품명을 입력해 주세요.')
+
+    diag_id = str(uuid.uuid4())
+
+    try:
+        supabase.table('creations').insert({
+            'id': diag_id, 'user_id': current_user.id,
+            'brand_id': brand['id'], 'creation_type': 'detail_page_diagnosis',
+            'input_data': input_data, 'output_data': {}, 'points_used': 0,
+            'status': 'generating', 'created_at': now_kst().isoformat(),
+        }).execute()
+    except Exception as e:
+        logger.warning(f'[dp_diag] insert 실패: {e}')
+
+    from supabase import create_client as _sb_create
+    from tasks.detail_page_task import diagnose_product
+
+    supabase_url  = os.environ.get('SUPABASE_URL', '')
+    supabase_key  = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_KEY', '')
+    anthropic_key = get_config('anthropic_api_key') or os.environ.get('ANTHROPIC_API_KEY', '')
+
+    diagnose_product.delay(
+        diag_id=diag_id,
+        brand=brand,
+        input_data=input_data,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+        anthropic_api_key=anthropic_key,
+    )
+
+    return jsonify(ok=True, diag_id=diag_id)
+
+
+@create_bp.route('/detail-page/diagnose/<diag_id>/status', methods=['GET'])
+@login_required
+def detail_page_diagnose_status(diag_id: str):
+    supabase = current_app.supabase
+    try:
+        r = supabase.table('creations').select(
+            'id, status, output_data, user_id'
+        ).eq('id', diag_id).eq('creation_type', 'detail_page_diagnosis').single().execute()
+        if not r.data or r.data['user_id'] != current_user.id:
+            return jsonify(ok=False, message='not found'), 404
+        row = r.data
+        if row['status'] == 'done':
+            return jsonify(ok=True, status='done', data=row['output_data'])
+        if row['status'] == 'failed':
+            return jsonify(ok=True, status='failed')
+        return jsonify(ok=True, status='generating')
+    except Exception as e:
+        return jsonify(ok=False, message=str(e)), 500
+
+
 # ── 초안 제안서 (3타입) ───────────────────────────────────
 @create_bp.route('/detail-page/plan', methods=['POST'])
 @login_required
@@ -210,12 +289,14 @@ def detail_page_plan():
         return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
 
     input_data = {
-        'product_name':    (data.get('product_name')    or '').strip(),
-        'features':        (data.get('features')        or '').strip(),
-        'target_customer': (data.get('target_customer') or '').strip(),
-        'price_range':     (data.get('price_range')     or '').strip(),
-        'differentiator':  (data.get('differentiator')  or '').strip(),
-        'renewal_url':     (data.get('renewal_url')     or '').strip(),
+        'product_name':       (data.get('product_name')       or '').strip(),
+        'features':           (data.get('features')           or '').strip(),
+        'target_customer':    (data.get('target_customer')    or '').strip(),
+        'price_range':        (data.get('price_range')        or '').strip(),
+        'differentiator':     (data.get('differentiator')     or '').strip(),
+        'certifications':     (data.get('certifications')     or '').strip(),
+        'customer_questions': (data.get('customer_questions') or '').strip(),
+        'customer_reviews':   (data.get('customer_reviews')   or '').strip(),
     }
     if not input_data['product_name'] or not input_data['features']:
         return jsonify(ok=False, message='상품명과 핵심 기능을 입력해 주세요.')
