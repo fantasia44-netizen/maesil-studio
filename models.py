@@ -224,6 +224,7 @@ MENU_REGISTRY = [
     ('생성 이력',   'bi-clock-history',       'main.history',         None,  '관리'),
     ('구독 관리',   'bi-credit-card',         'billing.index',        None,  '관리'),
     ('팀 관리',     'bi-people',              'team.index',           None,  '관리'),
+    ('외부 연동',   'bi-plug',                'integrations.index',   None,  '관리'),
     # ── 블라인드 (미사용 — 라우트는 유지)
     # ('썸네일 문구', 'bi-card-heading',        'create.thumbnail',     None,  '콘텐츠 생성'),
     # ('광고 카피',   'bi-megaphone',           'create.ad_copy',       None,  '콘텐츠 생성'),
