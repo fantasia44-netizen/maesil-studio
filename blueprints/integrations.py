@@ -228,6 +228,8 @@ def import_list():
         )
         products = result.get('products') or []
         pagination = result.get('pagination') or {}
+        if products:
+            logger.info('[integrations] 상품 첫번째 필드: %s', list(products[0].keys()))
         mark_used(current_user.id, operator_id=_op_id())
     except MaesilInsightError as e:
         logger.warning(f'[Integrations] list_products 실패: {e}')
