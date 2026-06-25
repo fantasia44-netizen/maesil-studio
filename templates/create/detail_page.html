@@ -394,6 +394,8 @@ function renderDiagnosis(data) {
     </div>`).join('');
 
   document.getElementById('diagResultWrap').classList.remove('d-none');
+  // 기획 생성 시 진단 결과 활용을 위해 저장
+  window._diagnosisData = data;
 }
 
 function toggleAdvanced() {
@@ -468,6 +470,11 @@ document.getElementById('planForm').addEventListener('submit', async (e) => {
     const fd = new FormData(e.target);
     const body = {};
     fd.forEach((v, k) => { body[k] = v; });
+
+    // 진단 결과가 있으면 기획에 포함
+    if (window._diagnosisData) {
+      body.diagnosis = window._diagnosisData;
+    }
 
     // 1) 태스크 제출
     const res  = await fetch('{{ url_for("create.detail_page_plan") }}', {

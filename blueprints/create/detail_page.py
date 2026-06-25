@@ -297,6 +297,7 @@ def detail_page_plan():
         'certifications':     (data.get('certifications')     or '').strip(),
         'customer_questions': (data.get('customer_questions') or '').strip(),
         'customer_reviews':   (data.get('customer_reviews')   or '').strip(),
+        'diagnosis':          data.get('diagnosis') or {},
     }
     if not input_data['product_name'] or not input_data['features']:
         return jsonify(ok=False, message='상품명과 핵심 기능을 입력해 주세요.')

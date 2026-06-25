@@ -131,6 +131,7 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
     questions    = input_data.get('customer_questions') or ''
     reviews      = input_data.get('customer_reviews') or ''
     renewal_url  = input_data.get('renewal_url') or ''
+    diagnosis    = input_data.get('diagnosis') or {}
 
     # 타입별 여정 블록 생성
     type_blocks = []
@@ -171,7 +172,26 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
         extra_blocks.append(f'실제 고객 후기 (이 언어를 appeal_analysis 작성에 적극 반영):\n{reviews}')
     extra_str = ('\n\n[고객 목소리 데이터]\n' + '\n\n'.join(extra_blocks)) if extra_blocks else ''
 
-    user = f"""아래 상품에 대해 3가지 상세페이지 타입의 섹션 구조를 설계해 주세요.{renewal_block}
+    # 진단 결과 블록
+    diag_block = ''
+    if diagnosis:
+        recs = diagnosis.get('recommendations') or []
+        top_type = recs[0].get('type_name', '') if recs else ''
+        top_reason = recs[0].get('reason', '') if recs else ''
+        purchase_reason = diagnosis.get('key_purchase_reason', '')
+        hesitation = diagnosis.get('key_hesitation', '')
+        diag_lines = []
+        if top_type:
+            diag_lines.append(f'AI 진단 추천 타입: {top_type} (이유: {top_reason})')
+        if purchase_reason:
+            diag_lines.append(f'핵심 구매 이유: {purchase_reason}')
+        if hesitation:
+            diag_lines.append(f'핵심 구매 망설임: {hesitation}')
+        if diag_lines:
+            diag_block = '\n\n[AI 진단 결과 — 섹션 설계에 반드시 반영]\n' + '\n'.join(diag_lines) + \
+                '\n→ 추천 타입을 plans 배열 첫 번째에 배치하고, 핵심 구매이유/망설임을 appeal_analysis와 섹션 purpose에 직접 녹여주세요.'
+
+    user = f"""아래 상품에 대해 3가지 상세페이지 타입의 섹션 구조를 설계해 주세요.{renewal_block}{diag_block}
 
 [상품 정보]
 상품명: {product_name}
