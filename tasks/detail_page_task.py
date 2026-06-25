@@ -155,10 +155,13 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
         import re as _re
 
         # ① NO TEXT를 맨 앞에 배치 — FLUX는 프롬프트 앞부분을 가장 강하게 따름
+        # 패키지에 글자 그리려다 깨지는 버그 방지: 표면 자체를 빈 것으로 명시
         _FLUX_NO_TEXT = (
-            'No text, no letters, no words, no writing, no characters, '
-            'no Korean, no Chinese, no Japanese, no numbers, no logos, '
-            'no labels, no signs on any surface. All surfaces blank and clean.'
+            'Plain unbranded packaging with completely blank surfaces, '
+            'no printing, no text, no letters, no words, no numbers, '
+            'no logos, no labels, no marks, no writing of any kind '
+            'on any surface anywhere in the image. '
+            'Packaging surface is solid color only, completely empty.'
         )
         _FLUX_QUALITY = (
             'high-end commercial photography, 8k resolution, photorealistic, '

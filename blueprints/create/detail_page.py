@@ -476,9 +476,11 @@ def detail_page_draft_gen_image():
         # FLUX: NO TEXT를 맨 앞에, 한글/한자 제거 후 전송
         import re as _re
         _no_text = (
-            'No text, no letters, no words, no writing, no characters, '
-            'no Korean, no Chinese, no Japanese, no logos, no labels on any surface. '
-            'All surfaces blank and clean.'
+            'Plain unbranded packaging with completely blank surfaces, '
+            'no printing, no text, no letters, no words, no numbers, '
+            'no logos, no labels, no marks, no writing of any kind '
+            'on any surface anywhere in the image. '
+            'Packaging surface is solid color only, completely empty.'
         )
         clean_prompt = _re.sub(r'[가-힣一-鿿぀-ヿ㐀-䶿]', '', image_prompt).strip(' ,')
         full_prompt = (
