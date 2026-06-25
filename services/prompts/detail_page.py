@@ -255,6 +255,7 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
     certs        = input_data.get('certifications') or ''
     questions    = input_data.get('customer_questions') or ''
     reviews      = input_data.get('customer_reviews') or ''
+    renewal_url  = input_data.get('renewal_url') or ''
     pain         = appeal.get('core_pain', '')
     trigger      = appeal.get('buy_trigger', '')
     ap_points    = appeal.get('appeal_points', [])
