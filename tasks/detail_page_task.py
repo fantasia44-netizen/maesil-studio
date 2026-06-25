@@ -2,10 +2,65 @@
 import json
 import logging
 import io
+import re
 
 from celery_app import celery
 
 logger = logging.getLogger(__name__)
+
+
+def _repair_json(raw: str) -> dict:
+    """JSON이 중간에 잘렸을 때 복구 시도.
+    1) 정상 파싱 → 성공 시 바로 반환
+    2) 잘린 지점 이후를 버리고 열린 괄호/따옴표 닫기
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # 열린 괄호·따옴표 스택으로 닫아가며 복구
+    stack = []
+    in_string = False
+    escape = False
+    last_good = 0
+
+    for i, ch in enumerate(raw):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            if in_string:
+                in_string = False
+                last_good = i + 1
+            else:
+                in_string = True
+            continue
+        if not in_string:
+            if ch in ('{', '['):
+                stack.append(ch)
+            elif ch == '}':
+                if stack and stack[-1] == '{':
+                    stack.pop()
+                    last_good = i + 1
+            elif ch == ']':
+                if stack and stack[-1] == '[':
+                    stack.pop()
+                    last_good = i + 1
+
+    # 잘린 문자열 → 마지막으로 완전했던 위치까지만 사용
+    truncated = raw[:last_good]
+    # 남은 열린 괄호 닫기
+    for ch in reversed(stack):
+        truncated += '}' if ch == '{' else ']'
+
+    try:
+        return json.loads(truncated)
+    except json.JSONDecodeError as e:
+        raise ValueError(f'JSON 복구 실패: {e}') from e
 
 
 def _setup():
@@ -38,7 +93,7 @@ def diagnose_product(self, diag_id, brand, input_data,
         cleaned = raw.strip()
         if cleaned.startswith('```'):
             cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-        data = json.loads(cleaned)
+        data = _repair_json(cleaned)
 
         supabase.table('creations').update(
             {'output_data': data, 'status': 'done'}
@@ -74,13 +129,13 @@ def generate_plan(self, plan_id, user_id, operator_id, brand, input_data,
         from services.claude_service import generate_text
 
         system, user_prompt = build_preview_prompt(brand, input_data)
-        raw = generate_text(system, user_prompt, max_tokens=5000,
+        raw = generate_text(system, user_prompt, max_tokens=8000,
                             model='claude-sonnet-4-6')
 
         cleaned = raw.strip()
         if cleaned.startswith('```'):
             cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-        data = json.loads(cleaned)
+        data = _repair_json(cleaned)
 
         supabase.table('creations').update(
             {'output_data': data, 'status': 'done'}
@@ -116,13 +171,13 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
         from services.claude_service import generate_text
 
         system, user_prompt = build_copy_prompt(brand, input_data, plan_preview)
-        raw = generate_text(system, user_prompt, max_tokens=4000,
+        raw = generate_text(system, user_prompt, max_tokens=8000,
                             model='claude-sonnet-4-6')
 
         cleaned = raw.strip()
         if cleaned.startswith('```'):
             cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-        result = json.loads(cleaned)
+        result = _repair_json(cleaned)
 
         # ── Phase 2.5: AI 자기검수 ───────────────────────────
         raw_copies = result.get('copies', [])
@@ -133,7 +188,7 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             rev_cleaned = rev_raw.strip()
             if rev_cleaned.startswith('```'):
                 rev_cleaned = rev_cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
-            review = json.loads(rev_cleaned)
+            review = _repair_json(rev_cleaned)
 
             # 재작성 섹션 병합
             revisions = {r['no']: r['copy'] for r in review.get('revisions', [])}
