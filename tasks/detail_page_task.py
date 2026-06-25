@@ -152,26 +152,38 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             result['review'] = {'overall_pass': True, 'checks': [], 'revised_sections': []}
 
         # scene_prompt + commerce_prompt → image_prompt 합성 (FLUX 전송용)
-        _FLUX_SUFFIX = (
+        import re as _re
+
+        # ① NO TEXT를 맨 앞에 배치 — FLUX는 프롬프트 앞부분을 가장 강하게 따름
+        _FLUX_NO_TEXT = (
+            'No text, no letters, no words, no writing, no characters, '
+            'no Korean, no Chinese, no Japanese, no numbers, no logos, '
+            'no labels, no signs on any surface. All surfaces blank and clean.'
+        )
+        _FLUX_QUALITY = (
             'high-end commercial photography, 8k resolution, photorealistic, '
-            'NO text NO labels NO writing on any surface, blank clean package branding, '
             'sharp focus, shot on 35mm lens'
         )
         _VISIBILITY_PREFIX = {
             'none':   'Warm natural lifestyle photography, emotional atmosphere, authentic feel, soft bokeh,',
-            'small':  'Warm natural lifestyle photography, product subtly placed in background, soft bokeh,',
-            'medium': 'Commercial lifestyle photography, product clearly visible alongside person,',
+            'small':  'Warm natural lifestyle photography, product subtly in background, soft bokeh,',
+            'medium': 'Commercial lifestyle photography, product clearly visible,',
             'large':  'Minimalist product studio lighting, product package as hero in foreground, bright clean background,',
         }
 
+        def _sanitize(text: str) -> str:
+            """한글·한자·일어 제거 — FLUX가 아시아 문자를 이미지에 그려넣는 원인"""
+            return _re.sub(r'[가-힣一-鿿぀-ヿ㐀-䶿]', '', text).strip(' ,')
+
         def _build_flux_prompt(c: dict, sec: dict) -> str:
-            scene    = c.get('scene_prompt') or ''
-            commerce = c.get('commerce_prompt') or ''
-            legacy   = c.get('image_prompt') or ''   # 이전 포맷 호환
+            scene    = _sanitize(c.get('scene_prompt') or '')
+            commerce = _sanitize(c.get('commerce_prompt') or '')
+            legacy   = _sanitize(c.get('image_prompt') or '')
             visibility = sec.get('product_visibility', 'medium')
             prefix = _VISIBILITY_PREFIX.get(visibility, _VISIBILITY_PREFIX['medium'])
-            body = f"{scene}, {commerce}" if scene or commerce else legacy
-            return f"{prefix} {body}, {_FLUX_SUFFIX}"
+            body = f"{scene}, {commerce}" if (scene or commerce) else legacy
+            # NO TEXT → 스타일 prefix → 장면 → 품질 순서
+            return f"{_FLUX_NO_TEXT} {prefix} {body}, {_FLUX_QUALITY}"
 
         # copies + image_prompt를 sections에 병합
         sec_map = {sec['no']: sec for sec in

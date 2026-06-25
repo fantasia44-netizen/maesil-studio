@@ -473,11 +473,18 @@ def detail_page_draft_gen_image():
     try:
         use_points(current_user, 'detail_page_draft_image', gen_id, cost_override=cost)
 
-        # FLUX Schnell — 영어 프롬프트이므로 번역 불필요
-        # 스케치/레퍼런스 분위기 서픽스 추가
+        # FLUX: NO TEXT를 맨 앞에, 한글/한자 제거 후 전송
+        import re as _re
+        _no_text = (
+            'No text, no letters, no words, no writing, no characters, '
+            'no Korean, no Chinese, no Japanese, no logos, no labels on any surface. '
+            'All surfaces blank and clean.'
+        )
+        clean_prompt = _re.sub(r'[가-힣一-鿿぀-ヿ㐀-䶿]', '', image_prompt).strip(' ,')
         full_prompt = (
-            image_prompt.rstrip('.') +
-            ', editorial photography, professional commercial photo, no text, no words, no letters, clean composition'
+            f"{_no_text} {clean_prompt}, "
+            'editorial photography, professional commercial photo, clean composition, '
+            'high-end photography, photorealistic, 8k resolution'
         )
         image_url, _ = generate_image(full_prompt, engine='flux_preview')
 
