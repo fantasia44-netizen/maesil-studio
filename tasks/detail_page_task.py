@@ -74,7 +74,7 @@ def generate_plan(self, plan_id, user_id, operator_id, brand, input_data,
         from services.claude_service import generate_text
 
         system, user_prompt = build_preview_prompt(brand, input_data)
-        raw = generate_text(system, user_prompt, max_tokens=3000,
+        raw = generate_text(system, user_prompt, max_tokens=5000,
                             model='claude-sonnet-4-6')
 
         cleaned = raw.strip()
@@ -116,7 +116,7 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
         from services.claude_service import generate_text
 
         system, user_prompt = build_copy_prompt(brand, input_data, plan_preview)
-        raw = generate_text(system, user_prompt, max_tokens=2000,
+        raw = generate_text(system, user_prompt, max_tokens=4000,
                             model='claude-sonnet-4-6')
 
         cleaned = raw.strip()
