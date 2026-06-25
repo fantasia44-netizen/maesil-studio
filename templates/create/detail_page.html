@@ -530,7 +530,7 @@ async function startExport(fmt) {
 
   try {
     const r = await fetch(`/create/detail-page/draft/${_draftId}/export/${fmt}`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
     });
     const d = await r.json();
     if (!d.ok) { alert(d.message || '내보내기 오류'); btn.disabled = false; btn.innerHTML = origHtml; return; }
