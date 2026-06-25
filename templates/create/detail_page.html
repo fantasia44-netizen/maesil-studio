@@ -535,8 +535,9 @@ async function startExport(fmt) {
     const d = await r.json();
     if (!d.ok) { alert(d.message || '내보내기 오류'); btn.disabled = false; btn.innerHTML = origHtml; return; }
 
-    if (d.status === 'done' && d.url) {
-      _triggerDownload(d.url, fmt); btn.disabled = false; btn.innerHTML = origHtml; return;
+    if (d.status === 'done') {
+      _triggerDownload(`/create/detail-page/draft/${_draftId}/export/${fmt}/download`, fmt);
+      btn.disabled = false; btn.innerHTML = origHtml; return;
     }
 
     // 폴링 — 워커 완료 대기
@@ -549,9 +550,9 @@ async function startExport(fmt) {
       }
       try {
         const s = await fetch(`/create/detail-page/draft/${_draftId}/export/${fmt}/status`).then(x => x.json());
-        if (s.status === 'done' && s.url) {
+        if (s.status === 'done') {
           clearInterval(timer);
-          _triggerDownload(s.url, fmt);
+          _triggerDownload(`/create/detail-page/draft/${_draftId}/export/${fmt}/download`, fmt);
           btn.disabled = false; btn.innerHTML = origHtml;
         } else if (s.status === 'failed') {
           clearInterval(timer);
@@ -568,7 +569,7 @@ async function startExport(fmt) {
 
 function _triggerDownload(url, fmt) {
   const a = document.createElement('a');
-  a.href = url; a.download = `상세페이지_초안.${fmt}`; a.target = '_blank';
+  a.href = url; a.download = `상세페이지_초안.${fmt}`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 

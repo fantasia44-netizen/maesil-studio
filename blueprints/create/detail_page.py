@@ -494,10 +494,46 @@ def detail_page_draft_export_status(draft_id: str, fmt: str):
     if not row:
         return jsonify(ok=False, status='error', message='초안을 찾을 수 없습니다.')
     od  = row.get('output_data') or {}
-    url = od.get(f'export_{fmt}_url')
-    if url:
-        return jsonify(ok=True, status='done', url=url)
+    if od.get(f'export_{fmt}_url'):
+        return jsonify(ok=True, status='done')   # URL 노출 안 함 — 프록시 다운로드 사용
     err = od.get(f'export_{fmt}_error')
     if err:
         return jsonify(ok=False, status='failed', message=f'내보내기 실패: {err}')
     return jsonify(ok=True, status='generating')
+
+
+@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>/download', methods=['GET'])
+@login_required
+def detail_page_draft_export_download(draft_id: str, fmt: str):
+    """Supabase Storage URL을 서버에서 받아 파일로 전송 — 크로스 오리진 다운로드 문제 해결."""
+    import requests as req_lib
+    from flask import make_response
+
+    if fmt not in ('png', 'pdf'):
+        return '잘못된 형식', 400
+
+    supabase = current_app.supabase
+    row = _get_draft(supabase, draft_id)
+    if not row:
+        return '초안을 찾을 수 없습니다.', 404
+
+    od  = row.get('output_data') or {}
+    url = od.get(f'export_{fmt}_url')
+    if not url:
+        return '아직 생성 중입니다.', 404
+
+    try:
+        r = req_lib.get(url, timeout=60)
+        r.raise_for_status()
+    except Exception as e:
+        logger.error('[dp_download] Supabase fetch 실패: %s', e)
+        return '파일 다운로드 실패', 502
+
+    mimetype = 'application/pdf' if fmt == 'pdf' else 'image/png'
+    filename = f'detail_export.{fmt}'   # ASCII만 — gunicorn 헤더 오류 방지
+
+    resp = make_response(r.content)
+    resp.headers['Content-Type'] = mimetype
+    resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    resp.headers['Content-Length'] = len(r.content)
+    return resp
