@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 
 def _accessible_products(supabase, brand_id: str | None = None) -> list:
-    """현재 사용자가 접근 가능한 상품. brand_id 지정 시 해당 브랜드만."""
+    """현재 사용자가 접근 가능한 전체 상품 (브랜드 필터 없음 — 글 작성 시 모든 상품 선택 가능)."""
     user = current_user
     try:
         if user.operator_id:
@@ -37,14 +37,11 @@ def _accessible_products(supabase, brand_id: str | None = None) -> list:
             q = supabase.table('products').select(
                 'id,name,category,price,avoid_words,brand_id,image_url,images'
             ).eq('user_id', user.id)
-        if brand_id:
-            # brand_id 일치 OR brand_id가 NULL인 상품도 포함 (브랜드 미매핑 상품 누락 방지)
-            q = q.or_(f'brand_id.eq.{brand_id},brand_id.is.null')
         # 활성만
         try:
             q = q.eq('is_active', True)
         except Exception:
-            pass  # is_active 없는 환경 대비
+            pass
         res = q.order('created_at', desc=True).execute()
         return res.data or []
     except Exception as e:
