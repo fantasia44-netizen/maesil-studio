@@ -422,3 +422,80 @@ def build_image_prompt_for_section(section: dict, product_name: str) -> str:
             break
 
     return f"{scene}, high resolution, no text no words no letters in the image"
+
+
+# ── Phase 2.5: AI 자기검수 ──────────────────────────────────
+_REVIEW_CHECKLIST = [
+    ('empathy',     '섹션1: 고객 감정/상황 공감이 충분한가? 고객이 "나 얘기네"라고 느낄 수 있는가?'),
+    ('problem',     '섹션2: 기존 해결책의 한계 or 문제 심화가 구체적인가? 추상적이지 않은가?'),
+    ('solution',    '섹션3: 제품이 해결책으로 등장하는가? 기능 설명이 아닌 고객 편익으로 표현됐는가?'),
+    ('proof',       '섹션4~5: 신뢰 근거(인증/수치/후기)가 포함됐는가? "믿어도 될까?" 질문에 답하는가?'),
+    ('cta',         '섹션6: 구매 결심을 유도하는가? 반론 제거 + 행동 문구 + 안심 요소가 있는가?'),
+    ('voice',       '전체: 고객이 후기에 쓸 법한 진짜 언어인가? 브로셔 문체가 섞이지 않았는가?'),
+    ('story_flow',  '전체: 6개 섹션이 하나의 스토리로 자연스럽게 이어지는가? 각 섹션이 이전 감정을 받아서 진행하는가?'),
+    ('forbidden',   '전체: 금지 표현(최고/프리미엄/정성껏/괜찮아요 등) 없는가?'),
+]
+
+
+def build_review_prompt(copies: list[dict], input_data: dict, plan_preview: dict) -> tuple[str, str]:
+    """생성된 카피를 검수해 약한 섹션만 재작성."""
+    product_name = input_data.get('product_name', '')
+    type_name    = plan_preview.get('type_name', '')
+    appeal       = plan_preview.get('appeal_analysis', {})
+    pain         = appeal.get('core_pain', '')
+    trigger      = appeal.get('buy_trigger', '')
+
+    copies_block = '\n\n'.join(
+        f"섹션{c['no']}:\n{c['copy']}"
+        for c in copies
+    )
+
+    checklist_str = '\n'.join(
+        f"  [{k}] {desc}"
+        for k, desc in _REVIEW_CHECKLIST
+    )
+
+    system = """당신은 온라인 커머스 카피 품질 검수 전문가입니다.
+생성된 상세페이지 카피를 체크리스트로 평가하고, 기준 미달 섹션만 개선합니다.
+결과는 순수 JSON만 출력합니다. 마크다운 없음."""
+
+    user = f"""아래 상세페이지 카피를 검수하고 약한 섹션을 재작성해 주세요.
+
+[상품 / 전략 컨텍스트]
+상품명: {product_name}
+타입: {type_name}
+핵심 고통: {pain}
+구매 트리거: {trigger}
+
+[생성된 카피]
+{copies_block}
+
+[검수 체크리스트]
+{checklist_str}
+
+[판단 기준]
+- PASS: 기준을 충분히 충족. 수정 불필요.
+- FAIL: 기준 미달. 구체적 이유와 함께 개선된 카피 제시.
+- 재작성 시 원본 구조(헤드라인\\n본문줄1\\n본문줄2) 유지.
+- 재작성 카피도 동일 금지 표현 규칙 적용.
+
+Output ONLY this JSON:
+{{
+  "overall_pass": true,
+  "checks": [
+    {{"key": "empathy", "pass": true, "issue": ""}},
+    {{"key": "problem", "pass": true, "issue": ""}},
+    {{"key": "solution", "pass": false, "issue": "3섹션 본문이 기능 설명에 그침. '덕분에 당신은' 표현 없음"}},
+    {{"key": "proof", "pass": true, "issue": ""}},
+    {{"key": "cta", "pass": false, "issue": "섹션6 마무리가 약함. 행동 문구 없음"}},
+    {{"key": "voice", "pass": true, "issue": ""}},
+    {{"key": "story_flow", "pass": true, "issue": ""}},
+    {{"key": "forbidden", "pass": true, "issue": ""}}
+  ],
+  "revisions": [
+    {{"no": 3, "copy": "개선된 섹션3 카피\\n본문줄1\\n본문줄2"}},
+    {{"no": 6, "copy": "개선된 섹션6 카피\\n본문줄1\\n본문줄2"}}
+  ]
+}}"""
+
+    return system, user

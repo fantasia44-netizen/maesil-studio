@@ -112,7 +112,7 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
     os.environ.setdefault('ANTHROPIC_API_KEY', anthropic_api_key)
 
     try:
-        from services.prompts.detail_page import build_copy_prompt
+        from services.prompts.detail_page import build_copy_prompt, build_review_prompt
         from services.claude_service import generate_text
 
         system, user_prompt = build_copy_prompt(brand, input_data, plan_preview)
@@ -124,8 +124,35 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
             cleaned = cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
         result = json.loads(cleaned)
 
+        # ── Phase 2.5: AI 자기검수 ───────────────────────────
+        raw_copies = result.get('copies', [])
+        try:
+            rev_sys, rev_user = build_review_prompt(raw_copies, input_data, plan_preview)
+            rev_raw = generate_text(rev_sys, rev_user, max_tokens=1500,
+                                    model='claude-haiku-4-5-20251001')
+            rev_cleaned = rev_raw.strip()
+            if rev_cleaned.startswith('```'):
+                rev_cleaned = rev_cleaned.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+            review = json.loads(rev_cleaned)
+
+            # 재작성 섹션 병합
+            revisions = {r['no']: r['copy'] for r in review.get('revisions', [])}
+            if revisions:
+                for c in raw_copies:
+                    if c['no'] in revisions:
+                        c['copy'] = revisions[c['no']]
+                logger.info('[dp_copy] 검수 완료 — 재작성 섹션: %s', list(revisions.keys()))
+            result['review'] = {
+                'overall_pass': review.get('overall_pass', True),
+                'checks': review.get('checks', []),
+                'revised_sections': list(revisions.keys()),
+            }
+        except Exception as rev_e:
+            logger.warning('[dp_copy] 검수 실패 (무시): %s', rev_e)
+            result['review'] = {'overall_pass': True, 'checks': [], 'revised_sections': []}
+
         # copies + image_prompt를 sections에 병합
-        copies = {c['no']: (c['copy'], c.get('image_prompt', '')) for c in result.get('copies', [])}
+        copies = {c['no']: (c['copy'], c.get('image_prompt', '')) for c in raw_copies}
         r = supabase.table('creations').select('output_data').eq('id', draft_id).single().execute()
         od = r.data.get('output_data') or {}
         for sec in od.get('sections', []):
