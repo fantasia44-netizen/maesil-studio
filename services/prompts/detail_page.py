@@ -130,6 +130,7 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
     certs        = input_data.get('certifications') or ''
     questions    = input_data.get('customer_questions') or ''
     reviews      = input_data.get('customer_reviews') or ''
+    renewal_url  = input_data.get('renewal_url') or ''
 
     # 타입별 여정 블록 생성
     type_blocks = []
