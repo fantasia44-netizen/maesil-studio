@@ -459,42 +459,42 @@ def detail_page_draft_load(draft_id: str):
     return jsonify(ok=True, data=row.get('output_data') or {})
 
 
-@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>', methods=['GET'])
+@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>', methods=['POST'])
 @login_required
 def detail_page_draft_export(draft_id: str, fmt: str):
-    """초안 내보내기 — 웹서버에서 직접 PNG/PDF 합성 후 파일 전송."""
-    from services.detail_page_draft_service import compose_draft_png, compose_draft_pdf
+    """내보내기 태스크 제출 → 워커에서 PNG/PDF 합성 후 Storage 업로드."""
+    from tasks.detail_page_task import export_draft
+    import os
 
     if fmt not in ('png', 'pdf'):
-        return 'invalid format', 400
+        return jsonify(ok=False, message='지원하지 않는 형식'), 400
 
     supabase = current_app.supabase
     row = _get_draft(supabase, draft_id)
     if not row:
-        return '초안을 찾을 수 없습니다.', 404
+        return jsonify(ok=False, message='초안을 찾을 수 없습니다.')
 
-    od           = row.get('output_data') or {}
-    product_name = od.get('product_name', '상품명')
+    od = row.get('output_data') or {}
+    cached = od.get(f'export_{fmt}_url')
+    if cached:
+        return jsonify(ok=True, status='done', url=cached)
 
-    try:
-        if fmt == 'pdf':
-            data_bytes = compose_draft_pdf(od)
-            mimetype   = 'application/pdf'
-            filename   = f'상세페이지_초안_{product_name}.pdf'
-        else:
-            data_bytes = compose_draft_png(od)
-            mimetype   = 'image/png'
-            filename   = f'상세페이지_초안_{product_name}.png'
+    supabase_url = os.environ.get('SUPABASE_URL', '')
+    supabase_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+    export_draft.delay(draft_id, fmt, supabase_url, supabase_key)
+    return jsonify(ok=True, status='queued')
 
-        from flask import make_response
-        resp = make_response(data_bytes)
-        resp.headers['Content-Type'] = mimetype
-        resp.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-        resp.headers['Content-Length'] = len(data_bytes)
-        return resp
-    except Exception as e:
-        logger.error(f'[dp_export] 오류: {e}', exc_info=True)
-        from flask import make_response
-        r = make_response(f'내보내기 오류: {type(e).__name__}: {e}', 500)
-        r.headers['Content-Type'] = 'text/plain; charset=utf-8'
-        return r
+
+@create_bp.route('/detail-page/draft/<draft_id>/export/<fmt>/status', methods=['GET'])
+@login_required
+def detail_page_draft_export_status(draft_id: str, fmt: str):
+    """내보내기 완료 여부 폴링."""
+    supabase = current_app.supabase
+    row = _get_draft(supabase, draft_id)
+    if not row:
+        return jsonify(ok=False, status='error', message='초안을 찾을 수 없습니다.')
+    od  = row.get('output_data') or {}
+    url = od.get(f'export_{fmt}_url')
+    if url:
+        return jsonify(ok=True, status='done', url=url)
+    return jsonify(ok=True, status='generating')

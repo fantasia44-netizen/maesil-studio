@@ -109,42 +109,41 @@ def generate_copy(self, draft_id, brand, input_data, plan_preview,
         raise
 
 
-# ── Phase 3: PNG/PDF 합성 및 Supabase 업로드 ─────────────────
+# ── Phase 3: PNG/PDF 합성 및 Supabase Storage 업로드 ─────────
 @celery.task(bind=True, name='tasks.detail_page_task.export_draft',
              max_retries=1, soft_time_limit=180, time_limit=210)
 def export_draft(self, draft_id, fmt, supabase_url, supabase_key):
-    """PNG/PDF 합성 → Supabase Storage 업로드 → creations에 export URL 저장."""
+    """PNG/PDF 합성 → Supabase Storage(creations 버킷) 업로드 → URL 저장."""
     _setup()
+    import uuid as _uuid
     from supabase import create_client
     supabase = create_client(supabase_url, supabase_key)
 
     try:
         r = supabase.table('creations').select('output_data, user_id').eq('id', draft_id).single().execute()
-        od = r.data.get('output_data') or {}
+        od      = r.data.get('output_data') or {}
         user_id = r.data.get('user_id', 'unknown')
 
         from services.detail_page_draft_service import compose_draft_png, compose_draft_pdf
         if fmt == 'pdf':
-            data_bytes = compose_draft_pdf(od)
+            data_bytes   = compose_draft_pdf(od)
             content_type = 'application/pdf'
-            ext = 'pdf'
+            ext          = 'pdf'
         else:
-            data_bytes = compose_draft_png(od)
+            data_bytes   = compose_draft_png(od)
             content_type = 'image/png'
-            ext = 'png'
+            ext          = 'png'
 
-        path = f'detail_page_exports/{user_id}/{draft_id}.{ext}'
+        path = f'{user_id}/{_uuid.uuid4().hex}_detail_export.{ext}'
         supabase.storage.from_('creations').upload(
-            path, data_bytes,
-            file_options={'content-type': content_type, 'upsert': 'true'}
+            path, data_bytes, {'content-type': content_type}
         )
         url = supabase.storage.from_('creations').get_public_url(path)
 
-        # output_data에 export URL 기록
         od[f'export_{ext}_url'] = url
         supabase.table('creations').update({'output_data': od}).eq('id', draft_id).execute()
 
-        logger.info('[dp_export] 완료 draft_id=%s fmt=%s', draft_id, fmt)
+        logger.info('[dp_export] 완료 draft_id=%s fmt=%s size=%d', draft_id, fmt, len(data_bytes))
         return {'ok': True, 'url': url}
 
     except Exception as e:
