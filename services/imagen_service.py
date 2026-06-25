@@ -33,7 +33,7 @@ def _translate_prompt(text: str) -> str:
     try:
         from services.claude_service import generate_text
         translated = generate_text(
-            system=(
+            (
                 'You are an expert image prompt translator for AI image generation (FLUX model). '
                 'Convert the given Korean description into a concise, vivid English image generation prompt. '
                 'CRITICAL RULES:\n'
@@ -42,7 +42,7 @@ def _translate_prompt(text: str) -> str:
                 '- Focus on visual scene: lighting, composition, mood, subject, style.\n'
                 '- Output a single line. No explanation, no quotes, no line breaks.'
             ),
-            prompt=text,
+            text,
             max_tokens=300,
             model='claude-sonnet-4-6',
         )
