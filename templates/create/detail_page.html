@@ -308,7 +308,8 @@ function fillFromProduct(productId) {
   if (!productId || !opt) return;
 
   document.getElementById('inputProductName').value = opt.dataset.name || '';
-  document.getElementById('inputFeatures').value    = opt.dataset.features || '';
+  // features 없으면 description을 fallback으로
+  document.getElementById('inputFeatures').value = opt.dataset.features || opt.dataset.description || '';
 
   const price = opt.dataset.price;
   if (price) {
