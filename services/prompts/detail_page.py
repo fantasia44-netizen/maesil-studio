@@ -66,6 +66,7 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
     target       = input_data.get('target_customer') or ''
     diff         = input_data.get('differentiator') or ''
     price        = input_data.get('price_range') or ''
+    renewal_url  = input_data.get('renewal_url') or ''
 
     # 타입별 여정 블록 생성
     type_blocks = []
@@ -87,7 +88,17 @@ def build_preview_prompt(brand: dict, input_data: dict) -> tuple[str, str]:
 [브랜드 정보]
 {brand_ctx}"""
 
-    user = f"""아래 상품에 대해 3가지 상세페이지 타입의 섹션 구조를 설계해 주세요.
+    renewal_block = ''
+    if renewal_url:
+        renewal_block = f"""
+[리뉴얼 분석 요청]
+기존 상세페이지 URL: {renewal_url}
+→ 이 URL의 상세페이지가 가진 일반적 약점(스크롤 이탈 구간, 신뢰 부족, 공감 부재 등)을 추론하고,
+  각 타입의 섹션 구조에 그 개선 방향을 반영해 주세요.
+  appeal_analysis.core_pain과 buy_trigger에 기존 상세페이지의 미충족 요소를 명시해 주세요.
+"""
+
+    user = f"""아래 상품에 대해 3가지 상세페이지 타입의 섹션 구조를 설계해 주세요.{renewal_block}
 
 [상품 정보]
 상품명: {product_name}
@@ -168,6 +179,7 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
     target       = input_data.get('target_customer') or appeal.get('target_customer', '')
     diff         = input_data.get('differentiator') or ''
     price        = input_data.get('price_range') or ''
+    renewal_url  = input_data.get('renewal_url') or ''
     pain         = appeal.get('core_pain', '')
     trigger      = appeal.get('buy_trigger', '')
     ap_points    = appeal.get('appeal_points', [])
@@ -208,7 +220,17 @@ def build_copy_prompt(brand: dict, input_data: dict, plan_preview: dict) -> tupl
 결과는 순수 JSON만 출력합니다. 마크다운 없음.
 브랜드 컨텍스트: {brand_ctx}"""
 
-    user = f"""[상품 정보]
+    renewal_copy_block = ''
+    if renewal_url:
+        renewal_copy_block = f"""
+[리뉴얼 컨텍스트]
+기존 상세페이지: {renewal_url}
+→ 기존 페이지의 약점(공감 부족, 신뢰 미흡, 차별화 불명확 등)을 보완하는 방향으로 카피를 강화해 주세요.
+  특히 헤드라인과 첫 2개 섹션에서 기존 페이지가 놓쳤을 고객 공감 포인트를 살려주세요.
+
+"""
+
+    user = f"""{renewal_copy_block}[상품 정보]
 상품명: {product_name}
 핵심 특징·기능: {features}
 타겟 고객: {target}

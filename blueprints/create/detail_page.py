@@ -70,9 +70,26 @@ def detail_page():
     if not default_brand:
         flash('먼저 브랜드 프로필을 등록해 주세요.', 'warning')
         return redirect(url_for('main.onboarding'))
+
+    # 기존 상품 목록 (상품 불러오기 탭용)
+    products = []
+    try:
+        user = current_user
+        q = supabase.table('products').select(
+            'id,name,category,price,features,description,product_url,brand_id'
+        ).eq('is_active', True)
+        if user.operator_id:
+            q = q.eq('operator_id', user.operator_id)
+        else:
+            q = q.eq('user_id', user.id)
+        products = q.order('created_at', desc=True).execute().data or []
+    except Exception:
+        pass
+
     return render_template('create/detail_page.html',
                            brands=brands,
-                           default_brand=default_brand)
+                           default_brand=default_brand,
+                           products=products)
 
 
 @create_bp.route('/detail-page/generate', methods=['POST'])
@@ -198,6 +215,7 @@ def detail_page_plan():
         'target_customer': (data.get('target_customer') or '').strip(),
         'price_range':     (data.get('price_range')     or '').strip(),
         'differentiator':  (data.get('differentiator')  or '').strip(),
+        'renewal_url':     (data.get('renewal_url')     or '').strip(),
     }
     if not input_data['product_name'] or not input_data['features']:
         return jsonify(ok=False, message='상품명과 핵심 기능을 입력해 주세요.')
