@@ -158,12 +158,14 @@ def dashboard():
                     uid = s['user_id']
                     if uid not in sub_map:
                         sub_map[uid] = s
+                now_utc = datetime.now(timezone.utc)
                 for u in recent_users:
                     sub = sub_map.get(u['id'], {})
-                    u['sub_status']  = sub.get('status', '')
+                    raw_status = sub.get('status', '')
+                    u['sub_status']  = raw_status
                     expires = sub.get('current_period_end', '')
                     # current_period_end 없는 trial은 created_at + 30일로 추정
-                    if not expires and sub.get('status') == 'trial':
+                    if not expires and raw_status == 'trial':
                         created = sub.get('created_at') or u.get('created_at', '')
                         if created:
                             try:
@@ -172,11 +174,25 @@ def dashboard():
                             except Exception:
                                 pass
                     u['sub_expires'] = expires
+
+                    # ── 유효 상태: DB status가 trial/active여도 만료일이 지났으면 만료로 표기 ──
+                    eff = raw_status
+                    if raw_status in ('trial', 'active', 'past_due') and expires:
+                        try:
+                            exp_dt = datetime.fromisoformat(expires.replace('Z', '+00:00'))
+                            if exp_dt.tzinfo is None:
+                                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                            if exp_dt < now_utc:
+                                eff = 'trial_expired' if raw_status == 'trial' else 'expired'
+                        except Exception:
+                            pass
+                    u['sub_status_eff'] = eff
             except Exception as sub_err:
                 logger.warning(f'[ADMIN] 구독 정보 병합 실패: {sub_err}')
                 for u in recent_users:
                     u['sub_status'] = ''
                     u['sub_expires'] = ''
+                    u['sub_status_eff'] = ''
 
         # 최근 결제
         rp = supabase.table('payments').select(
