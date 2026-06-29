@@ -311,7 +311,7 @@ def register():
         if not is_invited_member:
             try:
                 from datetime import timedelta
-                _trial_end = (now_kst() + timedelta(days=30)).isoformat()
+                _trial_end = (now_kst() + timedelta(days=15)).isoformat()
                 sub_row = {
                     'user_id': user_id,
                     'plan_type': 'free',
