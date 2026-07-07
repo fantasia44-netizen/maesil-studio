@@ -13,6 +13,11 @@ def home():
     return render_template('landing/index.html')
 
 
+@landing_bp.route('/cases')
+def cases():
+    return render_template('landing/cases.html')
+
+
 @landing_bp.route('/terms')
 def terms():
     return render_template('landing/terms.html')

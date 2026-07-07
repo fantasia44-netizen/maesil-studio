@@ -34,7 +34,8 @@
 <nav class="navbar navbar-light bg-white border-bottom py-3">
   <div class="container">
     <a class="navbar-brand" href="/">매실 <span style="color:#e8355a">스튜디오</span></a>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center">
+      <a href="{{ url_for('landing.cases') }}" class="me-2 text-decoration-none fw-semibold" style="color:#444;font-size:.9rem">실 사용후기</a>
       <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm">로그인</a>
       <a href="{{ url_for('auth.register') }}" class="btn btn-sm btn-green">무료로 시작하기</a>
     </div>
@@ -100,6 +101,18 @@
   </div>
 </section>
 
+<!-- 실 사용후기 배너 -->
+<section class="py-5 text-center" style="background:#fdf6f8;">
+  <div class="container">
+    <span style="display:inline-block;background:#fce0e7;color:#e8355a;border-radius:20px;padding:.3rem .9rem;font-size:.8rem;font-weight:700;margin-bottom:1rem;">실 사용후기</span>
+    <h2 class="fw-bold mb-2">AI로 만든 블로그, 10주 만에 주간 조회수 <span style="color:#e8355a">3건 → 597건</span></h2>
+    <p class="text-muted mb-4">이웃 품앗이 0건, 전부 검색 유입 — 조건과 숫자 그대로 공개합니다.</p>
+    <a href="{{ url_for('landing.cases') }}" class="btn btn-outline-secondary px-4">
+      실제 후기 보기 <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+  </div>
+</section>
+
 <!-- 요금제 -->
 <section class="py-5">
   <div class="container">
@@ -153,6 +166,7 @@
 
 <footer class="py-4 text-center text-muted small border-top" style="line-height:1.9;">
   <div class="mb-1">
+    <a href="{{ url_for('landing.cases') }}" class="text-muted me-3">실 사용후기</a>
     <a href="{{ url_for('landing.terms') }}" target="_blank" class="text-muted me-3">이용약관</a>
     <a href="{{ url_for('landing.privacy') }}" target="_blank" class="text-muted">개인정보처리방침</a>
   </div>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>실 사용후기 - 매실 스튜디오</title>
+  <meta name="description" content="매실 스튜디오로 콘텐츠를 만들어 발행한 실제 사용자의 결과. 조건과 숫자를 있는 그대로 공개합니다.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --brand-primary: #e8355a;
+      --brand-light: #fdedf1;
+      --brand-deep: #fce0e7;
+      --navy: #1f1020;
+      --text-dark: #1e293b;
+      --text-body: #475569;
+      --text-muted: #94a3b8;
+      --bg-light: #f8fafc;
+      --border: #e2e8f0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+      background: #fff;
+      color: var(--text-dark);
+      line-height: 1.6;
+    }
+
+    /* ── 네비 ── */
+    .navbar-top {
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 0;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+    }
+    .navbar-top .container { display: flex; align-items: center; justify-content: space-between; }
+    .brand-logo { font-weight: 800; font-size: 1.15rem; color: var(--navy); text-decoration: none; }
+    .brand-logo span { color: var(--brand-primary); }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a { color: var(--text-body); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color .2s; }
+    .nav-links a.active { color: var(--brand-primary); font-weight: 700; }
+    .nav-links a:hover { color: var(--brand-primary); }
+    .nav-actions { display: flex; gap: 0.75rem; align-items: center; }
+
+    .btn-pink {
+      background: var(--brand-primary); color: #fff; font-weight: 600;
+      border: none; padding: 0.5rem 1.4rem; border-radius: 8px;
+      text-decoration: none; font-size: 0.9rem; transition: all .2s; display: inline-block;
+    }
+    .btn-pink:hover { background: #c42648; color: #fff; transform: translateY(-1px); }
+    .btn-outline {
+      border: 1.5px solid var(--border); color: var(--text-body); background: transparent;
+      font-weight: 500; padding: 0.5rem 1.2rem; border-radius: 8px;
+      text-decoration: none; font-size: 0.9rem; transition: all .2s; display: inline-block;
+    }
+    .btn-outline:hover { border-color: var(--brand-primary); color: var(--brand-primary); }
+
+    /* ── 페이지 히어로 ── */
+    .page-hero {
+      padding: 8rem 0 3rem;
+      background: linear-gradient(180deg, var(--brand-light) 0%, #fff 100%);
+      text-align: center;
+    }
+    .eyebrow {
+      display: inline-block; background: var(--brand-deep); color: var(--brand-primary);
+      font-size: 0.82rem; font-weight: 700; padding: 0.35rem 1rem;
+      border-radius: 20px; margin-bottom: 1.25rem;
+    }
+    .page-hero h1 {
+      font-size: 2.6rem; font-weight: 900; color: var(--navy);
+      letter-spacing: -1px; line-height: 1.3; margin-bottom: 1rem;
+    }
+    .page-hero h1 .hl { color: var(--brand-primary); }
+    .page-hero p { color: var(--text-body); font-size: 1.05rem; max-width: 640px; margin: 0 auto; }
+
+    /* ── 사례 카드 ── */
+    .section { padding: 4rem 0; }
+    .container-narrow { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+    .case-card {
+      background: #fff; border: 1px solid var(--border); border-radius: 16px;
+      padding: 2.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 2rem;
+    }
+    .case-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .case-tag {
+      background: var(--brand-deep); color: var(--brand-primary);
+      font-size: 0.78rem; font-weight: 700; padding: 0.3rem 0.75rem;
+      border-radius: 6px; letter-spacing: .3px;
+    }
+    .case-tag.channel { background: #f0fdf4; color: #15803d; }
+    .case-title {
+      font-size: 1.6rem; font-weight: 800; color: var(--navy);
+      line-height: 1.4; margin: 0.5rem 0 1rem; letter-spacing: -.5px;
+    }
+    .case-subtitle { color: var(--text-body); font-size: 1rem; line-height: 1.7; margin-bottom: 2rem; }
+
+    /* ── 결과 하이라이트 ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.75rem; margin-bottom: 1rem; }
+    .stat-box { border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border); }
+    .stat-box .k { font-size: 0.78rem; font-weight: 600; color: var(--text-body); margin-bottom: 0.3rem; }
+    .stat-box .v { font-size: 1.5rem; font-weight: 900; letter-spacing: -1px; }
+    .stat-box .d { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+    @media (max-width: 640px) { .stat-grid { grid-template-columns: 1fr; } }
+
+    .result-box {
+      background: var(--brand-light); border-left: 4px solid var(--brand-primary);
+      padding: 1.25rem 1.5rem; border-radius: 8px; margin: 1.5rem 0;
+    }
+    .result-box .k { font-size: 0.85rem; color: var(--text-body); font-weight: 600; }
+    .result-box .v {
+      font-size: 1.25rem; font-weight: 800; color: var(--brand-primary);
+      margin-top: 0.25rem; letter-spacing: -.3px;
+    }
+
+    /* ── 스토리 ── */
+    .story { margin-top: 2rem; }
+    .story h3 { font-size: 1.05rem; font-weight: 700; color: var(--navy); margin-bottom: 0.75rem; }
+    .story-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1rem; }
+    .story-step { background: var(--bg-light); border-radius: 10px; padding: 1.25rem; }
+    .story-step .no {
+      display: inline-block; background: var(--brand-primary); color: #fff;
+      font-size: 0.75rem; font-weight: 700; padding: 0.2rem 0.6rem;
+      border-radius: 4px; margin-bottom: 0.6rem;
+    }
+    .story-step .t { font-weight: 700; color: var(--navy); font-size: 0.95rem; margin-bottom: 0.35rem; }
+    .story-step .d { font-size: 0.85rem; color: var(--text-body); line-height: 1.5; }
+    @media (max-width: 640px) { .story-steps { grid-template-columns: 1fr; } }
+
+    /* ── 면책 ── */
+    .disclaimer {
+      background: var(--bg-light); border-radius: 12px; padding: 1.5rem;
+      margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-body); line-height: 1.7;
+    }
+    .disclaimer strong { color: var(--text-dark); }
+    .disclaimer ul { margin: 0.5rem 0 0 1.25rem; padding: 0; }
+    .disclaimer li { margin-bottom: 0.25rem; }
+
+    /* ── CTA ── */
+    .cta-section { background: var(--navy); padding: 4rem 0; text-align: center; color: #fff; }
+    .cta-section h2 { font-size: 2rem; font-weight: 800; margin-bottom: 0.75rem; letter-spacing: -.8px; }
+    .cta-section p { color: #cbd5e1; margin-bottom: 2rem; font-size: 1rem; }
+
+    /* ── 푸터 ── */
+    .footer { padding: 2.5rem 0 1.5rem; border-top: 1px solid var(--border); background: #fff; text-align: center; }
+    .footer-links { display: flex; gap: 1.5rem; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .footer-links a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; }
+    .footer-links a:hover { color: var(--brand-primary); }
+    .footer-copy { color: var(--text-muted); font-size: 0.8rem; }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .page-hero h1 { font-size: 1.9rem; }
+      .case-card { padding: 1.5rem; }
+      .case-title { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 네비 -->
+<nav class="navbar-top">
+  <div class="container">
+    <a href="/" class="brand-logo">매실 <span>스튜디오</span></a>
+    <div class="nav-links">
+      <a href="/">홈</a>
+      <a href="/cases" class="active">실 사용후기</a>
+    </div>
+    <div class="nav-actions">
+      <a href="{{ url_for('auth.login') }}" class="btn-outline">로그인</a>
+      <a href="{{ url_for('auth.register') }}" class="btn-pink">무료로 시작하기</a>
+    </div>
+  </div>
+</nav>
+
+<!-- 페이지 히어로 -->
+<section class="page-hero">
+  <div class="container">
+    <span class="eyebrow">실 사용후기 · 숫자 그대로 공개</span>
+    <h1>
+      직접 만들어 발행한 사람들의<br>
+      <span class="hl">실제 결과, 숫자 그대로</span>
+    </h1>
+    <p>
+      과장 없이, 조건과 수치 그대로 공개합니다.<br>
+      좋아 보이는 콘텐츠가 아니라 <strong>검색으로 실제 유입되는 콘텐츠</strong>가 기준입니다.
+    </p>
+  </div>
+</section>
+
+<!-- 사례 섹션 -->
+<section class="section">
+  <div class="container-narrow">
+
+    <!-- CASE 01 -->
+    <div class="case-card">
+      <div class="case-header">
+        <span class="case-tag">CASE 01</span>
+        <span class="case-tag channel"><i class="bi bi-journal-text"></i> 네이버 블로그</span>
+        <span class="case-tag" style="background:#eff6ff;color:#1d4ed8;">10주 추적</span>
+      </div>
+      <h2 class="case-title">
+        AI로 만든 블로그 포스트,<br>10주 만에 주간 조회수 <span style="color:var(--brand-primary);">3건 → 597건</span>
+      </h2>
+      <p class="case-subtitle">
+        매실 스튜디오 블로그 포스트 기능으로 초안을 만들어 네이버 블로그에 꾸준히 발행한 사례입니다.
+        시작 시점 주간 조회수는 3건이었지만, 10주 뒤 주간 597건까지 성장했습니다.
+        핵심은 유입의 질 — <strong>이웃 품앗이 유입은 0건, 사실상 전부 검색·외부 유입</strong>입니다.
+        검색 엔진이 콘텐츠를 계속 상위에 노출시키고 있다는 뜻입니다.
+      </p>
+
+      <!-- 주간 조회수 그래프 -->
+      <div style="background:var(--bg-light); border:1px solid var(--border); border-radius:12px; padding:1.5rem 1.5rem 1rem; margin-bottom:1rem;">
+        <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); margin-bottom:0.75rem; letter-spacing:.3px;">
+          📈 주간 조회수 추이 (2026.04.27 ~ 07.05, 네이버 블로그 통계)
+        </div>
+        <canvas id="viewChart" style="width:100%; max-height:260px;"></canvas>
+        <div style="margin-top:0.75rem; display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; font-size:0.78rem;">
+          <span style="display:flex;align-items:center;gap:0.3rem;"><span style="display:inline-block;width:20px;height:3px;background:var(--brand-primary);border-radius:2px;"></span><strong style="color:#1e293b;">주간 전체 조회수</strong></span>
+          <span style="margin-left:auto; font-size:0.75rem; color:var(--text-muted);">피이웃·서로이웃 유입 제외 시에도 거의 동일 (검색 유입 중심)</span>
+        </div>
+      </div>
+
+      <!-- 핵심 수치 3개 -->
+      <div class="stat-grid">
+        <div class="stat-box" style="background:var(--brand-light); border-color:#f9c6d2;">
+          <div class="k">주간 조회수</div>
+          <div class="v" style="color:var(--brand-primary);">3 → 597건</div>
+          <div class="d">10주간 지속 상승</div>
+        </div>
+        <div class="stat-box" style="background:#f0fdf4; border-color:#bbf7d0;">
+          <div class="k">검색·외부 유입 비중</div>
+          <div class="v" style="color:#15803d;">99% 이상</div>
+          <div class="d">이웃 품앗이 유입 0건</div>
+        </div>
+        <div class="stat-box" style="background:#eff6ff; border-color:#bfdbfe;">
+          <div class="k">일간 최고 조회수</div>
+          <div class="v" style="color:#1d4ed8;">149건</div>
+          <div class="d">2026.07.06 (월) 기록</div>
+        </div>
+      </div>
+
+      <!-- 핵심 결과 -->
+      <div class="result-box">
+        <div class="k">10주 누적 핵심 변화 (4월 말 대비 7월 초, 주간 기준)</div>
+        <div class="v">주간 조회수 3건 → 597건 · 최근 한 주에만 +60% 성장</div>
+        <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px dashed #f4a8ba; font-size:0.9rem; color:var(--text-body); line-height:1.7;">
+          <span style="color:var(--brand-primary); font-weight:700;">주말에 줄고 평일에 오르는 유입 패턴</span>
+          &nbsp;—&nbsp;
+          <span style="color:var(--text-dark); font-weight:700;">일하면서 검색하는 사장님·실무자가 들어오고 있다는 신호입니다.</span>
+        </div>
+      </div>
+
+      <!-- 스토리 3단 -->
+      <div class="story">
+        <h3>10주간 어떻게 운영했나요?</h3>
+        <div class="story-steps">
+          <div class="story-step">
+            <span class="no">STEP 1</span>
+            <div class="t">브랜드 프로필 등록</div>
+            <div class="d">매실 스튜디오에 브랜드·상품 정보를 한 번 등록. 이후 모든 콘텐츠가 같은 톤앤매너로 생성됨</div>
+          </div>
+          <div class="story-step">
+            <span class="no">STEP 2</span>
+            <div class="t">AI 초안 생성 → 발행</div>
+            <div class="d">블로그 포스트 기능으로 SEO 제목·본문·태그 초안 생성. 다듬어서 꾸준히 발행. 글쓰기 부담 없이 지속 가능</div>
+          </div>
+          <div class="story-step">
+            <span class="no">STEP 3</span>
+            <div class="t">검색 유입 확인</div>
+            <div class="d">발행이 쌓이며 검색 노출 증가. 이웃 유입 없이 주간 597건까지 성장 — 콘텐츠 자체가 유입을 만드는 구조</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 면책 -->
+      <div class="disclaimer">
+        <strong>※ 본 사례는 실제 사용자 1인의 개인 사례이며, 10주(2026.04.27~07.05) 실제 데이터입니다.</strong>
+        <ul>
+          <li>성과는 블로그 주제·키워드 경쟁 강도·발행 빈도·계정 상태 등 다양한 요인에 따라 달라질 수 있으며, 모든 사용자에게 동일한 결과를 보장하지 않습니다.</li>
+          <li>조회수·유입 구분(피이웃/서로이웃/기타)은 네이버 블로그 공식 통계 화면 기준이며, 원 데이터 그대로 표기했습니다 (반올림·각색 없음).</li>
+          <li>매실 스튜디오는 콘텐츠 초안을 생성하는 도구이며, 발행 여부·수정·운영 결정은 사용자 본인에게 있습니다.</li>
+          <li>본 사례는 사용자의 사전 동의 하에 익명 처리하여 게재되었습니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 추가 사례 슬롯 -->
+    <div style="text-align:center; padding:2rem 1rem; color:var(--text-muted); font-size:0.9rem;">
+      <i class="bi bi-plus-circle"></i> 더 많은 사용자 후기를 수집하고 있습니다.
+      <br><small>후기 공개에 동의해주신 사용자만 게재합니다.</small>
+    </div>
+
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2>콘텐츠가 유입을 만들기 시작하면 달라집니다</h2>
+    <p>15일 무료 체험 + 5,000P 즉시 지급 · 신용카드 불필요</p>
+    <a href="{{ url_for('auth.register') }}" class="btn-pink" style="padding:0.85rem 2.5rem; font-size:1.05rem;">
+      무료로 시작하기
+    </a>
+  </div>
+</section>
+
+<!-- 푸터 -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="/">홈</a>
+      <a href="/cases">실 사용후기</a>
+      <a href="{{ url_for('landing.terms') }}">이용약관</a>
+      <a href="{{ url_for('landing.privacy') }}">개인정보처리방침</a>
+      <a href="{{ url_for('auth.login') }}">로그인</a>
+    </div>
+    <div class="footer-copy">© 2026 매실 스튜디오 · 모든 권리 보유</div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const ctx = document.getElementById('viewChart').getContext('2d');
+  const labels = ['4/27주','5/4주','5/11주','5/18주','5/25주','6/1주','6/8주','6/15주','6/22주','6/29주'];
+  const views = [3, 2, 24, 85, 101, 140, 179, 326, 373, 597];
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '주간 조회수',
+        data: views,
+        borderColor: '#e8355a',
+        backgroundColor: 'rgba(232,53,90,0.08)',
+        borderWidth: 3,
+        pointRadius: 4,
+        pointBackgroundColor: '#e8355a',
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 2.8,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` 주간 조회수: ${ctx.parsed.y.toLocaleString()}건`
+          }
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          ticks: {
+            callback: v => v + '건',
+            font: { size: 11 },
+            color: '#94a3b8',
+          },
+          grid: { color: '#f1f5f9' },
+          border: { display: false },
+        },
+        x: {
+          ticks: { font: { size: 10 }, color: '#94a3b8', maxRotation: 0 },
+          grid: { display: false },
+          border: { display: false },
+        }
+      }
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
