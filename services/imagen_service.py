@@ -10,7 +10,7 @@ import os
 import re
 import logging
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from io import BytesIO
 import base64
 
@@ -512,6 +512,58 @@ def _find_korean_font(bold: bool = False) -> str:
             dest_reg,
         )
     return dest_reg
+
+
+def _find_display_font() -> str:
+    """썸네일 헤드라인용 초굵은 디스플레이 폰트(검은고딕/Black Han Sans).
+
+    유튜브 썸네일 특유의 임팩트를 위해 NanumGothicBold보다 훨씬 두꺼운
+    Black Han Sans 를 우선 사용. 없으면 Bold 폰트로 폴백.
+    """
+    import tempfile
+    candidates = [
+        'static/fonts/BlackHanSans.ttf',
+        '/usr/share/fonts/truetype/blackhansans/BlackHanSans-Regular.ttf',
+        os.path.join(tempfile.gettempdir(), 'BlackHanSans.ttf'),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    # 자동 다운로드 (로컬/클라우드 콜드스타트)
+    dest = os.path.join(tempfile.gettempdir(), 'BlackHanSans.ttf')
+    try:
+        import urllib.request
+        logger.info('[font] BlackHanSans 자동 다운로드 중...')
+        urllib.request.urlretrieve(
+            'https://github.com/google/fonts/raw/main/ofl/blackhansans/BlackHanSans-Regular.ttf',
+            dest,
+        )
+        return dest
+    except Exception as e:
+        logger.warning(f'[font] BlackHanSans 다운로드 실패 → Bold 폴백: {e}')
+        return _find_korean_font(bold=True)
+
+
+def _draw_line(draw, x, y, text, font, fill,
+               stroke_w=0, stroke_fill=None, spacing=0):
+    """한 줄 텍스트 렌더 — PIL 네이티브 외곽선(stroke) + 자간(spacing) 지원.
+
+    유튜브 썸네일풍 굵은 외곽선을 글자마다 균일하게 입혀 어떤 배경 위에서도
+    가독성을 확보한다. spacing 이 있으면 문자 단위로 그린다.
+    """
+    if not spacing:
+        draw.text((x, y), text, font=font, fill=fill,
+                  stroke_width=stroke_w, stroke_fill=stroke_fill)
+        return
+    for c in text:
+        draw.text((x, y), c, font=font, fill=fill,
+                  stroke_width=stroke_w, stroke_fill=stroke_fill)
+        # 이동폭은 외곽선 제외한 글리프 폭 기준 (자간 계산과 일치, 넘침 방지)
+        try:
+            cw = draw.textbbox((0, 0), c, font=font)[2]
+        except Exception:
+            cw = getattr(font, 'size', 20)
+        x += cw + spacing
 
 
 # ════════════════════════════════════════════════════════
@@ -1080,9 +1132,12 @@ def generate_blog_thumbnail(
     img = Image.alpha_composite(bg, ov)
     draw = ImageDraw.Draw(img)
 
-    # ── 폰트 (썸네일은 항상 Bold — 일관된 두께 보장) ────────────
+    # ── 폰트 (썸네일 헤드라인은 초굵은 디스플레이 폰트 — 유튜브 썸네일풍) ──
+    sz1 = int(H * 0.120 * scale)
+    sz2 = int(H * 0.104 * scale)
+    szm = int(H * 0.036)
     try:
-        fp  = _find_korean_font(bold=True)   # 본문 줄 (Bold)
+        fp  = _find_display_font()           # 본문 줄 (검은고딕/Black Han Sans)
         fpm = _find_korean_font(bold=False)  # 워터마크 (Regular)
         sz1 = int(H * 0.120 * scale)   # 10.8% → 12% (네이버 카드 가독성 개선)
         sz2 = int(H * 0.104 * scale)   # 9.4%  → 10.4%
@@ -1118,16 +1173,6 @@ def generate_blog_thumbnail(
                 cw = font.size if hasattr(font,'size') else 20
             total += cw + spacing
         return max(0, total - spacing)
-
-    def _draw_spaced(draw, x, y, text, font, fill, shadow_color, offset, spacing):
-        # 자간 적용 문자별 렌더링
-        for c in text:
-            _shadow_text(draw, (x, y), c, font, fill, shadow_color, offset)
-            try:
-                cw = draw.textbbox((0,0), c, font=font)[2]
-            except Exception:
-                cw = font.size if hasattr(font,'size') else 20
-            x += cw + spacing
 
     def _x(tw):
         if text_align == 'left':   return MARGIN
@@ -1215,33 +1260,48 @@ def generate_blog_thumbnail(
         img = Image.alpha_composite(img, bg_layer)
         draw = ImageDraw.Draw(img)
 
-    # ── Line 1 ────────────────────────────────────────────
+    # ── 텍스트 렌더 (유튜브 썸네일풍: 소프트 섀도우 + 굵은 외곽선) ──
+    # 폰트 크기 비례 외곽선 두께 (약 10%) — 어떤 배경에서도 글자가 튀어나옴
+    stroke1 = max(3, round(getattr(font_l1, 'size', sz1) * 0.10))
+    stroke2 = max(3, round(getattr(font_l2, 'size', sz2) * 0.10))
+
+    # 렌더 대상 라인 좌표를 미리 계산 (섀도우/본문 2패스 공유)
+    text_ops = []  # (line, font, x, y, fill, stroke_w)
+    _yy = y
     for l in l1_lines:
         if letter_spacing:
             tw = _measure_spaced(draw, l, font_l1, letter_spacing)
-            _draw_spaced(draw, _x(tw), y, l, font_l1,
-                         line1_fill, (0,0,0,225), 5, letter_spacing)
         else:
-            bbox = draw.textbbox((0, 0), l, font=font_l1)
-            tw = bbox[2] - bbox[0]
-            _shadow_text(draw, (_x(tw), y), l, font_l1,
-                         fill=line1_fill, shadow_color=(0,0,0,225), offset=5)
-        y += dy1
-
-    # ── Line 2 ────────────────────────────────────────────
+            bb = draw.textbbox((0, 0), l, font=font_l1, stroke_width=stroke1)
+            tw = bb[2] - bb[0]
+        text_ops.append((l, font_l1, _x(tw), _yy, line1_fill, stroke1))
+        _yy += dy1
     if l2_lines:
-        y += LINE_GAP
+        _yy += LINE_GAP
         for l in l2_lines:
             if letter_spacing:
                 tw = _measure_spaced(draw, l, font_l2, letter_spacing)
-                _draw_spaced(draw, _x(tw), y, l, font_l2,
-                             accent, (0,0,0,225), 5, letter_spacing)
             else:
-                bbox = draw.textbbox((0, 0), l, font=font_l2)
-                tw = bbox[2] - bbox[0]
-                _shadow_text(draw, (_x(tw), y), l, font_l2,
-                             fill=accent, shadow_color=(0,0,0,225), offset=5)
-            y += dy2
+                bb = draw.textbbox((0, 0), l, font=font_l2, stroke_width=stroke2)
+                tw = bb[2] - bb[0]
+            text_ops.append((l, font_l2, _x(tw), _yy, accent, stroke2))
+            _yy += dy2
+
+    # 1패스 — 소프트 드롭 섀도우 (별도 레이어에 그린 뒤 블러 → 입체감)
+    sh_off = max(4, round(stroke1 * 0.6))
+    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    sdraw = ImageDraw.Draw(shadow)
+    for (l, fnt, x, yy, _fill, stw) in text_ops:
+        _draw_line(sdraw, x + sh_off, yy + sh_off, l, fnt,
+                   (0, 0, 0, 205), 0, None, letter_spacing)
+    shadow = shadow.filter(ImageFilter.GaussianBlur(max(6, round(stroke1 * 0.9))))
+    img = Image.alpha_composite(img, shadow)
+    draw = ImageDraw.Draw(img)
+
+    # 2패스 — 굵은 검정 외곽선 + 본문 색
+    for (l, fnt, x, yy, fill, stw) in text_ops:
+        _draw_line(draw, x, yy, l, fnt, fill, stw, (0, 0, 0, 255), letter_spacing)
+    y = _yy
 
     # ── 워터마크 ──────────────────────────────────────────
     if brand_name:
