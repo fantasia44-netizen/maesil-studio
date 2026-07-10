@@ -356,6 +356,84 @@
         <!-- ── 왼쪽 패널: 탭 에디터 ── -->
         <div class="col-lg-7 border-end p-3">
 
+          <!-- 썸네일 방식 모드 토글 -->
+          <div class="btn-group w-100 mb-3" role="group" style="font-size:.8rem">
+            <input type="radio" class="btn-check" name="thumbStyleMode" id="thumbModeClassic"
+                   value="classic" checked onchange="setThumbMode('classic')">
+            <label class="btn btn-outline-secondary py-1" for="thumbModeClassic">
+              <i class="bi bi-image me-1"></i>클래식 (배경+글자)
+            </label>
+            <input type="radio" class="btn-check" name="thumbStyleMode" id="thumbModeDesign"
+                   value="design" onchange="setThumbMode('design')">
+            <label class="btn btn-outline-secondary py-1" for="thumbModeDesign">
+              <i class="bi bi-stickies me-1"></i>디자인 카드형
+            </label>
+          </div>
+
+          <!-- ── 디자인 카드형 패널 (기본 숨김) ── -->
+          <div id="thumbDesignPanel" class="d-none">
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">헤드라인</label>
+              <input id="thumbDzHeadline" class="form-control form-control-sm" maxlength="40"
+                     placeholder="예: 신생아 태열 관리 가이드">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">서브 문구 <span class="text-muted fw-normal">(선택)</span></label>
+              <input id="thumbDzSub" class="form-control form-control-sm" maxlength="40"
+                     placeholder="예: 엄마의 마음으로 챙기는 여름 피부 건강">
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">상단 뱃지 <span class="text-muted fw-normal">(선택)</span></label>
+                <input id="thumbDzBadge" class="form-control form-control-sm" maxlength="20"
+                       placeholder="예: 초보 엄빠 필수">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">하단 CTA <span class="text-muted fw-normal">(선택)</span></label>
+                <input id="thumbDzCta" class="form-control form-control-sm" maxlength="24"
+                       placeholder="예: 지금 바로 확인하세요">
+              </div>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">색 테마</label>
+                <select id="thumbDzTheme" class="form-select form-select-sm">
+                  <option value="baby_blue">베이비 블루</option>
+                  <option value="food_cream">푸드 크림</option>
+                  <option value="fresh_green">프레시 그린</option>
+                  <option value="warm_pink">웜 핑크</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">레이아웃</label>
+                <select id="thumbDzTemplate" class="form-select form-select-sm">
+                  <option value="char_right">캐릭터 우측</option>
+                  <option value="char_left">캐릭터 좌측</option>
+                  <option value="char_center">캐릭터 중앙</option>
+                </select>
+              </div>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">장식 아이콘</label>
+                <select id="thumbDzIcons" class="form-select form-select-sm">
+                  <option value="sun,drop">해 · 물방울</option>
+                  <option value="leaf,sun">잎 · 해</option>
+                  <option value="heart,leaf">하트 · 잎</option>
+                  <option value="">없음</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">브랜드 캐릭터 <span class="text-muted fw-normal">(선택)</span></label>
+                <input id="thumbDzChar" type="file" accept="image/png,image/webp"
+                       class="form-control form-control-sm" onchange="onThumbCharUpload(this)">
+              </div>
+            </div>
+            <div class="text-muted" style="font-size:.7rem">
+              캐릭터 미업로드 시 기본 캐릭터가 사용됩니다. 투명 PNG를 올리면 브랜드 마스코트로 합성됩니다.
+            </div>
+          </div>
+
           <!-- 탭 네비 -->
           <ul class="nav nav-tabs nav-fill mb-3" style="font-size:.8rem" id="thumbTabNav">
             <li class="nav-item">
@@ -1253,16 +1331,41 @@ function _splitThumbTitle(title) {
   return [title.slice(0, mid).slice(0,15), title.slice(mid).slice(0,15)];
 }
 
+// ── 썸네일 방식 모드 토글 (클래식 / 디자인 카드형) ───────────
+let _thumbCharData = null;   // 업로드한 브랜드 캐릭터 (base64 data URL)
+function setThumbMode(mode) {
+  const design = mode === 'design';
+  document.getElementById('thumbDesignPanel')?.classList.toggle('d-none', !design);
+  ['thumbTabNav', 'thumbTabBg', 'thumbTabText', 'thumbTabStyle'].forEach(id => {
+    const el = document.getElementById(id);
+    // 디자인 모드에선 클래식 탭 전부 숨김. 클래식 복귀 시 현재 탭만 다시 표시.
+    if (el) el.classList.toggle('d-none', design);
+  });
+  if (!design && typeof switchThumbTab === 'function') switchThumbTab('bg');
+  const bt = document.getElementById('thumbGenBtnText');
+  if (bt) bt.textContent = design ? '디자인 카드 생성' : '썸네일 미리보기 생성';
+}
+function onThumbCharUpload(inp) {
+  const f = inp.files && inp.files[0];
+  if (!f) { _thumbCharData = null; return; }
+  const r = new FileReader();
+  r.onload = e => { _thumbCharData = e.target.result; };
+  r.readAsDataURL(f);
+}
+
 // ── 썸네일 실제 이미지 생성 (미리보기) ───────────────────────
 let _thumbPreviewUrl   = null;   // 이미 생성된 PNG 합성본 URL 캐시
 let _thumbBgUrl        = null;   // FLUX로 생성한 배경 URL — 텍스트만 수정 시 재사용
 let _thumbLastBgTopic  = '';     // 마지막 FLUX 생성 시 사용된 bg_topic (바뀌면 신규 생성)
 
 async function generateThumbPreview() {
-  const l1 = document.getElementById('thumbLine1')?.value.trim() || '';
+  const _mode = document.querySelector('input[name="thumbStyleMode"]:checked')?.value || 'classic';
+  const l1 = (_mode === 'design'
+      ? document.getElementById('thumbDzHeadline')?.value.trim()
+      : document.getElementById('thumbLine1')?.value.trim()) || '';
   if (!l1) {
     const errEl = document.getElementById('thumbGenError');
-    if (errEl) { errEl.textContent = '메인 텍스트(줄1)를 먼저 입력하세요.'; errEl.classList.remove('d-none'); }
+    if (errEl) { errEl.textContent = '메인 텍스트(헤드라인)를 먼저 입력하세요.'; errEl.classList.remove('d-none'); }
     return;
   }
   document.getElementById('thumbGenError')?.classList.add('d-none');
@@ -1294,7 +1397,27 @@ async function generateThumbPreview() {
   }
 
   try {
-    const res = await fetch('{{ url_for("create.blog_thumbnail") }}', {
+    let res;
+    if (_mode === 'design') {
+      if (loadTxt) loadTxt.textContent = '디자인 카드 합성 중...';
+      const _iconSel = document.getElementById('thumbDzIcons')?.value || '';
+      res = await fetch('{{ url_for("create.blog_thumbnail_design") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          line1:          l1,
+          sub:            document.getElementById('thumbDzSub')?.value.trim() || '',
+          badge:          document.getElementById('thumbDzBadge')?.value.trim() || '',
+          cta:            document.getElementById('thumbDzCta')?.value.trim() || '',
+          theme:          document.getElementById('thumbDzTheme')?.value || 'baby_blue',
+          template:       document.getElementById('thumbDzTemplate')?.value || 'char_right',
+          icon_kinds:     _iconSel ? _iconSel.split(',') : null,
+          character_data: _thumbCharData || '',
+          brand_name:     watermark,
+        }),
+      });
+    } else {
+    res = await fetch('{{ url_for("create.blog_thumbnail") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({
@@ -1326,6 +1449,7 @@ async function generateThumbPreview() {
                             : (useFlux && _thumbBgUrl && bgTopic === _thumbLastBgTopic) ? _thumbBgUrl : '',
       }),
     });
+    }
     const data = await res.json();
     if (!data.ok) throw new Error(data.message || '생성 실패');
 
