@@ -1042,7 +1042,8 @@ def blog_thumbnail_design():
         logger.warning(f'[blog/thumbnail/design] 업로드 실패 → data URL 반환: {e}')
         url = b64
 
-    logger.info(f'[blog/thumbnail/design] 생성 완료 uid={current_user.id[:8]} '
+    _uid = str(getattr(current_user, 'id', '') or '')
+    logger.info(f'[blog/thumbnail/design] 생성 완료 uid={_uid[:8]} '
                 f'theme={theme} tpl={template} char={"Y" if mascot_bytes else "N"}')
     return jsonify(ok=True, url=url, style='design', cost=0)
 
