@@ -499,11 +499,17 @@ def render_thumbnail(
     # ── 씬 제목 스타일: 컬러 배너(테마색+흰글자) / 흰 배너(흰+진한글자) ──
     _banner = (scene is not None and title_style == 'banner')
     if _banner:
+        # 단색 배너는 자체 대비가 있어 두꺼운 외곽선이 불필요 → 얇게 해 자연스럽게.
         plate_fill = (*_hex_to_rgb(th['headline']), 250)
-        hl_color, sub_color = '#FFFFFF', '#FFFFFF'
+        hl_color = '#FFFFFF'
+        sub_color = '#DCEAF7'                 # 서브는 살짝 옅은 흰색(보조 위계)
+        hl_stroke = max(2, round(stroke * 0.55))
+        sub_start, sub_floor, sub_stroke = 54, 42, 2
     else:
         plate_fill = (255, 255, 255, 248)
         hl_color, sub_color = th['headline'], th['sub']
+        hl_stroke = stroke
+        sub_start, sub_floor, sub_stroke = 64, 46, 5
 
     # ── 씬 모드: 텍스트 뒤 타이틀 플레이트 (예시처럼 배너풍) ──────
     if scene is not None and title_plate:
@@ -525,27 +531,26 @@ def render_thumbnail(
         d.text((cx - tw // 2, y + 22 - bb[1]), badge, font=bf, fill=(255, 255, 255, 255))
         y += badge_h
 
-    _draw_center_lines(img, hl_lines, hl_font, cx, y, hl_dy, hl_color, stroke,
+    _draw_center_lines(img, hl_lines, hl_font, cx, y, hl_dy, hl_color, hl_stroke,
                        fallback_path=_find_korean_font(bold=True))
     y += hl_h
 
     if sub:
         y += 12
-        # 서브는 한 줄에 다 들어가도록 폭에 맞춰 자동 축소 (잘림 방지). 너무 작아지지
-        # 않게 하한을 올리고 외곽선을 굵혀 가독성 확보.
+        # 서브는 보조 위계 — 배너 모드에선 얇은 외곽선·작은 크기로 자연스럽게.
         dd = ImageDraw.Draw(img)
         sfp = _find_korean_font(bold=True)
-        s_size = 64
-        while s_size >= 46:
+        s_size = sub_start
+        while s_size >= sub_floor:
             sf = ImageFont.truetype(sfp, s_size)
-            bb = dd.textbbox((0, 0), sub, font=sf, stroke_width=5)
+            bb = dd.textbbox((0, 0), sub, font=sf, stroke_width=sub_stroke)
             if bb[2] - bb[0] <= tz_w:
                 break
             s_size -= 3
         sf = ImageFont.truetype(sfp, s_size)
         sub_lines = _wrap(sub, sf, tz_w, dd)[:2]  # 최소크기로도 넘치면 2줄 허용
         _draw_center_lines(img, sub_lines, sf, cx, y,
-                           int(s_size * 1.16), sub_color, stroke=5,
+                           int(s_size * 1.16), sub_color, stroke=sub_stroke,
                            fallback_path=_find_korean_font(bold=True))
 
     # ── CTA 바 ─────────────────────────────────────────────
