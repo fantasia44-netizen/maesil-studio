@@ -215,19 +215,51 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
     if not api_key:
         raise ValueError('FAL_KEY가 설정되지 않았습니다.')
 
+    # 마스코트 레퍼런스를 흰 배경으로 평탄화해 업로드.
+    #   누끼로 몸통(흰색)이 투명해진 PNG를 그대로 넘기면 fal이 투명부를 검은색으로
+    #   합성 → 흰곰이 검은곰이 되는 문제 방지. (씬은 어차피 캐릭터를 다시 그림)
+    import base64 as _b64
+    from io import BytesIO as _BIO
     urls = []
     for i, m in enumerate(mascot_urls or []):
+        raw = None
         if isinstance(m, str) and m.startswith('data:image/'):
-            urls.append(upload_to_supabase(m, user_id, f'mascot_ref_{i}.png'))
-        elif m:
-            urls.append(m)
+            try:
+                raw = _b64.b64decode(m.split(',', 1)[1])
+            except Exception:
+                raw = None
+        elif isinstance(m, str) and m.startswith('http'):
+            try:
+                rr = requests.get(m, timeout=30); rr.raise_for_status(); raw = rr.content
+            except Exception:
+                urls.append(m); continue     # 다운로드 실패 → 원본 URL 그대로
+        if raw is None:
+            if m:
+                urls.append(m)
+            continue
+        try:
+            im = Image.open(_BIO(raw)).convert('RGBA')
+            flat = Image.new('RGBA', im.size, (255, 255, 255, 255))
+            flat.alpha_composite(im)
+            buf = _BIO(); flat.convert('RGB').save(buf, format='PNG')
+            data_url = f"data:image/png;base64,{_b64.b64encode(buf.getvalue()).decode()}"
+            urls.append(upload_to_supabase(data_url, user_id, f'mascot_ref_{i}.png'))
+        except Exception as e:
+            logger.warning('[generate_scene] 마스코트 평탄화 실패 → 원본 사용: %s', e)
+            if isinstance(m, str) and m.startswith('data:image/'):
+                urls.append(upload_to_supabase(m, user_id, f'mascot_ref_{i}.png'))
+            elif m:
+                urls.append(m)
     if not urls:
         raise ValueError('브랜드 캐릭터(마스코트)가 필요합니다.')
 
     topic = (topic or '').strip() or '육아 정보'
     bg_phrase = (bg_color or '').strip() or 'soft pastel'
     prompt = (
-        f'Use the provided character as the same brand mascot. You MAY adjust its pose, '
+        f'Use the provided character as the same brand mascot, and keep its ORIGINAL colors '
+        f'exactly as in the reference (e.g. a white-bodied character stays white); '
+        f'never fill or shade the body dark or black. '
+        f'You MAY adjust its pose, '
         f'facial expression and add relevant props or actions so it naturally fits the scene — '
         f'but keep its identity, colors, outline style and overall design clearly recognizable '
         f'and consistent with the reference. '

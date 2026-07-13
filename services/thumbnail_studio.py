@@ -315,15 +315,19 @@ def _fit_headline(text, font_path, box_w, box_h, draw,
 
 
 def _title_plate(img, cx, top, width, height, radius=44):
-    """씬 상단 타이틀 플레이트 — 흰 라운드 패널 + 소프트 섀도우 (텍스트 뒤 배경)."""
+    """씬 상단 타이틀 플레이트 — 거의 불투명한 흰 라운드 패널 + 소프트 섀도우.
+
+    반투명이면 뒤 배경색이 비쳐 대비가 떨어지므로 거의 불투명(alpha 248)으로
+    깔아 텍스트 가독성을 확보한다.
+    """
     x0, x1 = int(cx - width // 2), int(cx + width // 2)
     sh = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(sh).rounded_rectangle(
-        [x0, top, x1, top + height], radius=radius, fill=(30, 40, 60, 80))
-    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(20)))
+        [x0, top, x1, top + height], radius=radius, fill=(30, 40, 60, 110))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(22)))
     plate = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(plate).rounded_rectangle(
-        [x0, top, x1, top + height], radius=radius, fill=(255, 255, 255, 228))
+        [x0, top, x1, top + height], radius=radius, fill=(255, 255, 255, 248))
     img.alpha_composite(plate)
 
 
