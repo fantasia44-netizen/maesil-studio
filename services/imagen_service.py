@@ -270,7 +270,9 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
             f'color, reserved for a title; place the mascot in the lower-center area. '
             f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
             f'square 1:1 composition. '
-            f'Absolutely NO text, no letters, no words, no captions anywhere in the image.'
+            f'CRITICAL: render absolutely NO text anywhere — no letters, words, numbers, labels, '
+            f'brand names, logos, signage, captions or writing on any object, sign, screen, box or surface. '
+            f'Every sign, label, screen and package must be completely blank.'
         )
         endpoint = 'fal-ai/nano-banana/edit'
         payload = {'prompt': prompt, 'image_urls': urls, 'num_images': 1}
@@ -288,7 +290,9 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
             f'reserved for a title; place the objects in the lower-center area. '
             f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
             f'square 1:1 composition. '
-            f'Absolutely NO text, no letters, no words, no captions anywhere in the image.'
+            f'CRITICAL: render absolutely NO text anywhere — no letters, words, numbers, labels, '
+            f'brand names, logos, signage, captions or writing on any object, sign, screen, box or surface. '
+            f'Every sign, label, screen and package must be completely blank.'
         )
         endpoint = 'fal-ai/nano-banana'
         payload = {'prompt': prompt, 'num_images': 1}

@@ -354,22 +354,72 @@ def _title_plate(img, cx, top, width, height, radius=44, fill=(255, 255, 255, 24
     img.alpha_composite(plate)
 
 
-def _draw_center_lines(img, lines, font, cx, y, dy, color, stroke):
-    """중앙정렬 텍스트 — 소프트 섀도우 + 굵은 외곽선 2패스."""
+def _missing(font, ch) -> bool:
+    """폰트가 이 글자를 렌더 못 하는지(글리프 없음). 공백은 제외."""
+    if not ch.strip():
+        return False
+    try:
+        return font.getmask(ch).getbbox() is None
+    except Exception:
+        return False
+
+
+def _glyph_font(ch, font, fb):
+    """글리프가 primary 폰트에 없으면 fallback 폰트로."""
+    return fb if (fb is not None and _missing(font, ch)) else font
+
+
+def _line_width(d, ln, font, fb):
+    return sum(d.textlength(ch, font=_glyph_font(ch, font, fb)) for ch in ln)
+
+
+def _draw_center_lines(img, lines, font, cx, y, dy, color, stroke, fallback_path=None):
+    """중앙정렬 텍스트 — 소프트 섀도우 + 굵은 외곽선.
+
+    디스플레이 폰트에 없는 글리프(예: 검은고딕의 가운뎃점 '·')는 fallback_path
+    폰트로 글자 단위 대체 렌더해 '빈칸'을 막는다. 미지원 글자가 없는 줄은 기존 방식
+    (한 번에 렌더)을 그대로 써서 외곽선 모양을 유지한다.
+    """
+    fb = None
+    if fallback_path:
+        try:
+            fb = ImageFont.truetype(fallback_path, font.size)
+        except Exception:
+            fb = None
+
+    def needs_fb(ln):
+        return fb is not None and any(_missing(font, ch) for ch in ln)
+
     d = ImageDraw.Draw(img)
     sh = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(sh)
     for i, ln in enumerate(lines):
-        bb = d.textbbox((0, 0), ln, font=font, stroke_width=stroke)
-        sd.text((cx - (bb[2] - bb[0]) // 2 + 4, y + i * dy + 6),
-                ln, font=font, fill=(0, 0, 0, 150))
+        yy = y + i * dy
+        if needs_fb(ln):
+            x = cx - _line_width(d, ln, font, fb) / 2
+            for ch in ln:
+                f = _glyph_font(ch, font, fb)
+                sd.text((x + 4, yy + 6), ch, font=f, fill=(0, 0, 0, 150))
+                x += d.textlength(ch, font=f)
+        else:
+            bb = d.textbbox((0, 0), ln, font=font, stroke_width=stroke)
+            sd.text((cx - (bb[2] - bb[0]) // 2 + 4, yy + 6), ln, font=font, fill=(0, 0, 0, 150))
     img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(max(5, round(stroke * 0.8)))))
+
     d = ImageDraw.Draw(img)
+    fill = (*_hex_to_rgb(color), 255)
     for i, ln in enumerate(lines):
-        bb = d.textbbox((0, 0), ln, font=font, stroke_width=stroke)
-        x = cx - (bb[2] - bb[0]) // 2
-        _draw_line(d, x, y + i * dy, ln, font, (*_hex_to_rgb(color), 255),
-                   stroke, (0, 0, 0, 255))
+        yy = y + i * dy
+        if needs_fb(ln):
+            x = cx - _line_width(d, ln, font, fb) / 2
+            for ch in ln:
+                f = _glyph_font(ch, font, fb)
+                d.text((x, yy), ch, font=f, fill=fill,
+                       stroke_width=stroke, stroke_fill=(0, 0, 0, 255))
+                x += d.textlength(ch, font=f)
+        else:
+            bb = d.textbbox((0, 0), ln, font=font, stroke_width=stroke)
+            _draw_line(d, cx - (bb[2] - bb[0]) // 2, yy, ln, font, fill, stroke, (0, 0, 0, 255))
 
 
 # ════════════════════════════════════════════════════════════
@@ -475,7 +525,8 @@ def render_thumbnail(
         d.text((cx - tw // 2, y + 22 - bb[1]), badge, font=bf, fill=(255, 255, 255, 255))
         y += badge_h
 
-    _draw_center_lines(img, hl_lines, hl_font, cx, y, hl_dy, hl_color, stroke)
+    _draw_center_lines(img, hl_lines, hl_font, cx, y, hl_dy, hl_color, stroke,
+                       fallback_path=_find_korean_font(bold=True))
     y += hl_h
 
     if sub:
