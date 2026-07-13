@@ -337,20 +337,20 @@ def _fit_headline(text, font_path, box_w, box_h, draw,
     return lines, font, int(asc * line_gap)
 
 
-def _title_plate(img, cx, top, width, height, radius=44):
-    """씬 상단 타이틀 플레이트 — 거의 불투명한 흰 라운드 패널 + 소프트 섀도우.
+def _title_plate(img, cx, top, width, height, radius=44, fill=(255, 255, 255, 248)):
+    """씬 상단 타이틀 플레이트 — 라운드 패널 + 소프트 섀도우.
 
-    반투명이면 뒤 배경색이 비쳐 대비가 떨어지므로 거의 불투명(alpha 248)으로
-    깔아 텍스트 가독성을 확보한다.
+    fill 로 색을 지정(흰 배너=흰색, 컬러 배너=테마색). 거의 불투명하게 깔아
+    뒤 배경이 비치지 않게 해 텍스트 대비를 확보한다.
     """
     x0, x1 = int(cx - width // 2), int(cx + width // 2)
     sh = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(sh).rounded_rectangle(
-        [x0, top, x1, top + height], radius=radius, fill=(30, 40, 60, 110))
+        [x0, top, x1, top + height], radius=radius, fill=(30, 40, 60, 120))
     img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(22)))
     plate = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(plate).rounded_rectangle(
-        [x0, top, x1, top + height], radius=radius, fill=(255, 255, 255, 248))
+        [x0, top, x1, top + height], radius=radius, fill=fill)
     img.alpha_composite(plate)
 
 
@@ -387,7 +387,8 @@ def render_thumbnail(
     brand_name: str = '',
     auto_cut: bool = True,    # 불투명 마스코트 업로드 시 무료 자동 누끼 여부
     bg_image=None,            # AI 씬 배경(경로/PIL/bytes). 있으면 그라데이션·캐릭터·아이콘 스킵.
-    title_plate: bool = True, # 씬 모드에서 상단 타이틀 플레이트(흰 라운드 패널)
+    title_plate: bool = True, # 씬 모드에서 상단 타이틀 플레이트 표시
+    title_style: str = 'banner',  # 씬 제목 스타일 'banner'(컬러+흰글자) | 'plate'(흰+진한글자)
 ) -> bytes:
     """썸네일 1080×1080 PNG(bytes) 생성.
 
@@ -445,6 +446,15 @@ def render_thumbnail(
     block_h = badge_h + hl_h + sub_reserve
     y = tz_y + max(0, (tz_h - block_h) // 2)
 
+    # ── 씬 제목 스타일: 컬러 배너(테마색+흰글자) / 흰 배너(흰+진한글자) ──
+    _banner = (scene is not None and title_style == 'banner')
+    if _banner:
+        plate_fill = (*_hex_to_rgb(th['headline']), 250)
+        hl_color, sub_color = '#FFFFFF', '#FFFFFF'
+    else:
+        plate_fill = (255, 255, 255, 248)
+        hl_color, sub_color = th['headline'], th['sub']
+
     # ── 씬 모드: 텍스트 뒤 타이틀 플레이트 (예시처럼 배너풍) ──────
     if scene is not None and title_plate:
         plate_w = 0
@@ -452,7 +462,7 @@ def render_thumbnail(
             bb = d.textbbox((0, 0), ln, font=hl_font, stroke_width=stroke)
             plate_w = max(plate_w, bb[2] - bb[0])
         plate_w = int(min(tz_w + 24, plate_w + 100))
-        _title_plate(img, cx, y - 30, plate_w, block_h + 56)
+        _title_plate(img, cx, y - 30, plate_w, block_h + 56, fill=plate_fill)
         d = ImageDraw.Draw(img)
 
     if badge:
@@ -465,7 +475,7 @@ def render_thumbnail(
         d.text((cx - tw // 2, y + 22 - bb[1]), badge, font=bf, fill=(255, 255, 255, 255))
         y += badge_h
 
-    _draw_center_lines(img, hl_lines, hl_font, cx, y, hl_dy, th['headline'], stroke)
+    _draw_center_lines(img, hl_lines, hl_font, cx, y, hl_dy, hl_color, stroke)
     y += hl_h
 
     if sub:
@@ -483,7 +493,7 @@ def render_thumbnail(
         sf = ImageFont.truetype(sfp, s_size)
         sub_lines = _wrap(sub, sf, tz_w, dd)[:2]  # 최소크기로도 넘치면 2줄 허용
         _draw_center_lines(img, sub_lines, sf, cx, y,
-                           int(s_size * 1.18), th['sub'], stroke=4)
+                           int(s_size * 1.18), sub_color, stroke=4)
 
     # ── CTA 바 ─────────────────────────────────────────────
     if cta:

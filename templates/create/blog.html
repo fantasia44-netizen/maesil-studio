@@ -504,6 +504,15 @@
                 </select>
               </div>
             </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">제목 스타일</label>
+                <select id="thumbScTitleStyle" class="form-select form-select-sm">
+                  <option value="banner">컬러 배너 · 흰 글자 (선명)</option>
+                  <option value="plate">흰 배너 · 진한 글자</option>
+                </select>
+              </div>
+            </div>
             <div class="mb-2">
               <label class="form-label small fw-semibold mb-1">하단 CTA 바 <span class="text-muted fw-normal">(선택)</span></label>
               <input id="thumbScCta" class="form-control form-control-sm" maxlength="24"
@@ -1628,6 +1637,7 @@ async function generateThumbPreview() {
           badge:          document.getElementById('thumbScBadge')?.value.trim() || '',
           cta:            document.getElementById('thumbScCta')?.value.trim() || '',
           theme:          document.getElementById('thumbScTheme')?.value || 'baby_blue',
+          title_style:    document.getElementById('thumbScTitleStyle')?.value || 'banner',
           topic:          document.getElementById('thumbScTopic')?.value.trim() || '',
           character_data: _thumbCharData || '',
         }),

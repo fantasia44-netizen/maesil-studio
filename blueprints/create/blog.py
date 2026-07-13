@@ -1252,6 +1252,7 @@ def blog_thumbnail_scene():
     badge = (data.get('badge') or '').strip()[:20]
     cta   = (data.get('cta') or '').strip()[:24]
     theme = (data.get('theme') or 'baby_blue').strip()
+    title_style = 'plate' if (data.get('title_style') == 'plate') else 'banner'
 
     # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 등록된 브랜드 마스코트
     refs = []
@@ -1290,7 +1291,7 @@ def blog_thumbnail_scene():
         r.raise_for_status()
         img_bytes = render_thumbnail(
             headline=headline, sub=sub, badge=badge, cta=cta, theme=theme,
-            bg_image=r.content,
+            bg_image=r.content, title_style=title_style,
         )
     except Exception as e:
         logger.error(f'[blog/thumbnail/scene] 텍스트 합성 실패: {e}', exc_info=True)
