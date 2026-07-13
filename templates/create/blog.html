@@ -474,6 +474,10 @@
               <i class="bi bi-stars me-1"></i>브랜드 캐릭터가 <b>상황 장면 일러스트</b>로 그려지고,
               상단에 선명한 한글 텍스트가 얹힙니다. (장당 <b>200P</b>)
             </div>
+            <button type="button" id="thumbScAutofillBtn" class="btn btn-outline-primary btn-sm w-100 mb-2"
+                    onclick="autofillScene(true)" style="font-size:.74rem">
+              <i class="bi bi-magic me-1"></i>선택한 소구포인트에서 자동 채우기
+            </button>
             <div class="mb-2">
               <label class="form-label small fw-semibold mb-1">헤드라인</label>
               <input id="thumbScHeadline" class="form-control form-control-sm" maxlength="40"
@@ -1434,6 +1438,34 @@ function setThumbMode(mode) {
                          : '썸네일 미리보기 생성';
   // 캐릭터 사용 모드 진입 시 등록된 브랜드 마스코트 1회 자동 로드
   if (usesChar && !_mascotLoaded) { _mascotLoaded = true; _autoLoadMascot(); }
+  // AI 씬 진입 시 소구포인트에서 빈 필드 자동 채우기
+  if (scene) autofillScene(false);
+}
+// ── AI 씬: 선택한 소구포인트/블로그 제목으로 필드 자동 채우기 ──
+function _firstBlogTitle() {
+  const text = document.getElementById('blogTextArea')?.value || '';
+  const secIdx = text.indexOf('제목 후보');
+  if (secIdx < 0) return '';
+  const after = text.slice(secIdx, secIdx + 900);
+  const m = [...after.matchAll(/^\d+\.\s*\[?([^\[\]\n]+?)\]?\s*(?:—[^\n]*)?\s*$/gm)];
+  return m.length ? m[0][1].replace(/\*+/g, '').trim() : '';
+}
+function autofillScene(force) {
+  const a = (typeof selectedAngle !== 'undefined' && selectedAngle) ? selectedAngle : {};
+  const setV = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val && (force || !el.value.trim())) el.value = val;
+  };
+  const title = _firstBlogTitle() || a.title || '';
+  setV('thumbScHeadline', title.slice(0, 40));
+  setV('thumbScSub',   (a.hook   || '').slice(0, 40));
+  setV('thumbScBadge', (a.target || '').slice(0, 20));
+  // 장면 주제: 소구포인트 제목 + 첫 핵심포인트로 상황 묘사 힌트
+  let topic = a.title || title || '';
+  if (a.key_points && a.key_points.length) {
+    topic = `${a.title || title || ''} — ${a.key_points[0]}`;
+  }
+  setV('thumbScTopic', topic.slice(0, 80));
 }
 async function _autoLoadMascot() {
   try {
