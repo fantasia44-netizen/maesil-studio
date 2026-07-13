@@ -1880,12 +1880,16 @@ async function redoBlogImages(id) {
     const data = await res.json();
     if (!data.ok) { alert(data.message || '불러오기 실패'); return; }
     const d = data.draft;
-    blogText       = (d.output_data?.text) || (d.step_data?.blog_text) || '';
+    const sd = d.step_data || {};
+    blogText       = (d.output_data?.text) || sd.blog_text || '';
     blogCreationId = d.id;
     const inp = d.input_data || {};
     if (inp.brand_id)   document.getElementById('brandSelect').value   = inp.brand_id;
     if (inp.product_id) document.getElementById('productSelect').value = inp.product_id;
     if (blogText) document.getElementById('blogTextArea').value = blogText;
+    // 소구포인트 복원 → 재작업에서도 AI 씬 자동채움(서브·뱃지·주제)이 작동하도록
+    selectedAngle = sd.selected_angle || null;
+    if ((sd.angles || []).length) window._angles = sd.angles;
     goStep(4);
   } catch(e) { alert('불러오기 실패: ' + e.message); }
 }
