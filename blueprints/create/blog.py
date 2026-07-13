@@ -1292,16 +1292,14 @@ def blog_thumbnail_scene():
     theme = (data.get('theme') or 'baby_blue').strip()
     title_style = 'plate' if (data.get('title_style') == 'plate') else 'banner'
 
-    # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 등록된 브랜드 마스코트
+    # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 등록된 브랜드 마스코트.
+    #   없으면(캐릭터 브랜딩 없는 일반 업체) refs=[] → 소품·장면만 그리는 모드로 진행.
     refs = []
     char_data = (data.get('character_data') or '').strip()
     if char_data.startswith('data:image/'):
         refs = [char_data]
     else:
         refs = _get_registered_mascot_urls()
-    if not refs:
-        return jsonify(ok=False,
-                       message='브랜드 캐릭터를 업로드하거나 먼저 등록해 주세요.')
 
     _uid = str(getattr(current_user, 'id', '') or '')
 
@@ -1351,7 +1349,7 @@ def blog_thumbnail_scene():
         'topic': topic, 'theme': theme, 'title_style': title_style,
     })
     logger.info(f'[blog/thumbnail/scene] 완료 uid={_uid[:8]} theme={theme} '
-                f'topic="{topic[:30]}" cost={_SCENE_COST}P')
+                f'topic="{topic[:30]}" char={"Y" if refs else "N"} cost={_SCENE_COST}P')
     return jsonify(ok=True, url=url, style='scene', cost=_SCENE_COST)
 
 

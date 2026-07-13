@@ -201,13 +201,13 @@ def transform_character(image_data: str, style_prompt: str,
 
 def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
                    extra: str = '', bg_color: str = '') -> str:
-    """브랜드 마스코트를 레퍼런스로 상황 장면 일러스트 생성 (nano-banana).
+    """상황 장면 일러스트 생성 (nano-banana). 캐릭터는 선택.
 
-    · 캐릭터는 정체성을 유지한 채 장면에 맞게 포즈·표정·소품을 조정(리포즈)한다.
-    · 주제에 맞는 배경 세팅과 소품을 함께 그린다.
-    · bg_color 로 배경 색 팔레트를 지정(색 테마 연동).
+    · 캐릭터(mascot_urls) 있으면 → 레퍼런스로 장면에 배치(edit), 정체성 유지하며 리포즈.
+    · 캐릭터 없으면 → 주제 소품·음식·세팅만 그림(text-to-image). 캐릭터 브랜딩 없는 일반 업체용.
+    · 주제에 맞는 배경 세팅·소품을 함께 그리고, bg_color 로 배경 색 팔레트 지정(색 테마 연동).
     · 상단 1/3은 텍스트용으로 비워두게 유도 → 이후 PIL 하이브리드 텍스트 합성에 사용.
-    mascot_urls: 공개 URL 또는 base64 data URL 리스트(앞/뒤 등).
+    mascot_urls: 공개 URL 또는 base64 data URL 리스트(없거나 비어도 됨).
     반환: 씬 이미지 URL.
     """
     from services.config_service import get_config
@@ -250,35 +250,56 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
                 urls.append(upload_to_supabase(m, user_id, f'mascot_ref_{i}.png'))
             elif m:
                 urls.append(m)
-    if not urls:
-        raise ValueError('브랜드 캐릭터(마스코트)가 필요합니다.')
-
     topic = (topic or '').strip() or '육아 정보'
     bg_phrase = (bg_color or '').strip() or 'soft pastel'
-    prompt = (
-        f'Use the provided character as the same brand mascot, and keep its ORIGINAL colors '
-        f'exactly as in the reference (e.g. a white-bodied character stays white); '
-        f'never fill or shade the body dark or black. '
-        f'You MAY adjust its pose, '
-        f'facial expression and add relevant props or actions so it naturally fits the scene — '
-        f'but keep its identity, colors, outline style and overall design clearly recognizable '
-        f'and consistent with the reference. '
-        f'Illustrate one cohesive cute editorial thumbnail scene about "{topic}", including a '
-        f'simple background setting and small props/doodle icons that clearly relate to the topic. '
-        f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle shapes. '
-        f'IMPORTANT: leave the TOP THIRD of the image as clean simple empty space of that background '
-        f'color, reserved for a title; place the mascot in the lower-center area. '
-        f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
-        f'square 1:1 composition. '
-        f'Absolutely NO text, no letters, no words, no captions anywhere in the image.'
-    )
+
+    if urls:
+        # ── 캐릭터 있음: 마스코트를 장면에 배치 (edit) ──────────────
+        prompt = (
+            f'Use the provided character as the same brand mascot, and keep its ORIGINAL colors '
+            f'exactly as in the reference (e.g. a white-bodied character stays white); '
+            f'never fill or shade the body dark or black. '
+            f'You MAY adjust its pose, '
+            f'facial expression and add relevant props or actions so it naturally fits the scene — '
+            f'but keep its identity, colors, outline style and overall design clearly recognizable '
+            f'and consistent with the reference. '
+            f'Illustrate one cohesive cute editorial thumbnail scene about "{topic}", including a '
+            f'simple background setting and small props/doodle icons that clearly relate to the topic. '
+            f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle shapes. '
+            f'IMPORTANT: leave the TOP THIRD of the image as clean simple empty space of that background '
+            f'color, reserved for a title; place the mascot in the lower-center area. '
+            f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
+            f'square 1:1 composition. '
+            f'Absolutely NO text, no letters, no words, no captions anywhere in the image.'
+        )
+        endpoint = 'fal-ai/nano-banana/edit'
+        payload = {'prompt': prompt, 'image_urls': urls, 'num_images': 1}
+    else:
+        # ── 캐릭터 없음: 주제 소품·장면만 (text-to-image) ────────────
+        #   캐릭터 브랜딩 없는 일반 업체용 — 캐릭터/사람/동물 없이 소품·음식·세팅만.
+        prompt = (
+            f'Illustrate one cute flat editorial thumbnail scene about "{topic}" — '
+            f'show the relevant objects, food, tools and a simple setting for the topic, '
+            f'arranged as an appealing centerpiece with a few small cute doodle icons around it. '
+            f'IMPORTANT: do NOT include any character, person, animal, mascot, face or figure — '
+            f'objects and scenery only. '
+            f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle shapes. '
+            f'Leave the TOP THIRD of the image as clean simple empty space of that background color, '
+            f'reserved for a title; place the objects in the lower-center area. '
+            f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
+            f'square 1:1 composition. '
+            f'Absolutely NO text, no letters, no words, no captions anywhere in the image.'
+        )
+        endpoint = 'fal-ai/nano-banana'
+        payload = {'prompt': prompt, 'num_images': 1}
+
     if extra:
-        prompt += f' {extra.strip()}'
+        payload['prompt'] += f' {extra.strip()}'
 
     resp = requests.post(
-        'https://fal.run/fal-ai/nano-banana/edit',
+        f'https://fal.run/{endpoint}',
         headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
-        json={'prompt': prompt, 'image_urls': urls, 'num_images': 1},
+        json=payload,
         timeout=150,
     )
     resp.raise_for_status()
