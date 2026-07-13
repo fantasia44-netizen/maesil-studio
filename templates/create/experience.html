@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block title %}경험담 블로그 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 경험담 블로그{% endblock %}
+
+{% block content %}
+<div style="max-width:860px">
+
+  <div class="card mb-4">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-camera me-2" style="color:#0d9488"></i>경험담 블로그
+        <span class="badge bg-light text-dark ms-2 fw-normal" style="font-size:.72rem">내 사진 + 대충 쓴 메모 → 완성 글</span>
+      </h6>
+    </div>
+    <div class="card-body p-4">
+
+      <div class="alert alert-success py-2 px-3 mb-4" style="font-size:.78rem">
+        <i class="bi bi-patch-check me-1"></i><b>직접 찍은 사진과 실제 경험</b>이 재료입니다.
+        AI는 내용을 지어내지 않고 <b>정리·구성만</b> 합니다 — 실사진·실경험 글은 네이버 검색이 가장 좋아하는 형태예요.
+      </div>
+
+      <!-- 유형 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">어떤 경험인가요?</label>
+        <div class="btn-group w-100" role="group" style="font-size:.8rem">
+          <input type="radio" class="btn-check" name="expType" id="expTravel" value="travel">
+          <label class="btn btn-outline-secondary py-2" for="expTravel"><i class="bi bi-airplane me-1"></i>여행기</label>
+          <input type="radio" class="btn-check" name="expType" id="expFood" value="food">
+          <label class="btn btn-outline-secondary py-2" for="expFood"><i class="bi bi-cup-hot me-1"></i>맛집·카페</label>
+          <input type="radio" class="btn-check" name="expType" id="expReview" value="review">
+          <label class="btn btn-outline-secondary py-2" for="expReview"><i class="bi bi-box-seam me-1"></i>제품 후기</label>
+          <input type="radio" class="btn-check" name="expType" id="expPlace" value="place" checked>
+          <label class="btn btn-outline-secondary py-2" for="expPlace"><i class="bi bi-geo-alt me-1"></i>장소·체험</label>
+        </div>
+      </div>
+
+      <!-- 사진 업로드 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">
+          사진 <span class="text-danger">*</span>
+          <span class="text-muted fw-normal">(최대 10장 — 글에 넣을 순서대로 선택하세요)</span>
+        </label>
+        <input id="expPhotos" type="file" accept="image/*" multiple
+               class="form-control form-control-sm" onchange="onExpPhotos(this)">
+        <div id="expPhotoGrid" class="d-flex flex-wrap gap-2 mt-2"></div>
+        <div class="text-muted mt-1" style="font-size:.7rem">
+          사진 속 장면(음식·장소·분위기)을 AI가 직접 보고 글에 반영합니다. 업로드 순서 = 글 속 배치 순서.
+        </div>
+      </div>
+
+      <!-- 메모 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">경험 메모 <span class="text-danger">*</span>
+          <span class="text-muted fw-normal">(문장 안 다듬어도 됩니다 — 생각나는 대로)</span></label>
+        <textarea id="expMemo" class="form-control form-control-sm" rows="6" maxlength="2000"
+                  placeholder="예)&#10;토요일에 아기랑 갔음. 주차 좀 힘들었는데 2층에 자리 있었음&#10;아기의자 있음. 수유실은 없음&#10;파스타 곱슬하니 맛있었고 피자는 좀 짰음&#10;창가 자리 뷰 좋음. 웨이팅 20분&#10;재방문 의사 있음"></textarea>
+      </div>
+
+      <!-- 장소/시기/톤 -->
+      <div class="row g-3 mb-4">
+        <div class="col-sm-5">
+          <label class="form-label fw-semibold small">장소/제품명 <span class="text-muted fw-normal">(선택)</span></label>
+          <input id="expPlaceName" class="form-control form-control-sm" maxlength="60" placeholder="예: 김해 ○○카페">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-semibold small">시기 <span class="text-muted fw-normal">(선택)</span></label>
+          <input id="expVisitAt" class="form-control form-control-sm" maxlength="40" placeholder="예: 7월 둘째 주">
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label fw-semibold small">문체</label>
+          <select id="expTone" class="form-select form-select-sm">
+            <option value="friendly">친근·발랄 (~했어요)</option>
+            <option value="calm">차분·담백</option>
+            <option value="info">정보 정리형</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="expGenBtn" class="btn w-100 fw-semibold py-2 text-white"
+              style="background:#0d9488" onclick="generateExperience()">
+        <i class="bi bi-magic me-1"></i><span id="expGenBtnText">경험담 글 생성 ({{ cost }}P)</span>
+      </button>
+      <div id="expError" class="alert alert-danger mt-3 d-none" style="font-size:.8rem"></div>
+    </div>
+  </div>
+
+  <!-- 결과 -->
+  <div id="expResultCard" class="card mb-4 d-none">
+    <div class="card-header py-2 d-flex align-items-center">
+      <h6 class="mb-0 fw-bold small me-auto"><i class="bi bi-file-text me-1"></i>완성된 글</h6>
+      <button class="btn btn-outline-secondary btn-sm me-1" style="font-size:.72rem" onclick="copyExpText()">
+        <i class="bi bi-clipboard me-1"></i>글 복사
+      </button>
+      <span class="text-muted" style="font-size:.68rem">복사 → 네이버 에디터에 붙여넣고 [사진 N] 자리에 해당 사진 삽입</span>
+    </div>
+    <div class="card-body p-4" id="expResultBody"
+         style="white-space:pre-wrap;font-size:.88rem;line-height:1.75"></div>
+  </div>
+
+</div>
+
+<script>
+let _expPhotos = [];   // [{dataUrl, name}] 업로드 순서 유지
+let _expText   = '';   // 생성된 원문 (마커 포함)
+
+// ── 사진 업로드: 클라이언트 리사이즈(최대 1024px, JPEG) 후 목록에 추가 ──
+async function onExpPhotos(inp) {
+  const files = Array.from(inp.files || []);
+  for (const f of files) {
+    if (_expPhotos.length >= 10) break;
+    const dataUrl = await _resizeImage(f, 1024, 0.8);
+    if (dataUrl) _expPhotos.push({ dataUrl, name: f.name });
+  }
+  inp.value = '';
+  renderExpGrid();
+}
+function _resizeImage(file, maxSide, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.round(img.width * r), h = Math.round(img.height * r);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+function renderExpGrid() {
+  const g = document.getElementById('expPhotoGrid');
+  g.innerHTML = _expPhotos.map((p, i) => `
+    <div class="position-relative" style="width:92px">
+      <img src="${p.dataUrl}" style="width:92px;height:92px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb">
+      <span class="position-absolute top-0 start-0 badge bg-dark bg-opacity-75 m-1" style="font-size:.6rem">${i + 1}</span>
+      <button type="button" class="btn-close position-absolute top-0 end-0 m-1 bg-white rounded-circle"
+              style="font-size:.55rem;padding:.22rem" onclick="removeExpPhoto(${i})"></button>
+    </div>`).join('');
+}
+function removeExpPhoto(i) { _expPhotos.splice(i, 1); renderExpGrid(); }
+
+// ── 생성 ─────────────────────────────────────────────────────
+async function generateExperience() {
+  const errEl = document.getElementById('expError');
+  errEl.classList.add('d-none');
+  const memo = document.getElementById('expMemo').value.trim();
+  if (!_expPhotos.length) { errEl.textContent = '사진을 1장 이상 올려주세요.'; errEl.classList.remove('d-none'); return; }
+  if (!memo) { errEl.textContent = '경험 메모를 입력해 주세요. 대충 쓰셔도 됩니다.'; errEl.classList.remove('d-none'); return; }
+
+  const btn = document.getElementById('expGenBtn');
+  const bt  = document.getElementById('expGenBtnText');
+  btn.disabled = true;
+  bt.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>사진 읽고 글 쓰는 중... (약 20~40초)';
+  try {
+    const res = await fetch('{{ url_for("create.experience_generate") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+      body: JSON.stringify({
+        exp_type: document.querySelector('input[name="expType"]:checked')?.value || 'place',
+        memo,
+        place:    document.getElementById('expPlaceName').value.trim(),
+        visit_at: document.getElementById('expVisitAt').value.trim(),
+        tone:     document.getElementById('expTone').value,
+        photos:   _expPhotos.map(p => p.dataUrl),
+      }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.message || '생성 실패');
+    _expText = j.text;
+    renderExpResult(j.text);
+  } catch (e) {
+    errEl.textContent = '생성 실패: ' + e.message;
+    errEl.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    bt.textContent = '경험담 글 생성 ({{ cost }}P)';
+  }
+}
+
+// ── 결과 표시: [사진 N] 마커 자리에 실제 사진 미리보기 ─────────
+function renderExpResult(text) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let html = esc(text);
+  html = html.replace(/\[사진\s*(\d+)\]/g, (m, n) => {
+    const p = _expPhotos[parseInt(n) - 1];
+    return p ? `<div class="my-2"><img src="${p.dataUrl}" style="max-width:70%;border-radius:10px;border:1px solid #e5e7eb"><div class="text-muted" style="font-size:.68rem">[사진 ${n}] — 네이버 에디터에서 이 자리에 삽입</div></div>` : m;
+  });
+  document.getElementById('expResultBody').innerHTML = html;
+  document.getElementById('expResultCard').classList.remove('d-none');
+  document.getElementById('expResultCard').scrollIntoView({ behavior: 'smooth' });
+}
+function copyExpText() {
+  if (!_expText) return;
+  navigator.clipboard.writeText(_expText).then(() => alert('복사됐습니다. 네이버 에디터에 붙여넣고 [사진 N] 자리에 사진을 넣어주세요.'));
+}
+</script>
+{% endblock %}

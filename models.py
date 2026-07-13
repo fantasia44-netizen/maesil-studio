@@ -54,6 +54,8 @@ POINT_COSTS = {
     'thumbnail_text':  40,
     'ad_copy':         60,
     'press_release':  200,
+    'experience_blog': 150,  # 경험담 블로그 — 실사진 vision 분석 + 글 정리
+
     # 이미지 생성 — FLUX Schnell + Ideogram만 운영
     'img_preview':     50,   # FLUX Schnell — 빠른 라이프스타일 씬
     'img_dev':         80,   # FLUX dev — 인체/손 정확도↑ (본문 이미지 기본)
@@ -166,6 +168,7 @@ CREATION_MODELS = {
 CREATION_LABELS = {
     # 텍스트
     'blog':            '블로그 포스트',
+    'experience_blog': '경험담 블로그',
     'instagram':       '인스타 캡션',
     'detail_page':     '상세페이지 카피',
     'thumbnail_text':  '썸네일 문구',
@@ -217,6 +220,7 @@ MENU_REGISTRY = [
     ('상품 관리',   'bi-box-seam',            'product.index',        None,  '상품'),
     # ── 콘텐츠 생성
     ('블로그',      'bi-file-text',           'create.blog',          None,  '콘텐츠 생성'),
+    ('경험담 블로그', 'bi-camera',            'create.experience',    None,  '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',     None,  '콘텐츠 생성'),
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
     ('상세페이지 초안', 'bi-layout-text-sidebar', 'create.detail_page',         None, '콘텐츠 생성'),

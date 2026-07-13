@@ -144,6 +144,32 @@ def generate_text(system_prompt: str, user_prompt: str,
     return message.content[0].text
 
 
+def generate_with_images(system_prompt: str, user_prompt: str,
+                         images: list, max_tokens: int = 4096,
+                         model: str = None) -> str:
+    """다중 이미지 + 텍스트 → 텍스트 생성 (Claude Vision).
+
+    images: [(b64_data, media_type), ...] — base64 인코딩된 이미지 목록 (순서 유지).
+    경험담 블로그 등 '사진을 보고 글을 쓰는' 작업용.
+    """
+    client = get_client()
+    content = []
+    for i, (b64, mt) in enumerate(images, 1):
+        content.append({'type': 'text', 'text': f'[사진 {i}]'})
+        content.append({
+            'type': 'image',
+            'source': {'type': 'base64', 'media_type': mt or 'image/jpeg', 'data': b64},
+        })
+    content.append({'type': 'text', 'text': user_prompt})
+    message = client.messages.create(
+        model=model or DEFAULT_MODEL,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{'role': 'user', 'content': content}],
+    )
+    return message.content[0].text
+
+
 def analyze_product_image(image_bytes: bytes, media_type: str = 'image/jpeg') -> dict:
     """Claude Vision으로 상품 이미지 분석 → 상품 정보 JSON 반환.
 

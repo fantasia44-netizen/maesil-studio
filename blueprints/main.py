@@ -121,7 +121,7 @@ def history():
     # logo.py   → logo
     # shorts.py → shorts_script / shorts_video
     TYPE_ORDER = [
-        'blog', 'blog_thumbnail', 'instagram', 'detail_page', 'thumbnail_text', 'ad_copy',
+        'blog', 'experience_blog', 'blog_thumbnail', 'instagram', 'detail_page', 'thumbnail_text', 'ad_copy',
         'press_release', 'thumbnail_image', 'detail_image', 'detail_page_image',
         'card_news', 'img_preview', 'img_ideogram', 'img_card_news', 'image_generation',
         'bg_replace', 'bg_remove_adv',
