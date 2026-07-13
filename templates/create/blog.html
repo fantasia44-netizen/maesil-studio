@@ -1427,7 +1427,8 @@ function _splitThumbTitle(title) {
 
 // ── 썸네일 방식 모드 토글 (클래식 / 디자인 카드형 / AI 씬) ─────
 let _thumbCharData = null;   // 업로드한 브랜드 캐릭터 (base64 data URL)
-let _mascotLoaded = false;   // 등록된 브랜드 마스코트 자동 로드 여부
+let _mascotLoaded = false;   // 등록된 브랜드 마스코트 자동 로드 여부(브랜드별)
+let _thumbCharAuto = false;  // 현재 캐릭터가 '등록 마스코트 자동로드'인지(수동 업로드=false)
 function setThumbMode(mode) {
   const design = mode === 'design';
   const scene  = mode === 'scene';
@@ -1485,14 +1486,15 @@ function autofillScene(force) {
 }
 async function _autoLoadMascot() {
   try {
-    const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_get") }}');
+    const bid = document.getElementById('brandSelect')?.value || '';
+    const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_get") }}?brand_id=' + encodeURIComponent(bid));
     const j = await res.json();
     if (j.ok && j.mascots && j.mascots.length && !_thumbCharData) {
       // 등록된 마스코트 URL → data URL 로 변환해 미리보기/재사용
       const im = await fetch(j.mascots[0]);
       const blob = await im.blob();
       const rd = new FileReader();
-      rd.onload = e => _setThumbChar(e.target.result);
+      rd.onload = e => { _setThumbChar(e.target.result); _thumbCharAuto = true; };
       rd.readAsDataURL(blob);
     }
   } catch (e) { /* 무시 — 등록 마스코트 없음 */ }
@@ -1507,7 +1509,10 @@ async function saveMascot() {
     const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_save") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ character_data: _thumbCharData }),
+      body: JSON.stringify({
+        character_data: _thumbCharData,
+        brand_id: document.getElementById('brandSelect')?.value || '',
+      }),
     });
     const j = await res.json();
     _thumbCharMsg(j.ok ? '브랜드 기본 캐릭터로 등록됐습니다.' : (j.message || '등록 실패'),
@@ -1528,6 +1533,7 @@ function _setThumbChar(dataUrl) {
 }
 function onThumbCharUpload(inp) {
   const f = inp.files && inp.files[0];
+  _thumbCharAuto = false;   // 사용자가 직접 올린 캐릭터 → 브랜드 전환 시 유지
   if (!f) { _setThumbChar(null); return; }
   const r = new FileReader();
   r.onload = e => _setThumbChar(e.target.result);
@@ -1646,6 +1652,7 @@ async function generateThumbPreview() {
           theme:          document.getElementById('thumbScTheme')?.value || 'baby_blue',
           title_style:    document.getElementById('thumbScTitleStyle')?.value || 'banner',
           topic:          document.getElementById('thumbScTopic')?.value.trim() || '',
+          brand_id:       document.getElementById('brandSelect')?.value || '',
           character_data: _thumbCharData || '',
         }),
       });
@@ -2114,6 +2121,12 @@ document.getElementById('brandSelect').addEventListener('change', async function
     if (redoSel) { redoSel.value = this.value; loadBlogRecentDone(this.value); }
   } catch {}
   _syncThumbBrandMark();   // 썸네일 워터마크 미리보기 업데이트
+  // 브랜드 전환: 자동로드된 (이전 브랜드) 마스코트 초기화 후 새 브랜드 것으로 재로드.
+  //   사용자가 직접 올린 캐릭터(_thumbCharAuto=false)는 유지.
+  if (_thumbCharAuto) _setThumbChar(null);
+  _mascotLoaded = false;
+  const _m = document.querySelector('input[name="thumbStyleMode"]:checked')?.value;
+  if (_m === 'design' || _m === 'scene') { _mascotLoaded = true; _autoLoadMascot(); }
 });
 
 // ── Step 1 → 소구포인트 생성 ─────────────────────────────────

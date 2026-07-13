@@ -1214,15 +1214,17 @@ def _mascot_owner_filter(q):
     return q.eq('user_id', current_user.id)
 
 
-def _get_registered_mascot_urls(limit: int = 2) -> list:
-    """등록된 브랜드 마스코트 URL 목록(최신순). 없으면 빈 리스트."""
+def _get_registered_mascot_urls(brand_id=None, limit: int = 2) -> list:
+    """등록된 브랜드 마스코트 URL 목록(최신순). brand_id를 주면 그 브랜드 것만."""
     if not current_app.supabase:
         return []
     try:
         q = (current_app.supabase.table('creations')
-             .select('output_data, created_at')
+             .select('output_data, created_at, brand_id')
              .eq('creation_type', 'brand_mascot'))
         q = _mascot_owner_filter(q)
+        if brand_id:
+            q = q.eq('brand_id', brand_id)   # 브랜드별 스코프 (다른 브랜드 마스코트 딸려오지 않게)
         rows = q.order('created_at', desc=True).limit(limit).execute().data or []
         urls = [(r.get('output_data') or {}).get('mascot_url') for r in rows]
         return [u for u in urls if u]
@@ -1234,8 +1236,9 @@ def _get_registered_mascot_urls(limit: int = 2) -> list:
 @create_bp.route('/blog/thumbnail/mascot', methods=['GET'])
 @login_required
 def blog_thumbnail_mascot_get():
-    """등록된 브랜드 마스코트 URL 목록 반환 (패널 진입 시 자동 로드용)."""
-    return jsonify(ok=True, mascots=_get_registered_mascot_urls())
+    """등록된 브랜드 마스코트 URL 목록 반환 (패널 진입 시 자동 로드용). brand_id로 스코프."""
+    brand_id = (request.args.get('brand_id') or '').strip() or None
+    return jsonify(ok=True, mascots=_get_registered_mascot_urls(brand_id))
 
 
 @create_bp.route('/blog/thumbnail/mascot/save', methods=['POST'])
@@ -1246,6 +1249,14 @@ def blog_thumbnail_mascot_save():
     char_data = (data.get('character_data') or '').strip()
     if not char_data.startswith('data:image/'):
         return jsonify(ok=False, message='등록할 캐릭터 이미지가 없습니다.')
+
+    # 현재 선택된 브랜드에 귀속 (없으면 기본 브랜드)
+    brand_id = (data.get('brand_id') or '').strip() or None
+    if not brand_id:
+        try:
+            brand_id = (get_default_brand(current_app.supabase) or {}).get('id') or None
+        except Exception:
+            brand_id = None
 
     _uid = str(getattr(current_user, 'id', '') or '')
     from services.imagen_service import upload_to_supabase
@@ -1265,6 +1276,8 @@ def blog_thumbnail_mascot_save():
                 'points_used': 0, 'status': 'done',
                 'created_at': now_s, 'updated_at': now_s,
             }
+            if brand_id:
+                row['brand_id'] = brand_id
             if getattr(current_user, 'operator_id', None):
                 row['operator_id'] = current_user.operator_id
             current_app.supabase.table('creations').insert(row).execute()
@@ -1292,14 +1305,15 @@ def blog_thumbnail_scene():
     theme = (data.get('theme') or 'baby_blue').strip()
     title_style = 'plate' if (data.get('title_style') == 'plate') else 'banner'
 
-    # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 등록된 브랜드 마스코트.
+    # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 (현재 브랜드에) 등록된 마스코트.
     #   없으면(캐릭터 브랜딩 없는 일반 업체) refs=[] → 소품·장면만 그리는 모드로 진행.
+    brand_id = (data.get('brand_id') or '').strip() or None
     refs = []
     char_data = (data.get('character_data') or '').strip()
     if char_data.startswith('data:image/'):
         refs = [char_data]
     else:
-        refs = _get_registered_mascot_urls()
+        refs = _get_registered_mascot_urls(brand_id)
 
     _uid = str(getattr(current_user, 'id', '') or '')
 
