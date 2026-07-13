@@ -340,17 +340,17 @@
     <div class="card-header py-2 d-flex align-items-center gap-2" style="background:#fafafe">
       <div class="form-check form-switch mb-0 me-auto">
         <input class="form-check-input" type="checkbox" id="enableThumb" role="switch"
-               onchange="toggleThumbCard(this.checked)">
+               checked onchange="toggleThumbCard(this.checked)">
         <label class="form-check-label fw-semibold small" for="enableThumb">
           <i class="bi bi-card-image me-1" style="color:#6366f1"></i>
           블로그 썸네일 카드 에디터
-          <span class="text-muted fw-normal">— 첫 이미지 자동 생성, 앨범형 CTR 향상</span>
+          <span class="text-muted fw-normal">— 첫 이미지 자동 생성, 앨범형 CTR 향상 (권장)</span>
         </label>
       </div>
       <span id="thumbCostBadge" class="badge" style="background:#ede9fe;color:#5b21b6;font-size:.7rem">+100P</span>
     </div>
 
-    <div id="thumbCardBody" class="d-none">
+    <div id="thumbCardBody">
       <div class="row g-0" style="min-height:460px">
 
         <!-- ── 왼쪽 패널: 탭 에디터 ── -->
@@ -1053,7 +1053,7 @@
 // ══════════════════════════════════════════════════════════════
 // 블로그 썸네일 비주얼 에디터
 // ══════════════════════════════════════════════════════════════
-let thumbEnabled     = false;
+let thumbEnabled     = true;   // 권장 옵션 — 기본 켜짐(에디터 펼침)
 let thumbAccentColor  = '#FFD700';
 let thumbTextColor1   = '#FFFFFF';
 let thumbTextBgColor  = '';
@@ -1971,6 +1971,10 @@ function goStep(n, pushHistory = true) {
   for (let i = 1; i <= 5; i++)
     document.getElementById('step' + i).classList.toggle('d-none', i !== n);
   updateStepIndicator(n);
+  // 썸네일 에디터가 기본으로 펼쳐져 있으므로, step4 진입 시 제목 후보를 채워둠
+  if (n === 4 && thumbEnabled && typeof _populateThumbTitles === 'function') {
+    _populateThumbTitles();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 updateStepIndicator(1);
