@@ -485,7 +485,7 @@ def render_thumbnail(
         badge_h = (bb[3] - bb[1]) + 44 + 26  # pill 높이 + 아래 간격
 
     # 헤드라인 자동 맞춤 (뱃지/서브 높이만큼 텍스트 존에서 차감)
-    sub_reserve = 104 if sub else 0
+    sub_reserve = 124 if sub else 0
     hl_box_h = tz_h - badge_h - sub_reserve
     fp = _find_display_font()
     hl_lines, hl_font, hl_dy = _fit_headline(
@@ -502,9 +502,9 @@ def render_thumbnail(
         # 단색 배너는 자체 대비가 있어 두꺼운 외곽선이 불필요 → 얇게 해 자연스럽게.
         plate_fill = (*_hex_to_rgb(th['headline']), 250)
         hl_color = '#FFFFFF'
-        sub_color = '#DCEAF7'                 # 서브는 살짝 옅은 흰색(보조 위계)
+        sub_color = '#FFFFFF'                 # 흰색 유지(가독성) — 위계는 크기로 구분
         hl_stroke = max(2, round(stroke * 0.55))
-        sub_start, sub_floor, sub_stroke = 54, 42, 2
+        sub_start, sub_floor, sub_stroke = 56, 44, 3
     else:
         plate_fill = (255, 255, 255, 248)
         hl_color, sub_color = th['headline'], th['sub']
@@ -536,7 +536,7 @@ def render_thumbnail(
     y += hl_h
 
     if sub:
-        y += 12
+        y += 30   # 헤드라인과 서브 사이 여백 (너무 붙어 보이지 않게)
         # 서브는 보조 위계 — 배너 모드에선 얇은 외곽선·작은 크기로 자연스럽게.
         dd = ImageDraw.Draw(img)
         sfp = _find_korean_font(bold=True)
