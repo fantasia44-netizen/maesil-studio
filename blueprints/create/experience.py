@@ -70,16 +70,15 @@ def experience_generate():
         return jsonify(ok=False, message='경험 메모를 입력해 주세요. 대충 쓰셔도 됩니다.')
     photos = data.get('photos') if isinstance(data.get('photos'), list) else []
     photos = [p for p in photos if isinstance(p, str) and p.startswith('data:image/')][:_MAX_PHOTOS]
-    if not photos:
-        return jsonify(ok=False, message='사진을 1장 이상 올려주세요. 실사진이 이 글의 핵심입니다.')
+    # 사진은 선택 — 없으면 텍스트 경험만으로 정리 (온라인 업무 경험담 등)
 
     exp_type = data.get('exp_type') if data.get('exp_type') in _TYPE_GUIDES else 'place'
     tone     = data.get('tone') if data.get('tone') in _TONES else 'friendly'
     place    = (data.get('place') or '').strip()[:60]
     visit_at = (data.get('visit_at') or '').strip()[:40]
 
-    # 포인트 확인·차감 준비
-    cost = POINT_COSTS.get('experience_blog', 150)
+    # 포인트 확인·차감 준비 — 사진 없으면(텍스트 전용, vision 미사용) 할인
+    cost = POINT_COSTS.get('experience_blog', 150) if photos else 100
     from services.point_service import get_balance, use_points, InsufficientPoints
     balance = get_balance(current_user)
     if balance < cost:
@@ -95,20 +94,28 @@ def experience_generate():
             images.append((b64, mt))
         except Exception:
             continue
-    if not images:
+    if photos and not images:
         return jsonify(ok=False, message='사진 형식을 읽을 수 없습니다. 다시 업로드해 주세요.')
 
     type_label, structure = _TYPE_GUIDES[exp_type]
-    system_prompt = (
-        '당신은 네이버 블로그 경험담 전문 에디터입니다. 사용자가 올린 실제 사진들과 '
-        '대충 쓴 메모를 바탕으로, 직접 겪은 사람의 목소리로 자연스러운 경험담 글을 씁니다.\n'
-        '\n'
-        '절대 규칙:\n'
-        '- 사진에서 보이는 것과 메모에 적힌 것만 쓴다. 확인할 수 없는 사실(가격·영업시간·'
-        '지명 등)은 창작하지 않는다. 메모에 없으면 그냥 언급하지 않는다.\n'
-        '- 광고 문구·과장("인생 맛집", "무조건 가세요" 남발) 금지. 솔직한 장단점.\n'
+    photo_rule = (
         '- 각 사진이 들어갈 자리에 [사진 N] 마커를 한 줄로 단독 배치한다. '
         '모든 사진을 순서대로 1회씩 사용한다.\n'
+        if images else
+        '- 사진이 없다. 대신 스크린샷/사진을 넣으면 좋을 자리 2~4곳에 '
+        '(📷 여기에 ○○ 스크린샷/사진 추천) 형태의 힌트를 한 줄로 넣는다 '
+        '(예: 매출 그래프, 광고 관리 화면, 실제 상품 사진 — 민감정보 모자이크 권장).\n'
+    )
+    system_prompt = (
+        '당신은 네이버 블로그 경험담 전문 에디터입니다. 사용자가 '
+        + ('올린 실제 사진들과 ' if images else '')
+        + '대충 쓴 메모를 바탕으로, 직접 겪은 사람의 목소리로 자연스러운 경험담 글을 씁니다.\n'
+        '\n'
+        '절대 규칙:\n'
+        '- ' + ('사진에서 보이는 것과 ' if images else '') + '메모에 적힌 것만 쓴다. '
+        '확인할 수 없는 사실(가격·수치·지명 등)은 창작하지 않는다. 메모에 없으면 그냥 언급하지 않는다.\n'
+        '- 광고 문구·과장("인생 맛집", "무조건 가세요" 남발) 금지. 솔직한 장단점.\n'
+        + photo_rule +
         '- 네이버 블로그 스타일: 2~4문장짜리 짧은 문단, 문단 사이 빈 줄, 소제목 활용.\n'
         '- 마크다운 기호(#, **, -) 대신 일반 텍스트와 줄바꿈만 사용한다(네이버 에디터 복붙용).'
     )
@@ -120,16 +127,23 @@ def experience_generate():
         + (f'시기: {visit_at}\n' if visit_at else '')
         + '\n[내 메모 — 이 경험이 글의 재료입니다]\n'
         + memo[:2000]
-        + '\n\n위 사진들을 순서대로 살펴보고, 사진 내용과 메모를 엮어 경험담 블로그 글을 '
-          '작성하세요.\n'
+        + '\n\n'
+        + ('위 사진들을 순서대로 살펴보고, 사진 내용과 메모를 엮어 '
+           if images else '위 메모의 경험을 살려 ')
+        + '경험담 블로그 글을 작성하세요.\n'
           '출력 형식:\n'
-          '제목 후보 3개(각 25자 내외, 검색어가 앞에 오게) → 빈 줄 → 본문(사진 마커 포함) '
-          '→ 마지막에 해시태그 8~12개(#태그 형식 한 줄).'
+          '제목 후보 3개(각 25자 내외, 검색어가 앞에 오게) → 빈 줄 → 본문'
+        + ('(사진 마커 포함)' if images else '(스크린샷 추천 힌트 포함)')
+        + ' → 마지막에 해시태그 8~12개(#태그 형식 한 줄).'
     )
 
-    from services.claude_service import generate_with_images
     try:
-        text = generate_with_images(system_prompt, user_prompt, images, max_tokens=4096)
+        if images:
+            from services.claude_service import generate_with_images
+            text = generate_with_images(system_prompt, user_prompt, images, max_tokens=4096)
+        else:
+            from services.claude_service import generate_text
+            text = generate_text(system_prompt, user_prompt, max_tokens=4096)
     except Exception as e:
         logger.error(f'[experience] 생성 실패: {e}', exc_info=True)
         return jsonify(ok=False, message=f'글 생성에 실패했습니다. ({str(e)[:100]})')
@@ -137,7 +151,7 @@ def experience_generate():
     # 포인트 차감 + creations 기록
     cid = str(_uuid.uuid4())
     try:
-        use_points(current_user, 'experience_blog', cid)
+        use_points(current_user, 'experience_blog', cid, cost_override=cost)
     except InsufficientPoints as e:
         return jsonify(ok=False, message=str(e))
     except Exception as e:

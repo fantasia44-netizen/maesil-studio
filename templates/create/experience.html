@@ -37,14 +37,15 @@
       <!-- 사진 업로드 -->
       <div class="mb-4">
         <label class="form-label fw-semibold small">
-          사진 <span class="text-danger">*</span>
-          <span class="text-muted fw-normal">(최대 10장 — 글에 넣을 순서대로 선택하세요)</span>
+          사진 <span class="text-muted fw-normal">(선택 · 최대 10장 — 글에 넣을 순서대로)</span>
         </label>
         <input id="expPhotos" type="file" accept="image/*" multiple
                class="form-control form-control-sm" onchange="onExpPhotos(this)">
         <div id="expPhotoGrid" class="d-flex flex-wrap gap-2 mt-2"></div>
         <div class="text-muted mt-1" style="font-size:.7rem">
-          사진 속 장면(음식·장소·분위기)을 AI가 직접 보고 글에 반영합니다. 업로드 순서 = 글 속 배치 순서.
+          사진이 있으면 AI가 직접 보고 글에 반영합니다(업로드 순서 = 배치 순서).
+          <b>사진 없이도 가능</b> — 온라인 업무 경험담 등은 메모만으로 정리하고,
+          스크린샷 넣을 자리를 추천해 드립니다. (사진 있음 {{ cost }}P / 없음 100P)
         </div>
       </div>
 
@@ -131,7 +132,12 @@ function _resizeImage(file, maxSide, quality) {
     img.src = url;
   });
 }
+function _expBtnLabel() {
+  return `경험담 글 생성 (${_expPhotos.length ? '{{ cost }}' : '100'}P)`;
+}
 function renderExpGrid() {
+  const bt = document.getElementById('expGenBtnText');
+  if (bt && !document.getElementById('expGenBtn').disabled) bt.textContent = _expBtnLabel();
   const g = document.getElementById('expPhotoGrid');
   g.innerHTML = _expPhotos.map((p, i) => `
     <div class="position-relative" style="width:92px">
@@ -148,7 +154,6 @@ async function generateExperience() {
   const errEl = document.getElementById('expError');
   errEl.classList.add('d-none');
   const memo = document.getElementById('expMemo').value.trim();
-  if (!_expPhotos.length) { errEl.textContent = '사진을 1장 이상 올려주세요.'; errEl.classList.remove('d-none'); return; }
   if (!memo) { errEl.textContent = '경험 메모를 입력해 주세요. 대충 쓰셔도 됩니다.'; errEl.classList.remove('d-none'); return; }
 
   const btn = document.getElementById('expGenBtn');
@@ -177,7 +182,7 @@ async function generateExperience() {
     errEl.classList.remove('d-none');
   } finally {
     btn.disabled = false;
-    bt.textContent = '경험담 글 생성 ({{ cost }}P)';
+    bt.textContent = _expBtnLabel();
   }
 }
 
