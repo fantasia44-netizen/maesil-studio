@@ -1046,6 +1046,10 @@ def blog_thumbnail_design():
         url = b64
 
     _uid = str(getattr(current_user, 'id', '') or '')
+    _save_thumb_creation(url, 'design', 0, {
+        'line1': headline, 'sub': sub, 'badge': badge, 'cta': cta,
+        'theme': theme, 'template': template,
+    })
     logger.info(f'[blog/thumbnail/design] 생성 완료 uid={_uid[:8]} '
                 f'theme={theme} tpl={template} char={"Y" if mascot_bytes else "N"}')
     return jsonify(ok=True, url=url, style='design', cost=0)
@@ -1071,6 +1075,40 @@ def _charge_ai_points(cost: int, note: str) -> str | None:
         return None
     except InsufficientPoints as e:
         return str(e)
+
+
+def _save_thumb_creation(url: str, style: str, cost: int, meta: dict) -> None:
+    """썸네일 생성물을 creations에 기록 — 생성 이력 노출·재사용용. 실패해도 응답엔 영향 없음."""
+    if not current_app.supabase or not url:
+        return
+    try:
+        _brand_id = None
+        try:
+            _d = get_default_brand(current_app.supabase)
+            _brand_id = (_d or {}).get('id') or None
+        except Exception:
+            _brand_id = None
+        now_s = now_kst().isoformat()
+        row = {
+            'id': str(_uuid.uuid4()), 'user_id': current_user.id,
+            'creation_type': 'blog_thumbnail',
+            'input_data': dict(meta or {}, style=style),
+            'output_data': {'url': url, 'image_url': url, 'style': style},
+            'points_used': cost, 'status': 'done',
+            'created_at': now_s, 'updated_at': now_s,
+        }
+        if _brand_id:
+            row['brand_id'] = _brand_id
+        if getattr(current_user, 'operator_id', None):
+            row['operator_id'] = current_user.operator_id
+        try:
+            current_app.supabase.table('creations').insert(row).execute()
+        except Exception as ins_e:
+            logger.warning(f'[thumb creation] insert 1차 실패 → operator_id 빼고 재시도: {ins_e}')
+            row.pop('operator_id', None)
+            current_app.supabase.table('creations').insert(row).execute()
+    except Exception as e:
+        logger.warning(f'[thumb creation] 이력 기록 실패(무시): {e}')
 
 
 @create_bp.route('/blog/thumbnail/cutout', methods=['POST'])
@@ -1308,6 +1346,10 @@ def blog_thumbnail_scene():
     err = _charge_ai_points(_SCENE_COST, 'AI 씬 썸네일')
     if err:
         return jsonify(ok=False, message=err)
+    _save_thumb_creation(url, 'scene', _SCENE_COST, {
+        'line1': headline, 'sub': sub, 'badge': badge, 'cta': cta,
+        'topic': topic, 'theme': theme, 'title_style': title_style,
+    })
     logger.info(f'[blog/thumbnail/scene] 완료 uid={_uid[:8]} theme={theme} '
                 f'topic="{topic[:30]}" cost={_SCENE_COST}P')
     return jsonify(ok=True, url=url, style='scene', cost=_SCENE_COST)

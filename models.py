@@ -178,6 +178,7 @@ CREATION_LABELS = {
     'img_card_news':    '인스타 카드뉴스',
     'image_generation': '이미지 생성',
     'thumbnail_image':  '썸네일 이미지',
+    'blog_thumbnail':   '블로그 썸네일',
     'detail_image':     '상세페이지 이미지',
     'detail_page_image':'상세페이지 이미지 세트',
     'detail_page_plan': '상세페이지 기획 (3타입)',
