@@ -38,11 +38,12 @@ _TONES = {
     'info':     '정보 전달 중심(항목 정리·팁 강조, 담백한 ~해요체)',
 }
 
-# 분량: (라벨, 본문 목표 글자수 안내, max_tokens)
+# 분량: (라벨, 네이버판 목표, 구글판 목표, max_tokens[단일판 기준])
+#   구글판은 네이버판의 ~1.5배 + 표/FAQ — 구글은 깊이가 랭킹 요소.
 _LENGTHS = {
-    'short':  ('짧게',   '본문 800~1,000자',   3000),
-    'medium': ('보통',   '본문 1,500~1,800자', 4500),
-    'long':   ('길게',   '본문 2,300~2,800자', 6500),
+    'short':  ('짧게', '본문 1,000~1,200자', '본문 1,800~2,200자', 3500),
+    'medium': ('보통', '본문 1,800~2,200자', '본문 3,000~3,500자', 5500),
+    'long':   ('길게', '본문 2,500~3,000자', '본문 4,000~5,000자', 8000),
 }
 
 
@@ -87,8 +88,9 @@ def experience_generate():
     visit_at = (data.get('visit_at') or '').strip()[:40]
 
     # 포인트 확인·차감 준비 — 사진 없으면(텍스트 전용, vision 미사용) 할인,
-    # 구글판 동시 생성은 +50P (출력 토큰 증가분)
-    cost = (POINT_COSTS.get('experience_blog', 150) if photos else 100) + (50 if both else 0)
+    # 네이버+구글 세트는 2배 (구글판이 더 길고 깊어 출력 토큰도 ~2배)
+    base_cost = POINT_COSTS.get('experience_blog', 150) if photos else 100
+    cost = base_cost * 2 if both else base_cost
     from services.point_service import get_balance, use_points, InsufficientPoints
     balance = get_balance(current_user)
     if balance < cost:
@@ -132,23 +134,28 @@ def experience_generate():
            if both else
            '- 마크다운 기호(#, **, -) 대신 일반 텍스트와 줄바꿈만 사용한다(네이버 에디터 복붙용).')
     )
-    _len_label, len_guide, len_tokens = _LENGTHS[length]
+    _len_label, naver_len, google_len, len_tokens = _LENGTHS[length]
     naver_format = (
+        f'분량 {naver_len}(공백 포함). '
         '제목 후보 3개(각 25자 내외, 검색어가 앞에 오게) → 빈 줄 → 본문'
         + ('(사진 마커 포함)' if images else '(스크린샷 추천 힌트 포함)')
         + ' → 마지막에 해시태그 8~12개(#태그 형식 한 줄). '
-          '마크다운 기호 없이 일반 텍스트만.'
+          '마크다운 기호 없이 일반 텍스트만. 후기 스타일, 짧은 문단.'
     )
     google_format = (
-        '워드프레스(구글 검색용) 판. 마크다운 사용. 순서:\n'
+        f'워드프레스(구글 검색용) 판. 분량 {google_len}(공백 포함) — 네이버판보다 확실히 '
+        '길고 깊게, 배경 설명·상세 팁을 보강한다. 마크다운 사용. 순서:\n'
         '  SEO 제목: (60자 이내, 핵심 검색어 앞배치)\n'
         '  메타 설명: (150자 이내)\n'
         '  슬러그: (영문 소문자-하이픈)\n'
-        '  본문: ## / ### 소제목으로 구조화. 같은 경험이지만 네이버판을 복사하지 말고 '
-        '문장·구성을 다르게 쓴다(중복 콘텐츠 회피). 사진 마커는 동일하게 [사진 N]을 쓰되 '
-        '각 마커 다음 줄에 "알트텍스트: ..." 제안을 붙인다.\n'
+        '  본문: ## / ### 소제목으로 구조화. 비교·정리 가능한 정보(비용·준비물·장단점·'
+        '소요시간 등)는 마크다운 표 1개 이상으로 정리한다(메모·사진에서 확인되는 정보만). '
+        '사진 마커는 동일하게 [사진 N]을 쓰되 각 마커 다음 줄에 "알트텍스트: ..." 제안을 '
+        '붙인다.\n'
         '  FAQ: 독자가 검색할 질문 3~5개를 ### 질문 + 답변으로.\n'
-        '  태그: 쉼표로 구분한 키워드 8~10개.'
+        '  태그: 쉼표로 구분한 키워드 8~10개.\n'
+        '  중요: 주제는 같아도 도입·소제목 구성·문장을 네이버판과 30~50% 이상 다르게 쓴다. '
+        '네이버판 문장을 그대로 재사용하지 않는다(검색엔진 중복 콘텐츠 회피).'
     )
     if both:
         output_rule = (
@@ -162,8 +169,8 @@ def experience_generate():
         f'글 유형: {type_label}\n'
         f'권장 구성: {structure}\n'
         f'문체: {_TONES[tone]}\n'
-        f'분량: 판별 {len_guide} (공백 포함 기준 — 메모가 짧아 채울 내용이 없으면 억지로 '
-        f'늘리지 말고 자연스러운 선에서 마무리)\n'
+        '분량 공통 원칙: 메모가 짧아 채울 내용이 없으면 억지로 늘리지 말고 자연스러운 '
+        '선에서 마무리\n'
         + (f'장소/제품명: {place}\n' if place else '')
         + (f'시기: {visit_at}\n' if visit_at else '')
         + '\n[내 메모 — 이 경험이 글의 재료입니다]\n'
@@ -175,7 +182,7 @@ def experience_generate():
         + output_rule
     )
     if both:
-        len_tokens += 4000   # 구글판 출력 여유
+        len_tokens = int(len_tokens * 2.2)   # 구글판(더 긴 분량) 출력 여유
 
     try:
         if images:

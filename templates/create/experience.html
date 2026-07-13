@@ -45,7 +45,7 @@
         <div class="text-muted mt-1" style="font-size:.7rem">
           사진이 있으면 AI가 직접 보고 글에 반영합니다(업로드 순서 = 배치 순서).
           <b>사진 없이도 가능</b> — 온라인 업무 경험담 등은 메모만으로 정리하고,
-          스크린샷 넣을 자리를 추천해 드립니다. (사진 있음 {{ cost }}P / 없음 100P)
+          스크린샷 넣을 자리를 추천해 드립니다. (기본가: 사진 있음 {{ cost }}P / 없음 100P · 세트 선택 시 2배)
         </div>
       </div>
 
@@ -78,10 +78,11 @@
         <div class="col-sm-3">
           <label class="form-label fw-semibold small">분량</label>
           <select id="expLength" class="form-select form-select-sm">
-            <option value="short">짧게 (~1,000자)</option>
-            <option value="medium" selected>보통 (~1,500자)</option>
-            <option value="long">길게 (~2,500자)</option>
+            <option value="short">짧게 (네이버 ~1,200자)</option>
+            <option value="medium" selected>보통 (네이버 ~2,000자)</option>
+            <option value="long">길게 (네이버 ~3,000자)</option>
           </select>
+          <div class="text-muted mt-1" style="font-size:.66rem">구글판은 자동으로 약 1.5배 길게 생성</div>
         </div>
       </div>
 
@@ -91,7 +92,7 @@
         <div class="btn-group w-100" role="group" style="font-size:.8rem">
           <input type="radio" class="btn-check" name="expTargets" id="expTgBoth" value="both" checked onchange="renderExpGrid()">
           <label class="btn btn-outline-secondary py-2" for="expTgBoth">
-            <i class="bi bi-collection me-1"></i>네이버 + 구글(워드프레스) 세트 <span class="text-muted">+50P</span>
+            <i class="bi bi-collection me-1"></i>네이버 + 구글(워드프레스) 세트 <span class="text-muted">포인트 2배</span>
           </label>
           <input type="radio" class="btn-check" name="expTargets" id="expTgNaver" value="naver" onchange="renderExpGrid()">
           <label class="btn btn-outline-secondary py-2" for="expTgNaver">
@@ -99,8 +100,9 @@
           </label>
         </div>
         <div class="text-muted mt-1" style="font-size:.7rem">
-          세트는 같은 경험을 <b>네이버판</b>(복붙용)과 <b>구글판</b>(SEO 제목·메타·H2 구조·FAQ·알트텍스트, 워드프레스용)으로
-          문장을 다르게 써서 한 번에 만듭니다 — 중복 콘텐츠 회피.
+          세트는 같은 경험을 <b>네이버판</b>(후기 스타일·복붙용)과 <b>구글판</b>(약 1.5배 길게 —
+          SEO 제목·메타·H2 구조·표·FAQ·알트텍스트, 워드프레스용)으로 내용을 30~50% 이상
+          다르게 써서 한 번에 만듭니다 — 중복 콘텐츠 회피.
         </div>
       </div>
 
@@ -176,7 +178,7 @@ function _resizeImage(file, maxSide, quality) {
 function _expBtnLabel() {
   const both = document.querySelector('input[name="expTargets"]:checked')?.value !== 'naver';
   const base = _expPhotos.length ? parseInt('{{ cost }}') : 100;
-  return `경험담 글 생성 (${base + (both ? 50 : 0)}P)`;
+  return `경험담 글 생성 (${both ? base * 2 : base}P)`;
 }
 function renderExpGrid() {
   const bt = document.getElementById('expGenBtnText');
