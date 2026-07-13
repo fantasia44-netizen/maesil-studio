@@ -1091,14 +1091,24 @@ def blog_thumbnail_cutout():
         logger.error(f'[blog/thumbnail/cutout] AI 누끼 실패: {e}', exc_info=True)
         return jsonify(ok=False, message=f'AI 누끼 실패 ({str(e)[:100]})')
 
-    # 결과(투명 PNG) → data URL 로 변환해 프론트 캐릭터 슬롯에 그대로 재사용
+    # 결과(투명 PNG) → 내부 구멍 복원 후 data URL 로 변환
+    #   흰 선화 캐릭터는 AI 매팅이 몸통(넓은 흰 면적)을 배경으로 오인해 뚫는데,
+    #   외곽선에 둘러싸인 구멍을 흰색으로 되메워 흰곰 몸통을 살린다.
     try:
         r = requests.get(result_url, timeout=30)
         r.raise_for_status()
-        out = f"data:image/png;base64,{_b64.b64encode(r.content).decode()}"
+        from io import BytesIO as _BIO
+        from PIL import Image as _Img
+        from services.thumbnail_studio import fill_alpha_holes
+        im = fill_alpha_holes(_Img.open(_BIO(r.content)))
+        _buf = _BIO(); im.save(_buf, format='PNG')
+        out = f"data:image/png;base64,{_b64.b64encode(_buf.getvalue()).decode()}"
     except Exception as e:
-        logger.warning(f'[blog/thumbnail/cutout] 결과 fetch 실패 → URL 반환: {e}')
-        out = result_url
+        logger.warning(f'[blog/thumbnail/cutout] 결과 후처리 실패 → 원본 반환: {e}')
+        try:
+            out = f"data:image/png;base64,{_b64.b64encode(r.content).decode()}"
+        except Exception:
+            out = result_url
 
     err = _charge_ai_points(_CUTOUT_COST, '캐릭터 AI 누끼')
     if err:

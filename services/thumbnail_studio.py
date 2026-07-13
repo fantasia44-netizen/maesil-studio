@@ -221,6 +221,29 @@ def auto_cutout(img: Image.Image, thresh: int = 30, feather: float = 1.2) -> Ima
     return out
 
 
+def fill_alpha_holes(img: Image.Image, fill=(255, 255, 255)) -> Image.Image:
+    """알파의 '내부 구멍'(외곽선에 둘러싸여 이미지 밖과 이어지지 않은 투명부)을
+    채워 불투명화한다.
+
+    흰 몸통+검은 외곽선인 선화 캐릭터가 AI 매팅(birefnet)으로 몸통까지 뚫린 경우,
+    외곽선(불투명)에 둘러싸인 몸통 구멍만 골라 흰색으로 복원한다. 이미지 가장자리와
+    이어진 진짜 배경(투명)은 건드리지 않는다.
+    """
+    img = img.convert('RGBA')
+    w, h = img.size
+    a = img.getchannel('A')
+    trans = a.point(lambda p: 255 if p <= 32 else 0)   # 투명=255, 불투명=0
+    work = trans.convert('RGB')                          # 투명→흰, 불투명→검
+    for seed in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        if work.getpixel(seed) == (255, 255, 255):
+            ImageDraw.floodfill(work, seed, (255, 0, 0), thresh=10)  # 외부 투명 → 빨강
+    holes = work.getchannel('G')                         # 내부 구멍만 255 (외부=빨강 G0)
+    if holes.getextrema()[1] == 0:
+        return img                                        # 구멍 없음
+    patch = Image.new('RGBA', (w, h), (*fill, 255))
+    return Image.composite(patch, img, holes)
+
+
 def _load_asset(src, auto_cut: bool = True) -> Image.Image | None:
     """브랜드 에셋 로드 — PIL.Image / 파일경로 / bytes 모두 허용.
 
