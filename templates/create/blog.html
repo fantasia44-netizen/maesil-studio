@@ -388,14 +388,14 @@
                             background:repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50%/12px 12px">
                 <div class="flex-grow-1">
                   <div class="small fw-semibold">브랜드 캐릭터 준비됨</div>
-                  <div class="text-muted" style="font-size:.68rem">흰 배경은 업로드 시 자동 제거(무료)</div>
+                  <div id="thumbCharSubtitle" class="text-muted" style="font-size:.68rem">흰 배경은 업로드 시 자동 제거(무료)</div>
                 </div>
-                <button type="button" id="thumbCutoutBtn" class="btn btn-outline-secondary btn-sm"
+                <button type="button" id="thumbCutoutBtn" class="btn btn-outline-secondary btn-sm thumb-design-only"
                         onclick="aiCutoutChar()" style="font-size:.72rem;white-space:nowrap">
                   <i class="bi bi-scissors me-1"></i>AI 정밀 누끼 <span class="text-muted">30P</span>
                 </button>
               </div>
-              <div class="input-group input-group-sm mb-2">
+              <div class="input-group input-group-sm mb-2 thumb-design-only">
                 <input id="thumbCharStyle" class="form-control form-control-sm" maxlength="120"
                        placeholder="변형 스타일 예: 웃는 표정, 파스텔 수채화풍">
                 <button type="button" id="thumbTransformBtn" class="btn btn-outline-primary"
@@ -1445,6 +1445,13 @@ function setThumbMode(mode) {
   if (bt) bt.textContent = scene ? 'AI 씬 생성 (200P)'
                          : design ? '디자인 카드 생성'
                          : '썸네일 미리보기 생성';
+  // 캐릭터 편집 도구(누끼·변형)는 디자인 카드형에서만 유효 — AI 씬은 nano-banana가
+  // 캐릭터를 장면에 맞게 다시 그리므로 숨겨 포인트 낭비 방지.
+  document.querySelectorAll('.thumb-design-only').forEach(el => el.classList.toggle('d-none', scene));
+  const _sub = document.getElementById('thumbCharSubtitle');
+  if (_sub) _sub.textContent = scene
+    ? 'AI 씬은 캐릭터를 장면에 맞게 자동으로 그립니다 (누끼·변형 불필요)'
+    : '흰 배경은 업로드 시 자동 제거(무료)';
   // 캐릭터 사용 모드 진입 시 등록된 브랜드 마스코트 1회 자동 로드
   if (usesChar && !_mascotLoaded) { _mascotLoaded = true; _autoLoadMascot(); }
   // AI 씬 진입 시 소구포인트에서 빈 필드 자동 채우기
