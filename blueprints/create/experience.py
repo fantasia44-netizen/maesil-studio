@@ -33,9 +33,9 @@ _TYPE_GUIDES = {
 }
 
 _TONES = {
-    'friendly': '친근하고 발랄한 구어체(적당한 이모지, ~했어요체)',
-    'calm':     '차분하고 담백한 문체(이모지 최소, ~했다/~였다 혼용)',
-    'info':     '정보 전달 중심(항목 정리·팁 강조, 담백한 ~해요체)',
+    'friendly': '친근하고 발랄한 구어체. 문장 어미는 "~했어요/~더라고요/~였어요"체로 처음부터 끝까지 통일. 이모지는 문단당 최대 1개.',
+    'calm':     '차분하고 담백한 문체. 문장 어미는 "~했다/~였다"(평서형)로 통일. 이모지 사용 안 함.',
+    'info':     '정보 전달 중심의 담백한 "~해요"체로 통일. 팁·항목은 자연스러운 문장으로 풀되 기계적 나열은 피함.',
 }
 
 # 분량: (라벨, 네이버판 목표, 구글판 목표, max_tokens[단일판 기준])
@@ -52,7 +52,11 @@ _LENGTHS = {
 def experience():
     """경험담 블로그 작성 페이지."""
     cost = POINT_COSTS.get('experience_blog', 150)
-    return render_template('create/experience.html', cost=cost)
+    from services.wordpress_connection import is_connected as wp_is_connected
+    wp_connected = wp_is_connected(
+        current_user.id, operator_id=getattr(current_user, 'operator_id', None))
+    return render_template('create/experience.html', cost=cost,
+                           wp_connected=wp_connected)
 
 
 @create_bp.route('/experience/generate', methods=['POST'])
@@ -126,7 +130,14 @@ def experience_generate():
         '절대 규칙:\n'
         '- ' + ('사진에서 보이는 것과 ' if images else '') + '메모에 적힌 것만 쓴다. '
         '확인할 수 없는 사실(가격·수치·지명 등)은 창작하지 않는다. 메모에 없으면 그냥 언급하지 않는다.\n'
-        '- 광고 문구·과장("인생 맛집", "무조건 가세요" 남발) 금지. 솔직한 장단점.\n'
+        '- [시점] 글쓴이 본인이 직접 겪은 일을 1인칭("나/저")으로 쓴다. 동행한 가족은 화자의 '
+        '가족으로 부른다: 아이는 "우리 아이/아들/딸", 배우자는 "남편/아내". 절대 제3자·관찰자 '
+        '시점(예: "한 아이가", "아이가 즐거워 보였다"처럼 남을 구경하듯)으로 쓰지 않는다.\n'
+        '- [문체] 아래 지정된 문체와 문장 어미를 글 전체에서 처음부터 끝까지 일관되게 유지한다. '
+        '중간에 어미나 톤이 바뀌지 않게 한다.\n'
+        '- [자연스러움] AI 티 나는 상투구·과장을 쓰지 않는다: "여러분", "정말 최고", "강력 추천", '
+        '"많은 분들께 도움이 되길", 근거 없는 일반화, 접속어("또한/뿐만 아니라") 남발, '
+        '광고 문구("인생 맛집", "무조건 가세요") 모두 금지. 메모에 있는 구체적 장면·디테일로 솔직하게 채운다.\n'
         + photo_rule +
         '- 네이버 블로그 스타일: 2~4문장짜리 짧은 문단, 문단 사이 빈 줄, 소제목 활용.\n'
         + ('- 네이버판은 마크다운 기호 없이 일반 텍스트만(에디터 복붙용), '
@@ -168,7 +179,7 @@ def experience_generate():
     user_prompt = (
         f'글 유형: {type_label}\n'
         f'권장 구성: {structure}\n'
-        f'문체: {_TONES[tone]}\n'
+        f'지정 문체(글 전체에서 반드시 일관 유지): {_TONES[tone]}\n'
         '분량 공통 원칙: 메모가 짧아 채울 내용이 없으면 억지로 늘리지 말고 자연스러운 '
         '선에서 마무리\n'
         + (f'장소/제품명: {place}\n' if place else '')
@@ -184,27 +195,9 @@ def experience_generate():
     if both:
         len_tokens = int(len_tokens * 2.2)   # 구글판(더 긴 분량) 출력 여유
 
-    try:
-        if images:
-            from services.claude_service import generate_with_images
-            text = generate_with_images(system_prompt, user_prompt, images, max_tokens=len_tokens)
-        else:
-            from services.claude_service import generate_text
-            text = generate_text(system_prompt, user_prompt, max_tokens=len_tokens)
-    except Exception as e:
-        logger.error(f'[experience] 생성 실패: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'글 생성에 실패했습니다. ({str(e)[:100]})')
-
-    # 두 판 분리 — 구분자 없으면 전체를 네이버판으로 폴백
-    naver_text, google_text = text.replace('[[[NAVER]]]', '').strip(), ''
-    if both and '[[[GOOGLE]]]' in text:
-        head, _, tail = text.partition('[[[GOOGLE]]]')
-        naver_text = head.replace('[[[NAVER]]]', '').strip()
-        google_text = tail.strip()
-    elif both:
-        logger.warning('[experience] 구분자 파싱 실패 — 전체를 네이버판으로 반환')
-
-    # 포인트 차감 + creations 기록
+    # ── 포인트 선차감 → creations(generating) 기록 → 워커 제출 ──
+    # (동기 생성은 메인 서버를 20~90초 블로킹하므로 Celery 워커로 이전.
+    #  실패 시 워커가 포인트를 자동 환불한다 — tasks/experience_task.py)
     cid = str(_uuid.uuid4())
     try:
         use_points(current_user, 'experience_blog', cid, cost_override=cost)
@@ -212,6 +205,7 @@ def experience_generate():
         return jsonify(ok=False, message=str(e))
     except Exception as e:
         logger.error(f'[experience] 포인트 차감 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='포인트 차감 중 오류가 발생했습니다.')
 
     try:
         if current_app.supabase:
@@ -223,17 +217,70 @@ def experience_generate():
                                'targets': 'both' if both else 'naver',
                                'place': place, 'visit_at': visit_at, 'memo': memo[:500],
                                'photo_count': len(images)},
-                'output_data': {'text': naver_text, 'google_text': google_text},
-                'points_used': cost, 'status': 'done',
+                'output_data': {}, 'points_used': cost, 'status': 'generating',
                 'created_at': now_s, 'updated_at': now_s,
             }
             if getattr(current_user, 'operator_id', None):
                 row['operator_id'] = current_user.operator_id
             current_app.supabase.table('creations').insert(row).execute()
     except Exception as e:
-        logger.warning(f'[experience] 이력 기록 실패(무시): {e}')
+        logger.warning(f'[experience] creations insert 실패: {e}')
 
-    logger.info(f'[experience] 생성 완료 uid={str(current_user.id)[:8]} '
+    # Celery 워커에 제출
+    import os
+    from services.config_service import get_config
+    from tasks.experience_task import generate_experience as _gen_task
+
+    supabase_url  = os.environ.get('SUPABASE_URL', '')
+    supabase_key  = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_KEY', '')
+    anthropic_key = get_config('anthropic_api_key') or os.environ.get('ANTHROPIC_API_KEY', '')
+
+    _gen_task.delay(
+        creation_id=cid,
+        user_id=current_user.id,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        images=[[b64, mt] for (b64, mt) in images],
+        max_tokens=len_tokens,
+        both=both,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+        anthropic_api_key=anthropic_key,
+    )
+
+    logger.info(f'[experience] 제출 uid={str(current_user.id)[:8]} cid={cid[:8]} '
                 f'type={exp_type} photos={len(images)} '
                 f'targets={"both" if both else "naver"} cost={cost}P')
-    return jsonify(ok=True, text=naver_text, google_text=google_text, cost=cost)
+    return jsonify(ok=True, id=cid, async_mode=True, cost=cost)
+
+
+@create_bp.route('/experience/status/<cid>', methods=['GET'])
+@login_required
+def experience_status(cid):
+    """경험담 생성 Celery 태스크 완료 여부 폴링."""
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        r = supabase.table('creations').select(
+            'id, status, output_data, user_id'
+        ).eq('id', cid).single().execute()
+        row = r.data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+
+    if not row or row.get('user_id') != current_user.id:
+        return jsonify(ok=False, status='error', message='권한 없음')
+
+    status = row.get('status', '')
+    if status == 'done':
+        od = row.get('output_data') or {}
+        return jsonify(ok=True, status='done',
+                       text=od.get('text', ''), google_text=od.get('google_text', ''))
+    elif status == 'failed':
+        od = row.get('output_data') or {}
+        return jsonify(ok=False, status='failed',
+                       message=(od.get('error')
+                                or '글 생성 중 오류가 발생했습니다.') + ' (포인트는 환불되었습니다)')
+    else:
+        return jsonify(ok=True, status='generating')

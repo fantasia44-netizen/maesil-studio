@@ -129,13 +129,44 @@
           </a>
         </li>
       </ul>
-      <button class="btn btn-outline-secondary btn-sm" style="font-size:.72rem" onclick="copyExpText()">
-        <i class="bi bi-clipboard me-1"></i>현재 탭 복사
-      </button>
+      <div class="d-flex align-items-center gap-2">
+        {% if wp_connected %}
+        <div id="expWpPublish" class="d-none d-flex align-items-center gap-1">
+          <select id="expWpStatus" class="form-select form-select-sm" style="font-size:.72rem;width:auto">
+            <option value="draft" selected>초안으로</option>
+            <option value="publish">바로 발행</option>
+          </select>
+          <button id="expWpBtn" class="btn btn-sm text-white" style="font-size:.72rem;background:#21759b"
+                  onclick="publishToWordpress()">
+            <i class="bi bi-wordpress me-1"></i>워드프레스 보내기
+          </button>
+        </div>
+        {% else %}
+        <a id="expWpConnect" href="{{ url_for('integrations.index') }}"
+           class="btn btn-outline-secondary btn-sm d-none" style="font-size:.72rem">
+          <i class="bi bi-wordpress me-1"></i>워드프레스 연결하면 바로 발행
+        </a>
+        {% endif %}
+        <button class="btn btn-outline-secondary btn-sm" style="font-size:.72rem" onclick="copyExpText()">
+          <i class="bi bi-clipboard me-1"></i>현재 탭 복사
+        </button>
+      </div>
     </div>
     <div class="card-body p-4">
-      <div class="text-muted mb-2" style="font-size:.68rem" id="expResultHint"></div>
-      <div id="expResultBody" style="white-space:pre-wrap;font-size:.88rem;line-height:1.75"></div>
+      <div class="d-flex align-items-center mb-2">
+        <div class="text-muted" style="font-size:.68rem" id="expResultHint"></div>
+        <button type="button" class="btn btn-link btn-sm ms-auto p-0 text-decoration-none"
+                style="font-size:.72rem" onclick="toggleExpPreview()">
+          <i class="bi bi-image me-1"></i><span id="expPreviewToggleText">사진 미리보기</span>
+        </button>
+      </div>
+      <textarea id="expEditArea" class="form-control" spellcheck="false" oninput="onExpEdit()"
+                style="font-size:.88rem;line-height:1.75;min-height:340px;resize:vertical"></textarea>
+      <div class="text-muted mt-1" style="font-size:.66rem">
+        <i class="bi bi-pencil me-1"></i>여기서 바로 수정할 수 있어요. 고친 내용이 복사·워드프레스 발행에 그대로 반영됩니다.
+      </div>
+      <div id="expResultBody" class="mt-3 d-none"
+           style="white-space:pre-wrap;font-size:.88rem;line-height:1.75"></div>
     </div>
   </div>
 
@@ -204,8 +235,9 @@ async function generateExperience() {
   const btn = document.getElementById('expGenBtn');
   const bt  = document.getElementById('expGenBtnText');
   btn.disabled = true;
-  bt.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>사진 읽고 글 쓰는 중... (약 20~40초)';
+  bt.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>사진 읽고 글 쓰는 중... (약 20~60초)';
   try {
+    // 1) 워커에 생성 작업 제출
     const res = await fetch('{{ url_for("create.experience_generate") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
@@ -220,14 +252,35 @@ async function generateExperience() {
         photos:   _expPhotos.map(p => p.dataUrl),
       }),
     });
-    const j = await res.json();
-    if (!j.ok) throw new Error(j.message || '생성 실패');
-    _expNaver  = j.text || '';
-    _expGoogle = j.google_text || '';
-    document.getElementById('expTabGoogleLi').classList.toggle('d-none', !_expGoogle);
-    switchExpTab('naver');
-    document.getElementById('expResultCard').classList.remove('d-none');
-    document.getElementById('expResultCard').scrollIntoView({ behavior: 'smooth' });
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '생성 실패');
+
+    // 2) 완료될 때까지 폴링 (3초 간격, 최대 4분)
+    const statusUrl = `/create/experience/status/${submit.id}`;
+    let elapsed = 0, done = false;
+    while (elapsed < 240) {
+      await new Promise(r => setTimeout(r, 3000));
+      elapsed += 3;
+      let sd;
+      try {
+        const sr = await fetch(statusUrl);
+        sd = await sr.json();
+      } catch (pollErr) { continue; }   // 일시 네트워크 오류 무시하고 계속
+      if (sd.status === 'done') {
+        _expNaver  = sd.text || '';
+        _expGoogle = sd.google_text || '';
+        document.getElementById('expTabGoogleLi').classList.toggle('d-none', !_expGoogle);
+        switchExpTab('naver');
+        document.getElementById('expResultCard').classList.remove('d-none');
+        document.getElementById('expResultCard').scrollIntoView({ behavior: 'smooth' });
+        done = true;
+        break;
+      } else if (sd.status === 'failed' || sd.status === 'error') {
+        throw new Error(sd.message || '생성 실패');
+      }
+      // status === 'generating' → 계속 대기
+    }
+    if (!done) throw new Error('생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
   } catch (e) {
     errEl.textContent = '생성 실패: ' + e.message;
     errEl.classList.remove('d-none');
@@ -242,11 +295,34 @@ function switchExpTab(t) {
   _expTab = t;
   document.getElementById('expTabNaverBtn').classList.toggle('active', t === 'naver');
   document.getElementById('expTabGoogleBtn')?.classList.toggle('active', t === 'google');
+  // 워드프레스 발행 UI 는 구글판 탭에서만 노출
+  const showWp = (t === 'google') && !!_expGoogle;
+  document.getElementById('expWpPublish')?.classList.toggle('d-none', !showWp);
+  document.getElementById('expWpConnect')?.classList.toggle('d-none', !showWp);
   const text = t === 'google' ? _expGoogle : _expNaver;
   const hint = t === 'google'
     ? '워드프레스 에디터에 붙여넣으면 ## 소제목이 자동 변환됩니다. [사진 N] 자리에 사진 삽입, 알트텍스트 제안 활용.'
     : '네이버 에디터에 붙여넣고 [사진 N] 자리에 해당 사진을 삽입하세요.';
   document.getElementById('expResultHint').textContent = hint;
+  // 편집창에 현재 탭 원문 로드 (여기서 바로 수정 가능)
+  document.getElementById('expEditArea').value = text;
+  if (!document.getElementById('expResultBody').classList.contains('d-none')) _renderExpPreview();
+}
+
+// ── 편집: textarea 수정 → 원문 변수에 즉시 반영(복사·발행에 그대로 사용) ──
+function onExpEdit() {
+  const v = document.getElementById('expEditArea').value;
+  if (_expTab === 'google') _expGoogle = v; else _expNaver = v;
+  if (!document.getElementById('expResultBody').classList.contains('d-none')) _renderExpPreview();
+}
+function toggleExpPreview() {
+  const body = document.getElementById('expResultBody');
+  const hidden = body.classList.toggle('d-none');   // 토글 후 숨김이면 true
+  document.getElementById('expPreviewToggleText').textContent = hidden ? '사진 미리보기' : '미리보기 숨기기';
+  if (!hidden) _renderExpPreview();
+}
+function _renderExpPreview() {
+  const text = _expTab === 'google' ? _expGoogle : _expNaver;
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let html = esc(text);
   html = html.replace(/\[사진\s*(\d+)\]/g, (m, n) => {
@@ -262,6 +338,41 @@ function copyExpText() {
     alert(_expTab === 'google'
       ? '구글판 복사됐습니다. 워드프레스에 붙여넣으세요.'
       : '네이버판 복사됐습니다. 네이버 에디터에 붙여넣고 [사진 N] 자리에 사진을 넣어주세요.'));
+}
+
+// ── 워드프레스로 발행 (구글판 → REST API) ─────────────────────
+async function publishToWordpress() {
+  if (!_expGoogle) { alert('먼저 구글(워드프레스)판을 생성해주세요.'); return; }
+  const btn = document.getElementById('expWpBtn');
+  const statusSel = document.getElementById('expWpStatus');
+  const status = statusSel ? statusSel.value : 'draft';
+  if (status === 'publish' &&
+      !confirm('워드프레스에 바로 발행하면 글이 공개됩니다.\n초안이 아니라 지금 공개하시겠습니까?')) {
+    return;
+  }
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>보내는 중...';
+  try {
+    const res = await fetch('{{ url_for("integrations.wordpress_publish") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+      body: JSON.stringify({ google_text: _expGoogle, status }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.message || '발행 실패');
+    const where = j.edit_link || j.link;
+    if (where && confirm(j.message + '\n\n워드프레스에서 열어볼까요?')) {
+      window.open(where, '_blank', 'noopener');
+    } else {
+      alert(j.message);
+    }
+  } catch (e) {
+    alert('발행 실패: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 </script>
 {% endblock %}
