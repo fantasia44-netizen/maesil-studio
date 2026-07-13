@@ -199,6 +199,45 @@ def transform_character(image_data: str, style_prompt: str,
     raise ValueError(f'캐릭터 변형 응답 파싱 실패: {data}')
 
 
+def _scene_visual_desc(topic: str) -> str:
+    """씬 주제(한글/영문) → 브랜드명 없는 영어 오브젝트/장면 묘사.
+
+    주제에 '쿠팡·네이버' 같은 브랜드명이 들어가면 nano-banana가 그걸 그림에 써넣으려다
+    깨진 글자가 되므로, 시각 오브젝트로 추상화하고 고유명사(브랜드명)를 제거한다.
+    실패 시 원본 주제 반환.
+    """
+    topic = (topic or '').strip()
+    if not topic:
+        return ''
+    try:
+        from services.claude_service import generate_text
+        result = generate_text(
+            system=(
+                'Convert a Korean/English content topic into a SHORT English description of '
+                'concrete visual OBJECTS and a simple setting for a cute flat sticker illustration.\n'
+                'RULES:\n'
+                '- List relevant physical objects/props/food/tools for the topic.\n'
+                '- NEVER include brand names, company names, platform names, app names or any '
+                'proper nouns (e.g. Coupang, Naver, Amazon, Instagram) — use generic objects instead.\n'
+                '- NEVER request any text, letters, labels, numbers or writing.\n'
+                '- Output: 6-14 English words only. No quotes. No explanation.\n'
+                'EXAMPLES:\n'
+                '쿠팡·네이버 양쪽에서 파는 셀러 → shopping boxes, delivery cart, growth arrows, coins, balance scale\n'
+                '이유식 만들기 → baby food bowl, fresh vegetables, cooking pot, spoon, cutting board\n'
+                '여름 다이어트 → fresh salad bowl, water bottle, measuring tape, dumbbell, fruit\n'
+                '블로그 마케팅 → laptop, pencil, lightbulb, speech bubbles, upward arrow'
+            ),
+            prompt=topic,
+            max_tokens=50,
+            model='claude-sonnet-4-6',
+        )
+        desc = (result or '').strip().strip('"\'').rstrip('.').strip()
+        return desc or topic
+    except Exception as e:
+        logger.warning('[generate_scene] 주제 시각 변환 실패 → 원본 사용: %s', e)
+        return topic
+
+
 def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
                    extra: str = '', bg_color: str = '') -> str:
     """상황 장면 일러스트 생성 (nano-banana). 캐릭터는 선택.
@@ -279,6 +318,8 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
     else:
         # ── 캐릭터 없음: 주제 소품·장면만 (text-to-image) ────────────
         #   캐릭터 브랜딩 없는 일반 업체용 — 캐릭터/사람/동물 없이 소품·음식·세팅만.
+        #   브랜드명 제거 + 시각 오브젝트로 추상화 (그림 속 가짜 라벨 방지).
+        topic = _scene_visual_desc(topic) or topic
         prompt = (
             f'Illustrate one cute flat editorial thumbnail scene about "{topic}" — '
             f'show the relevant objects, food, tools and a simple setting for the topic, '

@@ -485,7 +485,7 @@ def render_thumbnail(
         badge_h = (bb[3] - bb[1]) + 44 + 26  # pill 높이 + 아래 간격
 
     # 헤드라인 자동 맞춤 (뱃지/서브 높이만큼 텍스트 존에서 차감)
-    sub_reserve = 92 if sub else 0
+    sub_reserve = 104 if sub else 0
     hl_box_h = tz_h - badge_h - sub_reserve
     fp = _find_display_font()
     hl_lines, hl_font, hl_dy = _fit_headline(
@@ -530,21 +530,23 @@ def render_thumbnail(
     y += hl_h
 
     if sub:
-        y += 10
-        # 서브는 한 줄에 다 들어가도록 폭에 맞춰 자동 축소 (잘림 방지)
+        y += 12
+        # 서브는 한 줄에 다 들어가도록 폭에 맞춰 자동 축소 (잘림 방지). 너무 작아지지
+        # 않게 하한을 올리고 외곽선을 굵혀 가독성 확보.
         dd = ImageDraw.Draw(img)
         sfp = _find_korean_font(bold=True)
-        s_size = 58
-        while s_size >= 38:
+        s_size = 64
+        while s_size >= 46:
             sf = ImageFont.truetype(sfp, s_size)
-            bb = dd.textbbox((0, 0), sub, font=sf, stroke_width=4)
+            bb = dd.textbbox((0, 0), sub, font=sf, stroke_width=5)
             if bb[2] - bb[0] <= tz_w:
                 break
             s_size -= 3
         sf = ImageFont.truetype(sfp, s_size)
         sub_lines = _wrap(sub, sf, tz_w, dd)[:2]  # 최소크기로도 넘치면 2줄 허용
         _draw_center_lines(img, sub_lines, sf, cx, y,
-                           int(s_size * 1.18), sub_color, stroke=4)
+                           int(s_size * 1.16), sub_color, stroke=5,
+                           fallback_path=_find_korean_font(bold=True))
 
     # ── CTA 바 ─────────────────────────────────────────────
     if cta:
