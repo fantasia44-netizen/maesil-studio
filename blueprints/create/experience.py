@@ -38,6 +38,13 @@ _TONES = {
     'info':     '정보 전달 중심(항목 정리·팁 강조, 담백한 ~해요체)',
 }
 
+# 분량: (라벨, 본문 목표 글자수 안내, max_tokens)
+_LENGTHS = {
+    'short':  ('짧게',   '본문 800~1,000자',   3000),
+    'medium': ('보통',   '본문 1,500~1,800자', 4500),
+    'long':   ('길게',   '본문 2,300~2,800자', 6500),
+}
+
 
 @create_bp.route('/experience')
 @login_required
@@ -74,6 +81,7 @@ def experience_generate():
 
     exp_type = data.get('exp_type') if data.get('exp_type') in _TYPE_GUIDES else 'place'
     tone     = data.get('tone') if data.get('tone') in _TONES else 'friendly'
+    length   = data.get('length') if data.get('length') in _LENGTHS else 'medium'
     place    = (data.get('place') or '').strip()[:60]
     visit_at = (data.get('visit_at') or '').strip()[:40]
 
@@ -119,10 +127,13 @@ def experience_generate():
         '- 네이버 블로그 스타일: 2~4문장짜리 짧은 문단, 문단 사이 빈 줄, 소제목 활용.\n'
         '- 마크다운 기호(#, **, -) 대신 일반 텍스트와 줄바꿈만 사용한다(네이버 에디터 복붙용).'
     )
+    _len_label, len_guide, len_tokens = _LENGTHS[length]
     user_prompt = (
         f'글 유형: {type_label}\n'
         f'권장 구성: {structure}\n'
         f'문체: {_TONES[tone]}\n'
+        f'분량: {len_guide} (공백 포함 기준 — 메모가 짧아 채울 내용이 없으면 억지로 '
+        f'늘리지 말고 자연스러운 선에서 마무리)\n'
         + (f'장소/제품명: {place}\n' if place else '')
         + (f'시기: {visit_at}\n' if visit_at else '')
         + '\n[내 메모 — 이 경험이 글의 재료입니다]\n'
@@ -140,10 +151,10 @@ def experience_generate():
     try:
         if images:
             from services.claude_service import generate_with_images
-            text = generate_with_images(system_prompt, user_prompt, images, max_tokens=4096)
+            text = generate_with_images(system_prompt, user_prompt, images, max_tokens=len_tokens)
         else:
             from services.claude_service import generate_text
-            text = generate_text(system_prompt, user_prompt, max_tokens=4096)
+            text = generate_text(system_prompt, user_prompt, max_tokens=len_tokens)
     except Exception as e:
         logger.error(f'[experience] 생성 실패: {e}', exc_info=True)
         return jsonify(ok=False, message=f'글 생성에 실패했습니다. ({str(e)[:100]})')
@@ -163,8 +174,8 @@ def experience_generate():
             row = {
                 'id': cid, 'user_id': current_user.id,
                 'creation_type': 'experience_blog',
-                'input_data': {'exp_type': exp_type, 'tone': tone, 'place': place,
-                               'visit_at': visit_at, 'memo': memo[:500],
+                'input_data': {'exp_type': exp_type, 'tone': tone, 'length': length,
+                               'place': place, 'visit_at': visit_at, 'memo': memo[:500],
                                'photo_count': len(images)},
                 'output_data': {'text': text},
                 'points_used': cost, 'status': 'done',

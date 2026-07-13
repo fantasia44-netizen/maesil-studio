@@ -59,20 +59,28 @@
 
       <!-- 장소/시기/톤 -->
       <div class="row g-3 mb-4">
-        <div class="col-sm-5">
+        <div class="col-sm-4">
           <label class="form-label fw-semibold small">장소/제품명 <span class="text-muted fw-normal">(선택)</span></label>
           <input id="expPlaceName" class="form-control form-control-sm" maxlength="60" placeholder="예: 김해 ○○카페">
         </div>
-        <div class="col-sm-3">
+        <div class="col-sm-2">
           <label class="form-label fw-semibold small">시기 <span class="text-muted fw-normal">(선택)</span></label>
-          <input id="expVisitAt" class="form-control form-control-sm" maxlength="40" placeholder="예: 7월 둘째 주">
+          <input id="expVisitAt" class="form-control form-control-sm" maxlength="40" placeholder="7월 둘째 주">
         </div>
-        <div class="col-sm-4">
+        <div class="col-sm-3">
           <label class="form-label fw-semibold small">문체</label>
           <select id="expTone" class="form-select form-select-sm">
             <option value="friendly">친근·발랄 (~했어요)</option>
             <option value="calm">차분·담백</option>
             <option value="info">정보 정리형</option>
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label fw-semibold small">분량</label>
+          <select id="expLength" class="form-select form-select-sm">
+            <option value="short">짧게 (~1,000자)</option>
+            <option value="medium" selected>보통 (~1,500자)</option>
+            <option value="long">길게 (~2,500자)</option>
           </select>
         </div>
       </div>
@@ -170,6 +178,7 @@ async function generateExperience() {
         place:    document.getElementById('expPlaceName').value.trim(),
         visit_at: document.getElementById('expVisitAt').value.trim(),
         tone:     document.getElementById('expTone').value,
+        length:   document.getElementById('expLength').value,
         photos:   _expPhotos.map(p => p.dataUrl),
       }),
     });
