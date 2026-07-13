@@ -132,6 +132,132 @@ def replace_background(image_url: str, bg_prompt: str) -> str:
     raise ValueError(f'Bria 배경 교체 응답 파싱 실패: {data}')
 
 
+def remove_background_ai(image_data: str, user_id: str = 'anon') -> str:
+    """AI 정밀 누끼 — fal birefnet으로 배경 제거 후 투명 PNG URL 반환.
+
+    image_data: 공개 URL 또는 base64 data URL(자동으로 Supabase 업로드 후 fal에 전달).
+    """
+    from services.config_service import get_config
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    image_url = image_data
+    if image_data.startswith('data:image/'):
+        image_url = upload_to_supabase(image_data, user_id, 'cutout_src.png')
+
+    resp = requests.post(
+        'https://fal.run/fal-ai/birefnet',
+        headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
+        json={'image_url': image_url},
+        timeout=90,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get('image'):
+        return data['image']['url']
+    if data.get('images'):
+        return data['images'][0]['url']
+    raise ValueError(f'AI 누끼 응답 파싱 실패: {data}')
+
+
+def transform_character(image_data: str, style_prompt: str,
+                        user_id: str = 'anon') -> str:
+    """캐릭터 이미지 변형 — nano-banana(Gemini) 편집으로 정체성 유지하며 리스타일.
+
+    style_prompt: 한글 지시문 가능(예: '웃는 표정으로, 파스텔 수채화풍').
+    반환: 변형된 이미지 URL(흰 배경 스티커풍 — 이후 무료 누끼로 투명 처리 가능).
+    """
+    from services.config_service import get_config
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    image_url = image_data
+    if image_data.startswith('data:image/'):
+        image_url = upload_to_supabase(image_data, user_id, 'char_src.png')
+
+    style = (style_prompt or '').strip() or '귀엽게 다듬기'
+    # 원 캐릭터 정체성·포즈 유지 + 단색 흰 배경(이후 누끼) 유도
+    full = (
+        f'{style}. Keep the same character identity, face and pose. '
+        f'Cute flat illustration mascot sticker, clean vector style, '
+        f'plain solid white background, centered, no text, no shadow.'
+    )
+    resp = requests.post(
+        'https://fal.run/fal-ai/nano-banana/edit',
+        headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
+        json={'prompt': full, 'image_urls': [image_url], 'num_images': 1},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get('images'):
+        return data['images'][0]['url']
+    if data.get('image'):
+        return data['image']['url']
+    raise ValueError(f'캐릭터 변형 응답 파싱 실패: {data}')
+
+
+def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
+                   extra: str = '', bg_color: str = '') -> str:
+    """브랜드 마스코트를 레퍼런스로 상황 장면 일러스트 생성 (nano-banana).
+
+    · 캐릭터는 정체성을 유지한 채 장면에 맞게 포즈·표정·소품을 조정(리포즈)한다.
+    · 주제에 맞는 배경 세팅과 소품을 함께 그린다.
+    · bg_color 로 배경 색 팔레트를 지정(색 테마 연동).
+    · 상단 1/3은 텍스트용으로 비워두게 유도 → 이후 PIL 하이브리드 텍스트 합성에 사용.
+    mascot_urls: 공개 URL 또는 base64 data URL 리스트(앞/뒤 등).
+    반환: 씬 이미지 URL.
+    """
+    from services.config_service import get_config
+    api_key = get_config('fal_api_key')
+    if not api_key:
+        raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    urls = []
+    for i, m in enumerate(mascot_urls or []):
+        if isinstance(m, str) and m.startswith('data:image/'):
+            urls.append(upload_to_supabase(m, user_id, f'mascot_ref_{i}.png'))
+        elif m:
+            urls.append(m)
+    if not urls:
+        raise ValueError('브랜드 캐릭터(마스코트)가 필요합니다.')
+
+    topic = (topic or '').strip() or '육아 정보'
+    bg_phrase = (bg_color or '').strip() or 'soft pastel'
+    prompt = (
+        f'Use the provided character as the same brand mascot. You MAY adjust its pose, '
+        f'facial expression and add relevant props or actions so it naturally fits the scene — '
+        f'but keep its identity, colors, outline style and overall design clearly recognizable '
+        f'and consistent with the reference. '
+        f'Illustrate one cohesive cute editorial thumbnail scene about "{topic}", including a '
+        f'simple background setting and small props/doodle icons that clearly relate to the topic. '
+        f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle shapes. '
+        f'IMPORTANT: leave the TOP THIRD of the image as clean simple empty space of that background '
+        f'color, reserved for a title; place the mascot in the lower-center area. '
+        f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
+        f'square 1:1 composition. '
+        f'Absolutely NO text, no letters, no words, no captions anywhere in the image.'
+    )
+    if extra:
+        prompt += f' {extra.strip()}'
+
+    resp = requests.post(
+        'https://fal.run/fal-ai/nano-banana/edit',
+        headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
+        json={'prompt': prompt, 'image_urls': urls, 'num_images': 1},
+        timeout=150,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get('images'):
+        return data['images'][0]['url']
+    if data.get('image'):
+        return data['image']['url']
+    raise ValueError(f'씬 생성 응답 파싱 실패: {data}')
+
+
 def generate_card_news(texts: list[str], background_prompt: str,
                        brand_color: str = '#2d8f5e',
                        font_color: str = '#ffffff') -> tuple[str, str]:

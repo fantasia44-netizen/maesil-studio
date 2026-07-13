@@ -357,17 +357,61 @@
         <div class="col-lg-7 border-end p-3">
 
           <!-- 썸네일 방식 모드 토글 -->
-          <div class="btn-group w-100 mb-3" role="group" style="font-size:.8rem">
+          <div class="btn-group w-100 mb-3" role="group" style="font-size:.76rem">
             <input type="radio" class="btn-check" name="thumbStyleMode" id="thumbModeClassic"
                    value="classic" checked onchange="setThumbMode('classic')">
             <label class="btn btn-outline-secondary py-1" for="thumbModeClassic">
-              <i class="bi bi-image me-1"></i>클래식 (배경+글자)
+              <i class="bi bi-image me-1"></i>클래식
             </label>
             <input type="radio" class="btn-check" name="thumbStyleMode" id="thumbModeDesign"
                    value="design" onchange="setThumbMode('design')">
             <label class="btn btn-outline-secondary py-1" for="thumbModeDesign">
               <i class="bi bi-stickies me-1"></i>디자인 카드형
             </label>
+            <input type="radio" class="btn-check" name="thumbStyleMode" id="thumbModeScene"
+                   value="scene" onchange="setThumbMode('scene')">
+            <label class="btn btn-outline-secondary py-1" for="thumbModeScene">
+              <i class="bi bi-stars me-1"></i>AI 씬<span class="badge bg-primary ms-1" style="font-size:.58rem">NEW</span>
+            </label>
+          </div>
+
+          <!-- ── 공유: 브랜드 캐릭터 (디자인 카드형 · AI 씬 공용) ── -->
+          <div id="thumbCharShared" class="d-none mb-3">
+            <label class="form-label small fw-semibold mb-1">브랜드 캐릭터 <span class="text-muted fw-normal">(선택)</span></label>
+            <input id="thumbDzChar" type="file" accept="image/png,image/webp,image/jpeg"
+                   class="form-control form-control-sm" onchange="onThumbCharUpload(this)">
+            <div id="thumbCharTools" class="d-none mt-2 p-2 rounded"
+                 style="background:#f8f9fb;border:1px solid #eef0f4">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <img id="thumbCharPrev" alt="캐릭터"
+                     style="width:48px;height:48px;object-fit:contain;border:1px solid #e5e7eb;border-radius:8px;
+                            background:repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50%/12px 12px">
+                <div class="flex-grow-1">
+                  <div class="small fw-semibold">브랜드 캐릭터 준비됨</div>
+                  <div class="text-muted" style="font-size:.68rem">흰 배경은 업로드 시 자동 제거(무료)</div>
+                </div>
+                <button type="button" id="thumbCutoutBtn" class="btn btn-outline-secondary btn-sm"
+                        onclick="aiCutoutChar()" style="font-size:.72rem;white-space:nowrap">
+                  <i class="bi bi-scissors me-1"></i>AI 정밀 누끼 <span class="text-muted">30P</span>
+                </button>
+              </div>
+              <div class="input-group input-group-sm mb-2">
+                <input id="thumbCharStyle" class="form-control form-control-sm" maxlength="120"
+                       placeholder="변형 스타일 예: 웃는 표정, 파스텔 수채화풍">
+                <button type="button" id="thumbTransformBtn" class="btn btn-outline-primary"
+                        onclick="transformChar()" style="font-size:.72rem;white-space:nowrap">
+                  <i class="bi bi-magic me-1"></i>AI 변형 <span class="text-muted">100P</span>
+                </button>
+              </div>
+              <button type="button" id="thumbMascotSaveBtn" class="btn btn-outline-success btn-sm w-100"
+                      onclick="saveMascot()" style="font-size:.72rem">
+                <i class="bi bi-star me-1"></i>이 캐릭터를 브랜드 기본으로 등록
+              </button>
+              <div id="thumbCharMsg" class="d-none small mt-1"></div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.7rem">
+              JPG·PNG·WEBP 가능, 흰/단색 배경 자동 제거. 미업로드 시 <b>등록된 브랜드 캐릭터</b>가 자동 사용됩니다.
+            </div>
           </div>
 
           <!-- ── 디자인 카드형 패널 (기본 숨김) ── -->
@@ -413,24 +457,61 @@
                 </select>
               </div>
             </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">장식 아이콘</label>
+              <select id="thumbDzIcons" class="form-select form-select-sm">
+                <option value="sun,drop">해 · 물방울</option>
+                <option value="leaf,sun">잎 · 해</option>
+                <option value="heart,leaf">하트 · 잎</option>
+                <option value="">없음</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- ── AI 씬 패널 (기본 숨김) ── -->
+          <div id="thumbScenePanel" class="d-none">
+            <div class="alert alert-primary py-2 px-2 mb-2" style="font-size:.72rem">
+              <i class="bi bi-stars me-1"></i>브랜드 캐릭터가 <b>상황 장면 일러스트</b>로 그려지고,
+              상단에 선명한 한글 텍스트가 얹힙니다. (장당 <b>200P</b>)
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">헤드라인</label>
+              <input id="thumbScHeadline" class="form-control form-control-sm" maxlength="40"
+                     placeholder="예: 아기 장거리 운전 가능 시기">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">서브 문구 <span class="text-muted fw-normal">(선택)</span></label>
+              <input id="thumbScSub" class="form-control form-control-sm" maxlength="40"
+                     placeholder="예: 달리는 꿀팁 & 준비물 리스트">
+            </div>
             <div class="row g-2 mb-2">
               <div class="col-6">
-                <label class="form-label small fw-semibold mb-1">장식 아이콘</label>
-                <select id="thumbDzIcons" class="form-select form-select-sm">
-                  <option value="sun,drop">해 · 물방울</option>
-                  <option value="leaf,sun">잎 · 해</option>
-                  <option value="heart,leaf">하트 · 잎</option>
-                  <option value="">없음</option>
-                </select>
+                <label class="form-label small fw-semibold mb-1">상단 뱃지 <span class="text-muted fw-normal">(선택)</span></label>
+                <input id="thumbScBadge" class="form-control form-control-sm" maxlength="20"
+                       placeholder="예: 육아탑">
               </div>
               <div class="col-6">
-                <label class="form-label small fw-semibold mb-1">브랜드 캐릭터 <span class="text-muted fw-normal">(선택)</span></label>
-                <input id="thumbDzChar" type="file" accept="image/png,image/webp"
-                       class="form-control form-control-sm" onchange="onThumbCharUpload(this)">
+                <label class="form-label small fw-semibold mb-1">색 테마 <span class="text-muted fw-normal">(배경색·글자색)</span></label>
+                <select id="thumbScTheme" class="form-select form-select-sm">
+                  <option value="baby_blue">베이비 블루</option>
+                  <option value="food_cream">푸드 크림</option>
+                  <option value="fresh_green">프레시 그린</option>
+                  <option value="warm_pink">웜 핑크</option>
+                </select>
               </div>
             </div>
-            <div class="text-muted" style="font-size:.7rem">
-              캐릭터 미업로드 시 기본 캐릭터가 사용됩니다. 투명 PNG를 올리면 브랜드 마스코트로 합성됩니다.
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">하단 CTA 바 <span class="text-muted fw-normal">(선택)</span></label>
+              <input id="thumbScCta" class="form-control form-control-sm" maxlength="24"
+                     placeholder="예: 지금 바로 확인하세요">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">장면 주제 <span class="text-muted fw-normal">(선택 — 비우면 헤드라인 사용)</span></label>
+              <input id="thumbScTopic" class="form-control form-control-sm" maxlength="80"
+                     placeholder="예: 아기와 함께 자동차로 장거리 여행">
+              <div class="text-muted mt-1" style="font-size:.68rem">
+                이 주제로 캐릭터가 연출됩니다. 구체적일수록 장면이 정확해집니다.
+              </div>
             </div>
           </div>
 
@@ -1331,26 +1412,130 @@ function _splitThumbTitle(title) {
   return [title.slice(0, mid).slice(0,15), title.slice(mid).slice(0,15)];
 }
 
-// ── 썸네일 방식 모드 토글 (클래식 / 디자인 카드형) ───────────
+// ── 썸네일 방식 모드 토글 (클래식 / 디자인 카드형 / AI 씬) ─────
 let _thumbCharData = null;   // 업로드한 브랜드 캐릭터 (base64 data URL)
+let _mascotLoaded = false;   // 등록된 브랜드 마스코트 자동 로드 여부
 function setThumbMode(mode) {
   const design = mode === 'design';
+  const scene  = mode === 'scene';
+  const usesChar = design || scene;   // 캐릭터 블록 공용
   document.getElementById('thumbDesignPanel')?.classList.toggle('d-none', !design);
+  document.getElementById('thumbScenePanel')?.classList.toggle('d-none', !scene);
+  document.getElementById('thumbCharShared')?.classList.toggle('d-none', !usesChar);
   ['thumbTabNav', 'thumbTabBg', 'thumbTabText', 'thumbTabStyle'].forEach(id => {
     const el = document.getElementById(id);
-    // 디자인 모드에선 클래식 탭 전부 숨김. 클래식 복귀 시 현재 탭만 다시 표시.
-    if (el) el.classList.toggle('d-none', design);
+    // 특수 모드에선 클래식 탭 전부 숨김. 클래식 복귀 시 현재 탭만 다시 표시.
+    if (el) el.classList.toggle('d-none', usesChar);
   });
-  if (!design && typeof switchThumbTab === 'function') switchThumbTab('bg');
+  if (!usesChar && typeof switchThumbTab === 'function') switchThumbTab('bg');
   const bt = document.getElementById('thumbGenBtnText');
-  if (bt) bt.textContent = design ? '디자인 카드 생성' : '썸네일 미리보기 생성';
+  if (bt) bt.textContent = scene ? 'AI 씬 생성 (200P)'
+                         : design ? '디자인 카드 생성'
+                         : '썸네일 미리보기 생성';
+  // 캐릭터 사용 모드 진입 시 등록된 브랜드 마스코트 1회 자동 로드
+  if (usesChar && !_mascotLoaded) { _mascotLoaded = true; _autoLoadMascot(); }
+}
+async function _autoLoadMascot() {
+  try {
+    const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_get") }}');
+    const j = await res.json();
+    if (j.ok && j.mascots && j.mascots.length && !_thumbCharData) {
+      // 등록된 마스코트 URL → data URL 로 변환해 미리보기/재사용
+      const im = await fetch(j.mascots[0]);
+      const blob = await im.blob();
+      const rd = new FileReader();
+      rd.onload = e => _setThumbChar(e.target.result);
+      rd.readAsDataURL(blob);
+    }
+  } catch (e) { /* 무시 — 등록 마스코트 없음 */ }
+}
+async function saveMascot() {
+  if (!_thumbCharData) return;
+  const btn = document.getElementById('thumbMascotSaveBtn');
+  const old = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 등록 중...';
+  try {
+    const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_save") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ character_data: _thumbCharData }),
+    });
+    const j = await res.json();
+    _thumbCharMsg(j.ok ? '브랜드 기본 캐릭터로 등록됐습니다.' : (j.message || '등록 실패'),
+                  j.ok ? 'ok' : 'err');
+  } catch (e) { _thumbCharMsg('요청 실패: ' + e, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = old; }
+}
+function _setThumbChar(dataUrl) {
+  _thumbCharData = dataUrl || null;
+  const tools = document.getElementById('thumbCharTools');
+  const prev  = document.getElementById('thumbCharPrev');
+  if (dataUrl) {
+    if (prev) prev.src = dataUrl;
+    tools?.classList.remove('d-none');
+  } else {
+    tools?.classList.add('d-none');
+  }
 }
 function onThumbCharUpload(inp) {
   const f = inp.files && inp.files[0];
-  if (!f) { _thumbCharData = null; return; }
+  if (!f) { _setThumbChar(null); return; }
   const r = new FileReader();
-  r.onload = e => { _thumbCharData = e.target.result; };
+  r.onload = e => _setThumbChar(e.target.result);
   r.readAsDataURL(f);
+}
+function _thumbCharMsg(text, kind) {
+  const el = document.getElementById('thumbCharMsg');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'small mt-1 ' +
+    (kind === 'err' ? 'text-danger' : kind === 'ok' ? 'text-success' : 'text-muted');
+  el.classList.remove('d-none');
+}
+async function aiCutoutChar() {
+  if (!_thumbCharData) return;
+  const btn = document.getElementById('thumbCutoutBtn');
+  const old = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 처리 중...';
+  _thumbCharMsg('AI 정밀 누끼 처리 중...', 'muted');
+  try {
+    const res = await fetch('{{ url_for("create.blog_thumbnail_cutout") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ character_data: _thumbCharData }),
+    });
+    const j = await res.json();
+    if (j.ok && j.character_data) {
+      _setThumbChar(j.character_data);
+      _thumbCharMsg('누끼 완료! (-' + j.cost + 'P)', 'ok');
+    } else { _thumbCharMsg(j.message || 'AI 누끼에 실패했습니다.', 'err'); }
+  } catch (e) { _thumbCharMsg('요청 실패: ' + e, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = old; }
+}
+async function transformChar() {
+  if (!_thumbCharData) return;
+  const style = document.getElementById('thumbCharStyle')?.value.trim() || '';
+  if (!style) { _thumbCharMsg('원하는 변형 스타일을 입력하세요.', 'err'); return; }
+  const btn = document.getElementById('thumbTransformBtn');
+  const old = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 변형 중...';
+  _thumbCharMsg('AI가 캐릭터를 변형하는 중... (약 10~20초)', 'muted');
+  try {
+    const res = await fetch('{{ url_for("create.blog_thumbnail_transform_character") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ character_data: _thumbCharData, style }),
+    });
+    const j = await res.json();
+    if (j.ok && j.character_data) {
+      _setThumbChar(j.character_data);
+      _thumbCharMsg('변형 완료! (-' + j.cost + 'P)', 'ok');
+    } else { _thumbCharMsg(j.message || '캐릭터 변형에 실패했습니다.', 'err'); }
+  } catch (e) { _thumbCharMsg('요청 실패: ' + e, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = old; }
 }
 
 // ── 썸네일 실제 이미지 생성 (미리보기) ───────────────────────
@@ -1362,6 +1547,8 @@ async function generateThumbPreview() {
   const _mode = document.querySelector('input[name="thumbStyleMode"]:checked')?.value || 'classic';
   const l1 = (_mode === 'design'
       ? document.getElementById('thumbDzHeadline')?.value.trim()
+      : _mode === 'scene'
+      ? document.getElementById('thumbScHeadline')?.value.trim()
       : document.getElementById('thumbLine1')?.value.trim()) || '';
   if (!l1) {
     const errEl = document.getElementById('thumbGenError');
@@ -1398,7 +1585,22 @@ async function generateThumbPreview() {
 
   try {
     let res;
-    if (_mode === 'design') {
+    if (_mode === 'scene') {
+      if (loadTxt) loadTxt.textContent = 'AI가 캐릭터로 장면을 그리는 중... (약 15~30초)';
+      res = await fetch('{{ url_for("create.blog_thumbnail_scene") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          line1:          l1,
+          sub:            document.getElementById('thumbScSub')?.value.trim() || '',
+          badge:          document.getElementById('thumbScBadge')?.value.trim() || '',
+          cta:            document.getElementById('thumbScCta')?.value.trim() || '',
+          theme:          document.getElementById('thumbScTheme')?.value || 'baby_blue',
+          topic:          document.getElementById('thumbScTopic')?.value.trim() || '',
+          character_data: _thumbCharData || '',
+        }),
+      });
+    } else if (_mode === 'design') {
       if (loadTxt) loadTxt.textContent = '디자인 카드 합성 중...';
       const _iconSel = document.getElementById('thumbDzIcons')?.value || '';
       res = await fetch('{{ url_for("create.blog_thumbnail_design") }}', {

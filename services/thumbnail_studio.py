@@ -68,6 +68,12 @@ TEMPLATES = {
         char_slot=(330, 540, 420, 480),
         icon_slots=[(160, 640, 138), (920, 660, 138)],
     ),
+    # AI 씬 배경 위 상단 텍스트 존 (캐릭터·아이콘은 배경에 이미 그려져 있음)
+    'scene_top': dict(
+        text_zone=(MARGIN, 60, W - MARGIN * 2, 360),
+        char_slot=(0, 0, 1, 1),
+        icon_slots=[],
+    ),
 }
 
 
@@ -169,20 +175,78 @@ def _soft_shadow(layer: Image.Image, blur=16, alpha=95) -> Image.Image:
     return black.filter(ImageFilter.GaussianBlur(blur))
 
 
-def _load_asset(src) -> Image.Image | None:
-    """브랜드 에셋 로드 — PIL.Image / 파일경로 / bytes 모두 허용."""
+def _has_transparency(img: Image.Image) -> bool:
+    """이미 투명 영역이 있는(=누끼 처리된) 이미지인지 판별."""
+    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+        return img.convert('RGBA').getchannel('A').getextrema()[0] < 245
+    return False
+
+
+def auto_cutout(img: Image.Image, thresh: int = 30, feather: float = 1.2) -> Image.Image:
+    """단색 배경(흰/파스텔)을 모서리 flood-fill로 제거해 투명 PNG로 만든다 — 무료.
+
+    · 모서리부터 채워 들어가므로 피사체 내부의 흰색(흰 곰 몸통 등)은 보존된다.
+    · 모서리 색이 불균일(단색 배경 아님)하거나 결과가 비정상(거의 다/거의 안 지워짐)이면
+      원본을 그대로 반환한다 → 복잡한 사진 배경은 AI 정밀 누끼로 유도.
+    """
+    rgb = img.convert('RGB')
+    w, h = rgb.size
+    corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+
+    def _d(a, b):
+        return max(abs(a[0] - b[0]), abs(a[1] - b[1]), abs(a[2] - b[2]))
+
+    base = rgb.getpixel(corners[0])
+    if any(_d(base, rgb.getpixel(c)) > thresh * 2 for c in corners[1:]):
+        return img.convert('RGBA')            # 모서리 색 불균일 → 단색 배경 아님, 스킵
+
+    MARKER = (0, 254, 1)                       # 이미지에 거의 없는 마커색
+    work = rgb.copy()
+    seeds = corners + [(w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]
+    for sx, sy in seeds:
+        if work.getpixel((sx, sy)) != MARKER:
+            ImageDraw.floodfill(work, (sx, sy), MARKER, thresh=thresh)
+
+    px = list(work.getdata())
+    frac = sum(1 for p in px if p == MARKER) / float(w * h)
+    if frac < 0.01 or frac > 0.97:            # 아무것도 안 지워짐 / 피사체까지 먹음 → 원본 유지
+        return img.convert('RGBA')
+
+    mask = Image.new('L', (w, h), 255)
+    mask.putdata([0 if p == MARKER else 255 for p in px])
+    if feather:
+        mask = mask.filter(ImageFilter.GaussianBlur(feather))
+    out = img.convert('RGBA')
+    out.putalpha(mask)
+    return out
+
+
+def _load_asset(src, auto_cut: bool = True) -> Image.Image | None:
+    """브랜드 에셋 로드 — PIL.Image / 파일경로 / bytes 모두 허용.
+
+    불투명 이미지(JPG 등)면 auto_cut=True일 때 무료 누끼로 배경을 자동 제거한다.
+    """
     if src is None:
         return None
+    img = None
     try:
         if isinstance(src, Image.Image):
-            return src.convert('RGBA')
-        if isinstance(src, (bytes, bytearray)):
-            return Image.open(BytesIO(src)).convert('RGBA')
-        if isinstance(src, str) and os.path.exists(src):
-            return Image.open(src).convert('RGBA')
+            img = src.convert('RGBA')
+        elif isinstance(src, (bytes, bytearray)):
+            img = Image.open(BytesIO(src)).convert('RGBA')
+        elif isinstance(src, str) and os.path.exists(src):
+            img = Image.open(src).convert('RGBA')
     except Exception as e:
         logger.warning('[thumb_studio] 에셋 로드 실패 → 기본 캐릭터 사용: %s', e)
-    return None
+        return None
+    if img is None:
+        return None
+    if auto_cut and not _has_transparency(img):
+        try:
+            img = auto_cutout(img)
+        except Exception as e:
+            logger.warning('[thumb_studio] 자동 누끼 실패 → 원본 사용: %s', e)
+    return img
 
 
 def _fit_in(box_img: Image.Image, w: int, h: int) -> Image.Image:
@@ -190,6 +254,16 @@ def _fit_in(box_img: Image.Image, w: int, h: int) -> Image.Image:
     r = min(w / box_img.width, h / box_img.height)
     return box_img.resize((max(1, int(box_img.width * r)),
                            max(1, int(box_img.height * r))), Image.LANCZOS)
+
+
+def _fit_cover(box_img: Image.Image, w: int, h: int) -> Image.Image:
+    """비율 유지하며 (w,h)를 꽉 채우고 중앙 크롭 (배경 이미지용)."""
+    r = max(w / box_img.width, h / box_img.height)
+    rz = box_img.resize((max(1, int(box_img.width * r)),
+                         max(1, int(box_img.height * r))), Image.LANCZOS)
+    left = (rz.width - w) // 2
+    top = (rz.height - h) // 2
+    return rz.crop((left, top, left + w, top + h))
 
 
 def _wrap(text: str, font: ImageFont.FreeTypeFont, max_w: int, draw) -> list[str]:
@@ -240,6 +314,19 @@ def _fit_headline(text, font_path, box_w, box_h, draw,
     return lines, font, int(asc * line_gap)
 
 
+def _title_plate(img, cx, top, width, height, radius=44):
+    """씬 상단 타이틀 플레이트 — 흰 라운드 패널 + 소프트 섀도우 (텍스트 뒤 배경)."""
+    x0, x1 = int(cx - width // 2), int(cx + width // 2)
+    sh = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle(
+        [x0, top, x1, top + height], radius=radius, fill=(30, 40, 60, 80))
+    img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(20)))
+    plate = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(plate).rounded_rectangle(
+        [x0, top, x1, top + height], radius=radius, fill=(255, 255, 255, 228))
+    img.alpha_composite(plate)
+
+
 def _draw_center_lines(img, lines, font, cx, y, dy, color, stroke):
     """중앙정렬 텍스트 — 소프트 섀도우 + 굵은 외곽선 2패스."""
     d = ImageDraw.Draw(img)
@@ -271,30 +358,45 @@ def render_thumbnail(
     mascot_src=None,          # 브랜드 마스코트(경로/PIL/bytes). None이면 내장 곰.
     icon_kinds=None,          # 장식 아이콘 종류 리스트. None이면 테마 기본.
     brand_name: str = '',
+    auto_cut: bool = True,    # 불투명 마스코트 업로드 시 무료 자동 누끼 여부
+    bg_image=None,            # AI 씬 배경(경로/PIL/bytes). 있으면 그라데이션·캐릭터·아이콘 스킵.
+    title_plate: bool = True, # 씬 모드에서 상단 타이틀 플레이트(흰 라운드 패널)
 ) -> bytes:
-    """썸네일 1080×1080 PNG(bytes) 생성."""
+    """썸네일 1080×1080 PNG(bytes) 생성.
+
+    bg_image가 주어지면 'AI 씬 하이브리드' 모드로 동작 — 배경 일러스트는 그대로 두고
+    상단 텍스트 존에만 선명한 PIL 한글 텍스트를 얹는다.
+    """
     th = THEMES.get(theme, THEMES['baby_blue'])
+    scene = None
+    if bg_image is not None:
+        scene = _load_asset(bg_image, auto_cut=False)
+    if scene is not None:
+        template = 'scene_top'                    # 씬 모드는 상단 텍스트 존 고정
+        img = _fit_cover(scene, W, H).convert('RGBA')
+    else:
+        img = _bg(th)
     tpl = TEMPLATES.get(template, TEMPLATES['char_right'])
-    img = _bg(th)
     d = ImageDraw.Draw(img)
 
     tz_x, tz_y, tz_w, tz_h = tpl['text_zone']
     cx = tz_x + tz_w // 2
 
-    # ── 캐릭터 슬롯 (그림자 포함, 바닥 정렬) ──────────────────
-    char = _load_asset(mascot_src) or _mascot(tpl['char_slot'][2])
-    cs_x, cs_y, cs_w, cs_h = tpl['char_slot']
-    char = _fit_in(char, cs_w, cs_h)
-    px = cs_x + (cs_w - char.width) // 2
-    py = cs_y + (cs_h - char.height)        # 바닥 정렬
-    img.alpha_composite(_soft_shadow(char), dest=(px + 8, py + 14))
-    img.alpha_composite(char, dest=(px, py))
+    if scene is None:
+        # ── 캐릭터 슬롯 (그림자 포함, 바닥 정렬) ──────────────────
+        char = _load_asset(mascot_src, auto_cut=auto_cut) or _mascot(tpl['char_slot'][2])
+        cs_x, cs_y, cs_w, cs_h = tpl['char_slot']
+        char = _fit_in(char, cs_w, cs_h)
+        px = cs_x + (cs_w - char.width) // 2
+        py = cs_y + (cs_h - char.height)        # 바닥 정렬
+        img.alpha_composite(_soft_shadow(char), dest=(px + 8, py + 14))
+        img.alpha_composite(char, dest=(px, py))
 
-    # ── 아이콘 슬롯 ─────────────────────────────────────────
-    kinds = icon_kinds or ['sun', 'drop']
-    for (icx, icy, isz), kind in zip(tpl['icon_slots'], kinds):
-        g = _icon(kind, isz)
-        img.alpha_composite(g, dest=(icx - isz // 2, icy - isz // 2))
+        # ── 아이콘 슬롯 ─────────────────────────────────────────
+        kinds = icon_kinds or ['sun', 'drop']
+        for (icx, icy, isz), kind in zip(tpl['icon_slots'], kinds):
+            g = _icon(kind, isz)
+            img.alpha_composite(g, dest=(icx - isz // 2, icy - isz // 2))
 
     # ── 텍스트 존: 뱃지 + 헤드라인 + 서브 (수직 중앙 팩) ──────
     d = ImageDraw.Draw(img)
@@ -315,6 +417,16 @@ def render_thumbnail(
 
     block_h = badge_h + hl_h + sub_reserve
     y = tz_y + max(0, (tz_h - block_h) // 2)
+
+    # ── 씬 모드: 텍스트 뒤 타이틀 플레이트 (예시처럼 배너풍) ──────
+    if scene is not None and title_plate:
+        plate_w = 0
+        for ln in hl_lines:
+            bb = d.textbbox((0, 0), ln, font=hl_font, stroke_width=stroke)
+            plate_w = max(plate_w, bb[2] - bb[0])
+        plate_w = int(min(tz_w + 24, plate_w + 100))
+        _title_plate(img, cx, y - 30, plate_w, block_h + 56)
+        d = ImageDraw.Draw(img)
 
     if badge:
         bf = ImageFont.truetype(_find_korean_font(bold=True), 44)

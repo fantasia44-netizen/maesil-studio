@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import uuid as _uuid
+import requests
 from flask import render_template, request, jsonify, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 
@@ -1011,6 +1012,7 @@ def blog_thumbnail_design():
     template   = (data.get('template') or 'char_right').strip()
     brand_name = (data.get('brand_name') or '').strip()[:24]
     icons      = data.get('icon_kinds') if isinstance(data.get('icon_kinds'), list) else None
+    auto_cut   = data.get('auto_cutout', True) is not False   # 무료 자동 누끼 (기본 ON)
 
     # 선택적 브랜드 마스코트 (base64 data URL → bytes)
     mascot_bytes = None
@@ -1027,6 +1029,7 @@ def blog_thumbnail_design():
             headline=headline, sub=sub, badge=badge, cta=cta,
             theme=theme, template=template, icon_kinds=icons,
             mascot_src=mascot_bytes, brand_name=brand_name,
+            auto_cut=auto_cut,
         )
     except Exception as e:
         logger.error(f'[blog/thumbnail/design] 렌더 실패: {e}', exc_info=True)
@@ -1046,6 +1049,257 @@ def blog_thumbnail_design():
     logger.info(f'[blog/thumbnail/design] 생성 완료 uid={_uid[:8]} '
                 f'theme={theme} tpl={template} char={"Y" if mascot_bytes else "N"}')
     return jsonify(ok=True, url=url, style='design', cost=0)
+
+
+# ─────────────────────────────────────────────────────────────
+# 캐릭터 AI 정밀 누끼 (fal birefnet) — 무료 PIL 누끼로 부족할 때
+# ─────────────────────────────────────────────────────────────
+_CUTOUT_COST    = 30
+_TRANSFORM_COST = 100
+
+
+def _charge_ai_points(cost: int, note: str) -> str | None:
+    """AI 부가기능 포인트 차감. 성공 시 None, 부족/실패 시 사용자 메시지 반환."""
+    import uuid as _uuid
+    from services.point_service import get_balance, use_points, InsufficientPoints
+    try:
+        if get_balance(current_user) < cost:
+            bal = get_balance(current_user)
+            return f'포인트가 부족합니다. (필요: {cost}P, 잔액: {bal}P)'
+        use_points(current_user, 'blog_thumbnail', str(_uuid.uuid4()),
+                   cost_override=cost, note_override=note)
+        return None
+    except InsufficientPoints as e:
+        return str(e)
+
+
+@create_bp.route('/blog/thumbnail/cutout', methods=['POST'])
+@login_required
+def blog_thumbnail_cutout():
+    """캐릭터 이미지 AI 정밀 누끼 → 투명 PNG data URL 반환."""
+    import base64 as _b64
+    data = request.get_json(force=True) or {}
+    char_data = (data.get('character_data') or '').strip()
+    if not char_data.startswith('data:image/'):
+        return jsonify(ok=False, message='캐릭터 이미지를 먼저 업로드해 주세요.')
+
+    _uid = str(getattr(current_user, 'id', '') or '')
+    from services.imagen_service import remove_background_ai
+    try:
+        result_url = remove_background_ai(char_data, _uid or 'anon')
+    except Exception as e:
+        logger.error(f'[blog/thumbnail/cutout] AI 누끼 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'AI 누끼 실패 ({str(e)[:100]})')
+
+    # 결과(투명 PNG) → data URL 로 변환해 프론트 캐릭터 슬롯에 그대로 재사용
+    try:
+        r = requests.get(result_url, timeout=30)
+        r.raise_for_status()
+        out = f"data:image/png;base64,{_b64.b64encode(r.content).decode()}"
+    except Exception as e:
+        logger.warning(f'[blog/thumbnail/cutout] 결과 fetch 실패 → URL 반환: {e}')
+        out = result_url
+
+    err = _charge_ai_points(_CUTOUT_COST, '캐릭터 AI 누끼')
+    if err:
+        return jsonify(ok=False, message=err)
+    logger.info(f'[blog/thumbnail/cutout] 완료 uid={_uid[:8]} cost={_CUTOUT_COST}P')
+    return jsonify(ok=True, character_data=out, cost=_CUTOUT_COST)
+
+
+@create_bp.route('/blog/thumbnail/transform-character', methods=['POST'])
+@login_required
+def blog_thumbnail_transform_character():
+    """캐릭터 이미지 변형(img2img) → 변형된 투명 PNG data URL 반환."""
+    import base64 as _b64
+    from io import BytesIO as _BytesIO
+    from PIL import Image as _Image
+    data = request.get_json(force=True) or {}
+    char_data = (data.get('character_data') or '').strip()
+    style     = (data.get('style') or '').strip()[:120]
+    if not char_data.startswith('data:image/'):
+        return jsonify(ok=False, message='캐릭터 이미지를 먼저 업로드해 주세요.')
+    if not style:
+        return jsonify(ok=False, message='원하는 변형 스타일을 입력해 주세요.')
+
+    _uid = str(getattr(current_user, 'id', '') or '')
+    from services.imagen_service import transform_character
+    try:
+        result_url = transform_character(char_data, style, _uid or 'anon')
+    except Exception as e:
+        logger.error(f'[blog/thumbnail/transform] 변형 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'캐릭터 변형 실패 ({str(e)[:100]})')
+
+    # 결과(흰 배경 스티커) → 무료 누끼로 투명 처리 후 data URL 반환
+    try:
+        r = requests.get(result_url, timeout=30)
+        r.raise_for_status()
+        from services.thumbnail_studio import auto_cutout
+        cut = auto_cutout(_Image.open(_BytesIO(r.content)))
+        buf = _BytesIO()
+        cut.save(buf, format='PNG')
+        out = f"data:image/png;base64,{_b64.b64encode(buf.getvalue()).decode()}"
+    except Exception as e:
+        logger.warning(f'[blog/thumbnail/transform] 후처리 실패 → 원본 URL 반환: {e}')
+        out = result_url
+
+    err = _charge_ai_points(_TRANSFORM_COST, '캐릭터 AI 변형')
+    if err:
+        return jsonify(ok=False, message=err)
+    logger.info(f'[blog/thumbnail/transform] 완료 uid={_uid[:8]} '
+                f'style="{style[:30]}" cost={_TRANSFORM_COST}P')
+    return jsonify(ok=True, character_data=out, cost=_TRANSFORM_COST)
+
+
+# ─────────────────────────────────────────────────────────────
+# AI 씬 썸네일 — 브랜드 마스코트 레퍼런스로 상황 장면 생성(nano-banana)
+#   + 상단에 선명한 PIL 한글 텍스트 합성 (하이브리드)
+# ─────────────────────────────────────────────────────────────
+_SCENE_COST = 200
+
+
+def _mascot_owner_filter(q):
+    """마스코트 조회를 operator/user 소유 범위로 제한."""
+    oid = getattr(current_user, 'operator_id', None)
+    if oid:
+        return q.or_(f'operator_id.eq.{oid},user_id.eq.{current_user.id}')
+    return q.eq('user_id', current_user.id)
+
+
+def _get_registered_mascot_urls(limit: int = 2) -> list:
+    """등록된 브랜드 마스코트 URL 목록(최신순). 없으면 빈 리스트."""
+    if not current_app.supabase:
+        return []
+    try:
+        q = (current_app.supabase.table('creations')
+             .select('output_data, created_at')
+             .eq('creation_type', 'brand_mascot'))
+        q = _mascot_owner_filter(q)
+        rows = q.order('created_at', desc=True).limit(limit).execute().data or []
+        urls = [(r.get('output_data') or {}).get('mascot_url') for r in rows]
+        return [u for u in urls if u]
+    except Exception as e:
+        logger.warning(f'[blog/thumbnail/mascot] 조회 실패: {e}')
+        return []
+
+
+@create_bp.route('/blog/thumbnail/mascot', methods=['GET'])
+@login_required
+def blog_thumbnail_mascot_get():
+    """등록된 브랜드 마스코트 URL 목록 반환 (패널 진입 시 자동 로드용)."""
+    return jsonify(ok=True, mascots=_get_registered_mascot_urls())
+
+
+@create_bp.route('/blog/thumbnail/mascot/save', methods=['POST'])
+@login_required
+def blog_thumbnail_mascot_save():
+    """현재 캐릭터(투명 PNG data URL)를 브랜드 기본 마스코트로 등록. 무료."""
+    data = request.get_json(force=True) or {}
+    char_data = (data.get('character_data') or '').strip()
+    if not char_data.startswith('data:image/'):
+        return jsonify(ok=False, message='등록할 캐릭터 이미지가 없습니다.')
+
+    _uid = str(getattr(current_user, 'id', '') or '')
+    from services.imagen_service import upload_to_supabase
+    try:
+        url = upload_to_supabase(char_data, _uid, 'brand_mascot.png')
+    except Exception as e:
+        logger.error(f'[blog/thumbnail/mascot/save] 업로드 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='마스코트 저장에 실패했습니다.')
+
+    try:
+        if current_app.supabase:
+            now_s = now_kst().isoformat()
+            row = {
+                'id': str(_uuid.uuid4()), 'user_id': _uid,
+                'creation_type': 'brand_mascot',
+                'input_data': {}, 'output_data': {'mascot_url': url},
+                'points_used': 0, 'status': 'done',
+                'created_at': now_s, 'updated_at': now_s,
+            }
+            if getattr(current_user, 'operator_id', None):
+                row['operator_id'] = current_user.operator_id
+            current_app.supabase.table('creations').insert(row).execute()
+    except Exception as e:
+        logger.warning(f'[blog/thumbnail/mascot/save] 기록 실패(무시): {e}')
+
+    logger.info(f'[blog/thumbnail/mascot/save] 등록 완료 uid={_uid[:8]}')
+    return jsonify(ok=True, url=url)
+
+
+@create_bp.route('/blog/thumbnail/scene', methods=['POST'])
+@login_required
+def blog_thumbnail_scene():
+    """AI 씬 썸네일 — 마스코트 레퍼런스로 장면 생성 후 상단 텍스트 하이브리드 합성."""
+    import base64 as _b64, time as _time
+    data = request.get_json(force=True) or {}
+    headline = (data.get('line1') or '').strip()[:40]
+    topic    = (data.get('topic') or data.get('line1') or '').strip()[:80]
+    if not headline:
+        return jsonify(ok=False, message='메인 텍스트(헤드라인)를 입력해 주세요.')
+
+    sub   = (data.get('sub') or '').strip()[:40]
+    badge = (data.get('badge') or '').strip()[:20]
+    cta   = (data.get('cta') or '').strip()[:24]
+    theme = (data.get('theme') or 'baby_blue').strip()
+
+    # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 등록된 브랜드 마스코트
+    refs = []
+    char_data = (data.get('character_data') or '').strip()
+    if char_data.startswith('data:image/'):
+        refs = [char_data]
+    else:
+        refs = _get_registered_mascot_urls()
+    if not refs:
+        return jsonify(ok=False,
+                       message='브랜드 캐릭터를 업로드하거나 먼저 등록해 주세요.')
+
+    _uid = str(getattr(current_user, 'id', '') or '')
+
+    # 색 테마 → AI 배경 색 팔레트 (텍스트뿐 아니라 배경색도 테마 연동)
+    _THEME_BG = {
+        'baby_blue':   'soft pastel baby blue',
+        'food_cream':  'warm cream and soft orange',
+        'fresh_green': 'fresh pastel mint green',
+        'warm_pink':   'soft warm pink',
+    }
+    bg_color = _THEME_BG.get(theme, 'soft pastel')
+
+    # 1) AI 씬 생성
+    from services.imagen_service import generate_scene, upload_to_supabase
+    try:
+        scene_url = generate_scene(refs, topic, _uid or 'anon', bg_color=bg_color)
+    except Exception as e:
+        logger.error(f'[blog/thumbnail/scene] 씬 생성 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'AI 씬 생성 실패 ({str(e)[:100]})')
+
+    # 2) 씬 이미지 fetch → 상단 텍스트 하이브리드 합성
+    from services.thumbnail_studio import render_thumbnail
+    try:
+        r = requests.get(scene_url, timeout=60)
+        r.raise_for_status()
+        img_bytes = render_thumbnail(
+            headline=headline, sub=sub, badge=badge, cta=cta, theme=theme,
+            bg_image=r.content,
+        )
+    except Exception as e:
+        logger.error(f'[blog/thumbnail/scene] 텍스트 합성 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'텍스트 합성 실패 ({str(e)[:100]})')
+
+    # 3) 업로드 + 포인트 차감
+    b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
+    try:
+        url = upload_to_supabase(b64, _uid, f'blog_thumb_scene_{int(_time.time())}.png')
+    except Exception as e:
+        logger.warning(f'[blog/thumbnail/scene] 업로드 실패 → data URL 반환: {e}')
+        url = b64
+
+    err = _charge_ai_points(_SCENE_COST, 'AI 씬 썸네일')
+    if err:
+        return jsonify(ok=False, message=err)
+    logger.info(f'[blog/thumbnail/scene] 완료 uid={_uid[:8]} theme={theme} '
+                f'topic="{topic[:30]}" cost={_SCENE_COST}P')
+    return jsonify(ok=True, url=url, style='scene', cost=_SCENE_COST)
 
 
 # ─────────────────────────────────────────────────────────────
