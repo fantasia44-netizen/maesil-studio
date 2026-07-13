@@ -2318,6 +2318,10 @@ document.addEventListener('DOMContentLoaded', () => {
   selectImgCount(5, document.querySelector('[data-count="5"]'));
   _syncThumbBrandMark();   // 초기 워터마크 셋업
   updateThumbCostBadge();  // 초기 배지 상태
+  // 에디터 기본 펼침 상태에서 선택된 모드에 맞게 패널/탭 동기화
+  // (AI 씬·디자인 카드형이면 클래식 전용 '배경 유형' 등을 확실히 숨김)
+  const _initMode = document.querySelector('input[name="thumbStyleMode"]:checked')?.value || 'classic';
+  if (typeof setThumbMode === 'function') setThumbMode(_initMode);
 });
 
 // ── Step 4: 이미지 스타일 선택 ───────────────────────────────
