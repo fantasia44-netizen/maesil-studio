@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 ENGINE_COST_MAP = {
     'flux_preview':  'img_preview',   # FLUX Schnell 50P
+    'flux_dev':      'img_dev',       # FLUX dev 80P — 인체/손 정확도↑
     'ideogram':      'img_ideogram',  # Ideogram 200P
     'card_news':     'img_card_news', # 카드뉴스 800P
     'bg_replace':    'bg_replace',    # 배경 교체 80P

@@ -61,6 +61,7 @@ def _translate_prompt(text: str) -> str:
 # ── 엔진별 포인트 비용 ───────────────────────────────────
 IMAGE_COSTS = {
     'flux_preview':  50,   # FLUX Schnell — 빠른 라이프스타일 씬
+    'flux_dev':      80,   # FLUX dev — 인체/손 정확도↑, 네거티브 반영 (본문 이미지 기본)
     'flux_standard': 300,  # FLUX Pro — 브랜드 에셋
     'flux_hq':       600,  # FLUX Pro Max — 최고 품질
     'ideogram':      400,  # Ideogram 3.0 — 한글 타이포
@@ -88,7 +89,7 @@ def generate_image(prompt: str, engine: str = 'flux_standard',
     if style_preset and style_preset in STYLE_PRESETS:
         prompt = f'{prompt}, {STYLE_PRESETS[style_preset]}'
 
-    if engine in ('flux_preview', 'flux_standard', 'flux_hq'):
+    if engine in ('flux_preview', 'flux_dev', 'flux_standard', 'flux_hq'):
         return _generate_flux(prompt, engine, size)
     elif engine == 'ideogram':
         return _generate_ideogram(prompt, size)
@@ -371,10 +372,17 @@ def generate_card_news(texts: list[str], background_prompt: str,
 # ════════════════════════════════════════════════════════
 
 _FAL_MODELS = {
-    'flux_preview':  'fal-ai/flux/schnell',      # Klein/Schnell — 고속·저가
+    'flux_preview':  'fal-ai/flux/schnell',      # Klein/Schnell — 고속·저가(네거티브 무시)
+    'flux_dev':      'fal-ai/flux/dev',           # dev — 인체/손 정확도↑, 네거티브 반영
     'flux_standard': 'fal-ai/flux-pro',           # Pro — 브랜드 에셋
     'flux_hq':       'fal-ai/flux-pro/v1.1-ultra',# Max — 최고화질
 }
+
+# 인물·손이 포함된 프롬프트 감지 (dev/pro는 인체 정확도 긍정 프롬프트를 반영)
+_HUMAN_RE = re.compile(
+    r'\b(man|woman|men|women|person|people|boy|girl|lady|guy|kid|child|children|'
+    r'baby|hand|hands|holding|hold|arm|arms|finger|fingers|portrait|model|human|'
+    r'face|couple|family|worker|customer|mother|father)\b', re.I)
 
 
 # Flux는 CJK 문자를 생성하려 할 때 중국어/일본어로 출력하는 경향 — 항상 억제
@@ -404,6 +412,13 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
             cleaned = re.sub(r'[가-힣ㄱ-ㆎᄀ-ᇿ一-鿿぀-ヿ㐀-䶿]+', ' ', prompt)
             prompt = re.sub(r'\s+', ' ', cleaned).strip() or 'lifestyle scene, natural lighting'
         logger.debug(f'[flux] 번역 후 프롬프트: "{prompt[:80]}"')
+
+    # 인물/손 포함 시 인체 정확도 긍정 프롬프트 (dev/pro가 반영 — schnell은 무시)
+    if _HUMAN_RE.search(prompt):
+        prompt = prompt.rstrip() + (
+            ', natural anatomically correct hands with exactly five fingers each'
+            ', well-formed hands and fingers, correct human body proportions'
+        )
 
     # CJK 문자 억제 (Flux가 중국어/일본어 글자를 생성하는 현상 차단)
     prompt = prompt.rstrip() + _NO_CJK

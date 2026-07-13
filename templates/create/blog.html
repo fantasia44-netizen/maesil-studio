@@ -2308,7 +2308,7 @@ function selectImgCount(n, el) {
   });
   // 힌트 업데이트
   const aiCount = productImageUrl ? n - 1 : n;
-  const cost    = aiCount * 50;
+  const cost    = aiCount * 80;
   const hints   = { 3:'짧은 정보성 포스트', 5:'일반 블로그 포스트', 7:'상세 리뷰형 포스트', 10:'긴 스토리텔링 포스트' };
   document.getElementById('imgCountHint').textContent =
     `${hints[n] || ''} · AI 생성 ${aiCount}장 · 약 ${cost}P`;
@@ -2390,7 +2390,7 @@ function renderPromptCards(prompts) {
   const aiSlots  = prompts.length;
   const thumbCost = thumbEnabled
     ? (document.getElementById('thumbUseFlux')?.checked ? 50 : 0) : 0;
-  const cost     = aiSlots * 50 + thumbCost;
+  const cost     = aiSlots * 80 + thumbCost;
   const thumbPfx = thumbEnabled ? '썸네일 1장 + ' : '';
   document.getElementById('totalImgCost').textContent =
     productImageUrl
@@ -2639,7 +2639,7 @@ async function generateAllImages() {
       const res  = await fetch('/create/image/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ engine: 'flux_preview', prompt, size })
+        body: JSON.stringify({ engine: 'flux_dev', prompt, size })
       });
       const data = await res.json();
       generatedImages.push({
@@ -2917,7 +2917,7 @@ function clearSlotManual(idx) {
 function _updateTotalCostBadge() {
   const manualCount = slotManualImages.filter(Boolean).length;
   const aiCount     = (window._prompts?.length || 0) - manualCount;
-  const cost        = aiCount * 50;
+  const cost        = aiCount * 80;
   const el          = document.getElementById('totalImgCost');
   if (!el) return;
   const parts = [];
@@ -2994,7 +2994,7 @@ async function blogRegenGenerate() {
     const res  = await fetch('/create/image/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ engine: 'flux_preview', prompt: fullPrompt, size })
+      body: JSON.stringify({ engine: 'flux_dev', prompt: fullPrompt, size })
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);

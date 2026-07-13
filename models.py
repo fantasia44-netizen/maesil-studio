@@ -56,6 +56,7 @@ POINT_COSTS = {
     'press_release':  200,
     # 이미지 생성 — FLUX Schnell + Ideogram만 운영
     'img_preview':     50,   # FLUX Schnell — 빠른 라이프스타일 씬
+    'img_dev':         80,   # FLUX dev — 인체/손 정확도↑ (본문 이미지 기본)
     'img_ideogram':   200,   # Ideogram 3.0 — 한글 타이포 (원가 ~110원)
     'bg_replace':      80,   # Bria — 누끼컷 배경 교체 (원가 ~55원)
     'img_card_news':  800,   # FLUX + PIL 합성 카드뉴스
@@ -172,6 +173,7 @@ CREATION_LABELS = {
     'press_release':   '보도자료',
     # 이미지
     'img_preview':      '이미지 생성',
+    'img_dev':          '이미지 생성',
     'img_ideogram':     '이미지 생성 (한글)',
     'bg_replace':       '배경 교체',
     'bg_remove_adv':    '배경 제거',
