@@ -85,9 +85,28 @@
         </div>
       </div>
 
+      <!-- 발행 대상 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">발행 대상</label>
+        <div class="btn-group w-100" role="group" style="font-size:.8rem">
+          <input type="radio" class="btn-check" name="expTargets" id="expTgBoth" value="both" checked onchange="renderExpGrid()">
+          <label class="btn btn-outline-secondary py-2" for="expTgBoth">
+            <i class="bi bi-collection me-1"></i>네이버 + 구글(워드프레스) 세트 <span class="text-muted">+50P</span>
+          </label>
+          <input type="radio" class="btn-check" name="expTargets" id="expTgNaver" value="naver" onchange="renderExpGrid()">
+          <label class="btn btn-outline-secondary py-2" for="expTgNaver">
+            <i class="bi bi-journal-text me-1"></i>네이버용만
+          </label>
+        </div>
+        <div class="text-muted mt-1" style="font-size:.7rem">
+          세트는 같은 경험을 <b>네이버판</b>(복붙용)과 <b>구글판</b>(SEO 제목·메타·H2 구조·FAQ·알트텍스트, 워드프레스용)으로
+          문장을 다르게 써서 한 번에 만듭니다 — 중복 콘텐츠 회피.
+        </div>
+      </div>
+
       <button id="expGenBtn" class="btn w-100 fw-semibold py-2 text-white"
               style="background:#0d9488" onclick="generateExperience()">
-        <i class="bi bi-magic me-1"></i><span id="expGenBtnText">경험담 글 생성 ({{ cost }}P)</span>
+        <i class="bi bi-magic me-1"></i><span id="expGenBtnText">경험담 글 생성</span>
       </button>
       <div id="expError" class="alert alert-danger mt-3 d-none" style="font-size:.8rem"></div>
     </div>
@@ -96,21 +115,35 @@
   <!-- 결과 -->
   <div id="expResultCard" class="card mb-4 d-none">
     <div class="card-header py-2 d-flex align-items-center">
-      <h6 class="mb-0 fw-bold small me-auto"><i class="bi bi-file-text me-1"></i>완성된 글</h6>
-      <button class="btn btn-outline-secondary btn-sm me-1" style="font-size:.72rem" onclick="copyExpText()">
-        <i class="bi bi-clipboard me-1"></i>글 복사
+      <ul class="nav nav-pills me-auto" style="font-size:.76rem" id="expResultTabs">
+        <li class="nav-item">
+          <a class="nav-link active py-1 px-3" href="#" onclick="switchExpTab('naver');return false" id="expTabNaverBtn">
+            <i class="bi bi-journal-text me-1"></i>네이버용
+          </a>
+        </li>
+        <li class="nav-item d-none" id="expTabGoogleLi">
+          <a class="nav-link py-1 px-3" href="#" onclick="switchExpTab('google');return false" id="expTabGoogleBtn">
+            <i class="bi bi-google me-1"></i>구글·워드프레스용
+          </a>
+        </li>
+      </ul>
+      <button class="btn btn-outline-secondary btn-sm" style="font-size:.72rem" onclick="copyExpText()">
+        <i class="bi bi-clipboard me-1"></i>현재 탭 복사
       </button>
-      <span class="text-muted" style="font-size:.68rem">복사 → 네이버 에디터에 붙여넣고 [사진 N] 자리에 해당 사진 삽입</span>
     </div>
-    <div class="card-body p-4" id="expResultBody"
-         style="white-space:pre-wrap;font-size:.88rem;line-height:1.75"></div>
+    <div class="card-body p-4">
+      <div class="text-muted mb-2" style="font-size:.68rem" id="expResultHint"></div>
+      <div id="expResultBody" style="white-space:pre-wrap;font-size:.88rem;line-height:1.75"></div>
+    </div>
   </div>
 
 </div>
 
 <script>
 let _expPhotos = [];   // [{dataUrl, name}] 업로드 순서 유지
-let _expText   = '';   // 생성된 원문 (마커 포함)
+let _expNaver  = '';   // 네이버판 원문 (마커 포함)
+let _expGoogle = '';   // 구글판 원문 (마크다운)
+let _expTab    = 'naver';
 
 // ── 사진 업로드: 클라이언트 리사이즈(최대 1024px, JPEG) 후 목록에 추가 ──
 async function onExpPhotos(inp) {
@@ -141,7 +174,9 @@ function _resizeImage(file, maxSide, quality) {
   });
 }
 function _expBtnLabel() {
-  return `경험담 글 생성 (${_expPhotos.length ? '{{ cost }}' : '100'}P)`;
+  const both = document.querySelector('input[name="expTargets"]:checked')?.value !== 'naver';
+  const base = _expPhotos.length ? parseInt('{{ cost }}') : 100;
+  return `경험담 글 생성 (${base + (both ? 50 : 0)}P)`;
 }
 function renderExpGrid() {
   const bt = document.getElementById('expGenBtnText');
@@ -179,13 +214,18 @@ async function generateExperience() {
         visit_at: document.getElementById('expVisitAt').value.trim(),
         tone:     document.getElementById('expTone').value,
         length:   document.getElementById('expLength').value,
+        targets:  document.querySelector('input[name="expTargets"]:checked')?.value || 'both',
         photos:   _expPhotos.map(p => p.dataUrl),
       }),
     });
     const j = await res.json();
     if (!j.ok) throw new Error(j.message || '생성 실패');
-    _expText = j.text;
-    renderExpResult(j.text);
+    _expNaver  = j.text || '';
+    _expGoogle = j.google_text || '';
+    document.getElementById('expTabGoogleLi').classList.toggle('d-none', !_expGoogle);
+    switchExpTab('naver');
+    document.getElementById('expResultCard').classList.remove('d-none');
+    document.getElementById('expResultCard').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     errEl.textContent = '생성 실패: ' + e.message;
     errEl.classList.remove('d-none');
@@ -195,21 +235,31 @@ async function generateExperience() {
   }
 }
 
-// ── 결과 표시: [사진 N] 마커 자리에 실제 사진 미리보기 ─────────
-function renderExpResult(text) {
+// ── 결과 표시: 탭 전환 + [사진 N] 마커 자리에 실제 사진 미리보기 ──
+function switchExpTab(t) {
+  _expTab = t;
+  document.getElementById('expTabNaverBtn').classList.toggle('active', t === 'naver');
+  document.getElementById('expTabGoogleBtn')?.classList.toggle('active', t === 'google');
+  const text = t === 'google' ? _expGoogle : _expNaver;
+  const hint = t === 'google'
+    ? '워드프레스 에디터에 붙여넣으면 ## 소제목이 자동 변환됩니다. [사진 N] 자리에 사진 삽입, 알트텍스트 제안 활용.'
+    : '네이버 에디터에 붙여넣고 [사진 N] 자리에 해당 사진을 삽입하세요.';
+  document.getElementById('expResultHint').textContent = hint;
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let html = esc(text);
   html = html.replace(/\[사진\s*(\d+)\]/g, (m, n) => {
     const p = _expPhotos[parseInt(n) - 1];
-    return p ? `<div class="my-2"><img src="${p.dataUrl}" style="max-width:70%;border-radius:10px;border:1px solid #e5e7eb"><div class="text-muted" style="font-size:.68rem">[사진 ${n}] — 네이버 에디터에서 이 자리에 삽입</div></div>` : m;
+    return p ? `<div class="my-2"><img src="${p.dataUrl}" style="max-width:70%;border-radius:10px;border:1px solid #e5e7eb"><div class="text-muted" style="font-size:.68rem">[사진 ${n}] — 이 자리에 삽입</div></div>` : m;
   });
   document.getElementById('expResultBody').innerHTML = html;
-  document.getElementById('expResultCard').classList.remove('d-none');
-  document.getElementById('expResultCard').scrollIntoView({ behavior: 'smooth' });
 }
 function copyExpText() {
-  if (!_expText) return;
-  navigator.clipboard.writeText(_expText).then(() => alert('복사됐습니다. 네이버 에디터에 붙여넣고 [사진 N] 자리에 사진을 넣어주세요.'));
+  const text = _expTab === 'google' ? _expGoogle : _expNaver;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() =>
+    alert(_expTab === 'google'
+      ? '구글판 복사됐습니다. 워드프레스에 붙여넣으세요.'
+      : '네이버판 복사됐습니다. 네이버 에디터에 붙여넣고 [사진 N] 자리에 사진을 넣어주세요.'));
 }
 </script>
 {% endblock %}

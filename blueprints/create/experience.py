@@ -82,11 +82,13 @@ def experience_generate():
     exp_type = data.get('exp_type') if data.get('exp_type') in _TYPE_GUIDES else 'place'
     tone     = data.get('tone') if data.get('tone') in _TONES else 'friendly'
     length   = data.get('length') if data.get('length') in _LENGTHS else 'medium'
+    both     = data.get('targets') != 'naver'   # 기본: 네이버+구글 세트
     place    = (data.get('place') or '').strip()[:60]
     visit_at = (data.get('visit_at') or '').strip()[:40]
 
-    # 포인트 확인·차감 준비 — 사진 없으면(텍스트 전용, vision 미사용) 할인
-    cost = POINT_COSTS.get('experience_blog', 150) if photos else 100
+    # 포인트 확인·차감 준비 — 사진 없으면(텍스트 전용, vision 미사용) 할인,
+    # 구글판 동시 생성은 +50P (출력 토큰 증가분)
+    cost = (POINT_COSTS.get('experience_blog', 150) if photos else 100) + (50 if both else 0)
     from services.point_service import get_balance, use_points, InsufficientPoints
     balance = get_balance(current_user)
     if balance < cost:
@@ -125,14 +127,42 @@ def experience_generate():
         '- 광고 문구·과장("인생 맛집", "무조건 가세요" 남발) 금지. 솔직한 장단점.\n'
         + photo_rule +
         '- 네이버 블로그 스타일: 2~4문장짜리 짧은 문단, 문단 사이 빈 줄, 소제목 활용.\n'
-        '- 마크다운 기호(#, **, -) 대신 일반 텍스트와 줄바꿈만 사용한다(네이버 에디터 복붙용).'
+        + ('- 네이버판은 마크다운 기호 없이 일반 텍스트만(에디터 복붙용), '
+           '구글판은 마크다운 소제목(##)을 사용한다.'
+           if both else
+           '- 마크다운 기호(#, **, -) 대신 일반 텍스트와 줄바꿈만 사용한다(네이버 에디터 복붙용).')
     )
     _len_label, len_guide, len_tokens = _LENGTHS[length]
+    naver_format = (
+        '제목 후보 3개(각 25자 내외, 검색어가 앞에 오게) → 빈 줄 → 본문'
+        + ('(사진 마커 포함)' if images else '(스크린샷 추천 힌트 포함)')
+        + ' → 마지막에 해시태그 8~12개(#태그 형식 한 줄). '
+          '마크다운 기호 없이 일반 텍스트만.'
+    )
+    google_format = (
+        '워드프레스(구글 검색용) 판. 마크다운 사용. 순서:\n'
+        '  SEO 제목: (60자 이내, 핵심 검색어 앞배치)\n'
+        '  메타 설명: (150자 이내)\n'
+        '  슬러그: (영문 소문자-하이픈)\n'
+        '  본문: ## / ### 소제목으로 구조화. 같은 경험이지만 네이버판을 복사하지 말고 '
+        '문장·구성을 다르게 쓴다(중복 콘텐츠 회피). 사진 마커는 동일하게 [사진 N]을 쓰되 '
+        '각 마커 다음 줄에 "알트텍스트: ..." 제안을 붙인다.\n'
+        '  FAQ: 독자가 검색할 질문 3~5개를 ### 질문 + 답변으로.\n'
+        '  태그: 쉼표로 구분한 키워드 8~10개.'
+    )
+    if both:
+        output_rule = (
+            '아래 두 가지 판을 모두 작성하세요. 반드시 이 구분자를 그대로 사용:\n'
+            '[[[NAVER]]]\n(네이버판 — ' + naver_format + ')\n'
+            '[[[GOOGLE]]]\n(' + google_format + ')'
+        )
+    else:
+        output_rule = '출력 형식:\n' + naver_format
     user_prompt = (
         f'글 유형: {type_label}\n'
         f'권장 구성: {structure}\n'
         f'문체: {_TONES[tone]}\n'
-        f'분량: {len_guide} (공백 포함 기준 — 메모가 짧아 채울 내용이 없으면 억지로 '
+        f'분량: 판별 {len_guide} (공백 포함 기준 — 메모가 짧아 채울 내용이 없으면 억지로 '
         f'늘리지 말고 자연스러운 선에서 마무리)\n'
         + (f'장소/제품명: {place}\n' if place else '')
         + (f'시기: {visit_at}\n' if visit_at else '')
@@ -142,11 +172,10 @@ def experience_generate():
         + ('위 사진들을 순서대로 살펴보고, 사진 내용과 메모를 엮어 '
            if images else '위 메모의 경험을 살려 ')
         + '경험담 블로그 글을 작성하세요.\n'
-          '출력 형식:\n'
-          '제목 후보 3개(각 25자 내외, 검색어가 앞에 오게) → 빈 줄 → 본문'
-        + ('(사진 마커 포함)' if images else '(스크린샷 추천 힌트 포함)')
-        + ' → 마지막에 해시태그 8~12개(#태그 형식 한 줄).'
+        + output_rule
     )
+    if both:
+        len_tokens += 4000   # 구글판 출력 여유
 
     try:
         if images:
@@ -158,6 +187,15 @@ def experience_generate():
     except Exception as e:
         logger.error(f'[experience] 생성 실패: {e}', exc_info=True)
         return jsonify(ok=False, message=f'글 생성에 실패했습니다. ({str(e)[:100]})')
+
+    # 두 판 분리 — 구분자 없으면 전체를 네이버판으로 폴백
+    naver_text, google_text = text.replace('[[[NAVER]]]', '').strip(), ''
+    if both and '[[[GOOGLE]]]' in text:
+        head, _, tail = text.partition('[[[GOOGLE]]]')
+        naver_text = head.replace('[[[NAVER]]]', '').strip()
+        google_text = tail.strip()
+    elif both:
+        logger.warning('[experience] 구분자 파싱 실패 — 전체를 네이버판으로 반환')
 
     # 포인트 차감 + creations 기록
     cid = str(_uuid.uuid4())
@@ -175,9 +213,10 @@ def experience_generate():
                 'id': cid, 'user_id': current_user.id,
                 'creation_type': 'experience_blog',
                 'input_data': {'exp_type': exp_type, 'tone': tone, 'length': length,
+                               'targets': 'both' if both else 'naver',
                                'place': place, 'visit_at': visit_at, 'memo': memo[:500],
                                'photo_count': len(images)},
-                'output_data': {'text': text},
+                'output_data': {'text': naver_text, 'google_text': google_text},
                 'points_used': cost, 'status': 'done',
                 'created_at': now_s, 'updated_at': now_s,
             }
@@ -188,5 +227,6 @@ def experience_generate():
         logger.warning(f'[experience] 이력 기록 실패(무시): {e}')
 
     logger.info(f'[experience] 생성 완료 uid={str(current_user.id)[:8]} '
-                f'type={exp_type} photos={len(images)} cost={cost}P')
-    return jsonify(ok=True, text=text, cost=cost)
+                f'type={exp_type} photos={len(images)} '
+                f'targets={"both" if both else "naver"} cost={cost}P')
+    return jsonify(ok=True, text=naver_text, google_text=google_text, cost=cost)
