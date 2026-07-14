@@ -684,83 +684,48 @@ def instagram_image_generate():
     # 비용
     cost_key = 'img_ideogram' if style == 'typography' else 'img_preview'
     cost     = POINT_COSTS.get(cost_key, 50)
+    model_used = 'ideogram' if style == 'typography' else 'flux_schnell'
 
-    # 포인트 확인 (User 객체 전달 — operator 풀 자동 라우팅)
-    from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user)
-    if balance < cost:
-        return jsonify(ok=False, message=f'포인트 부족 (필요: {cost}P, 잔액: {balance}P)')
-
-    creation_id = str(uuid.uuid4())
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.instagram_task import generate_image as instagram_image_task
     try:
-        _row = {
-            'id':            creation_id,
-            'user_id':       current_user.id,
-            'creation_type': cost_key,
-            'input_data':    {'prompt': flux_prompt, 'style': style, 'size': img_size},
-            'output_data':   {},
-            'points_used':   cost,
-            'status':        'generating',
-            'model_used':    'ideogram' if style == 'typography' else 'flux_schnell',
-            'created_at':    now_kst().isoformat(),
-        }
-        if getattr(current_user, 'operator_id', None):
-            _row['operator_id'] = current_user.operator_id
-        supabase.table('creations').insert(_row).execute()
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type=cost_key, cost=cost,
+            input_data={'prompt': flux_prompt, 'style': style, 'size': img_size},
+            model_used=model_used,
+            task_delay_fn=instagram_image_task.delay,
+            task_kwargs=dict(
+                style=style, flux_prompt=flux_prompt, flux_size_str=flux_size_str,
+                pil_size=pil_size, brand_color=brand_color, title=title, body_text=body_text,
+                dialogue1=dialogue1, dialogue2=dialogue2, text_color=text_color,
+                overlay_strength=overlay_strength,
+            ),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
     except Exception as e:
-        logger.warning(f'[insta img] creation insert: {e}')
+        logger.error(f'[insta/image-generate] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
 
-    # 포인트 선차감 — API 호출 전 차감하여 race condition 방지
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=cost)
+
+
+@create_bp.route('/instagram/image-generate/status/<creation_id>', methods=['GET'])
+@login_required
+def instagram_image_generate_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
     try:
-        use_points(current_user, cost_key, creation_id)
-    except InsufficientPoints:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message='포인트가 부족합니다.')
-
-    try:
-        from services.imagen_service import upload_to_supabase
-
-        translated_prompt = ''
-        bg_url = None
-
-        from services.imagen_service import _generate_flux
-        from services.instagram_service import create_banner_image, create_webtoon_image
-
-        if style == 'webtoon':
-            bg_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
-            dialogues = [d for d in [dialogue1, dialogue2] if d]
-            data_url  = create_webtoon_image(bg_url, dialogues, pil_size)
-            final_url = upload_to_supabase(data_url, current_user.id,
-                                           f'insta_webtoon_{creation_id[:8]}.jpg')
-
-        else:
-            # 실사배너 + 모든 일러스트 스타일 — FLUX 후 PIL 텍스트 오버레이
-            img_url, translated_prompt = _generate_flux(flux_prompt, 'flux_preview', flux_size_str)
-            bg_url = img_url
-            texts = [t for t in [title, body_text] if t]
-            if texts:
-                data_url  = create_banner_image(
-                    img_url, texts, brand_color, pil_size,
-                    text_color=text_color, overlay_strength=overlay_strength,
-                )
-                final_url = upload_to_supabase(data_url, current_user.id,
-                                               f'insta_{style}_{creation_id[:8]}.jpg')
-            else:
-                final_url = upload_to_supabase(img_url, current_user.id,
-                                               f'insta_{style}_{creation_id[:8]}.jpg')
-
-        supabase.table('creations').update({
-            'output_data': {'image_url': final_url},
-            'status':      'done',
-        }).eq('id', creation_id).execute()
-
-        return jsonify(ok=True, image_url=final_url, base_image_url=bg_url, cost=cost,
-                       creation_id=creation_id, translated_prompt=translated_prompt or None)
-
-    except Exception as ex:
-        logger.error(f'[insta/image-generate] {ex}')
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message=f'이미지 생성 실패: {ex}')
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(
+        row, current_user.id,
+        done_fields={'image_url': 'image_url', 'base_image_url': 'base_image_url',
+                    'translated_prompt': 'translated_prompt'})
 
 
 # ─────────────────────────────────────────────────────────────

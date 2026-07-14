@@ -787,6 +787,7 @@
 {% endblock %}
 
 {% block extra_script %}
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 // ── 이미지 강제 다운로드 (서버 프록시 경유 — 크로스-오리진 새탭 방지) ──
 function downloadImage(url, filename) {
@@ -1680,8 +1681,10 @@ async function generateImage() {
       headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
       body: JSON.stringify(body)
     });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.message);
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message);
+    const data = await pollTaskStatus(
+      '{{ url_for("create.instagram_image_generate_status", creation_id="") }}' + submit.id);
 
     bannerBaseUrl     = data.base_image_url || null;
     generatedImageUrl = data.image_url;
@@ -1916,8 +1919,10 @@ async function generateAllImages() {
           title, body_text, dialogue1, dialogue2,
         })
       });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.message);
+      const submit = await res.json();
+      if (!submit.ok) throw new Error(submit.message);
+      const data = await pollTaskStatus(
+        '{{ url_for("create.instagram_image_generate_status", creation_id="") }}' + submit.id);
 
       generatedImages[i] = data.image_url;
       baseFluxImages[i]  = data.base_image_url || data.image_url;
@@ -2172,8 +2177,10 @@ async function regenModalGenerate() {
       body: JSON.stringify({ style: selectedStyle, flux_prompt: prompt, size: selectedRatio,
         brand_color: selectedBrandColor || '#e8355a', title, body_text, dialogue1, dialogue2 })
     });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.message);
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message);
+    const data = await pollTaskStatus(
+      '{{ url_for("create.instagram_image_generate_status", creation_id="") }}' + submit.id);
     regenPreviewUrl     = data.image_url;
     regenPreviewBaseUrl = data.base_image_url || data.image_url;
     document.getElementById('regenPreviewImg').src = regenPreviewUrl;
