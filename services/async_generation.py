@@ -25,7 +25,8 @@ class AsyncSubmitError(Exception):
 def submit_async_generation(*, owner, creation_type: str, cost: int, input_data: dict,
                             task_delay_fn: Callable, task_kwargs: dict,
                             model_used: str | None = None,
-                            extra_row: dict | None = None) -> str:
+                            extra_row: dict | None = None,
+                            note_override: str | None = None) -> str:
     """포인트 차감 + creations(status='generating') insert + Celery 태스크 제출.
 
     task_kwargs에는 creation_id/user_id/supabase_url/supabase_key를 넣지 않는다 —
@@ -67,7 +68,8 @@ def submit_async_generation(*, owner, creation_type: str, cost: int, input_data:
             logger.warning('[async_generation] creations insert 실패: %s', e)
 
     try:
-        use_points(owner, creation_type, creation_id, cost_override=cost)
+        use_points(owner, creation_type, creation_id, cost_override=cost,
+                  note_override=note_override)
     except InsufficientPoints as e:
         if supabase:
             try:

@@ -159,6 +159,7 @@
 .page-card.selected { border-color:#198754 !important; background:#f0faf4; }
 </style>
 
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 const CATALOG_PAGE_COSTS = {{ catalog_page_costs | tojson }};
 
@@ -268,8 +269,15 @@ generateBtn.addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
-    if (!data.ok) { showError(data.message || '생성 실패'); return; }
+    const submit = await res.json();
+    if (!submit.ok) { showError(submit.message || '생성 실패'); return; }
+
+    let data;
+    if (submit.async_mode) {
+      data = await pollTaskStatus(`/create/promo-doc/status/${submit.id}`);
+    } else {
+      data = submit;
+    }
     showResult(data.text, printoutType);
   } catch(e) {
     showError('오류가 발생했습니다: ' + e.message);

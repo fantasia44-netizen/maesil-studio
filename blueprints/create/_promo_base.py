@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 from flask import current_app, request, jsonify
-from flask_login import current_user
+from flask_login import current_user, login_required
 
+from blueprints.create import create_bp
 from blueprints.create._base import (
     get_accessible_brands, get_brand_by_id, get_default_brand,
-    run_text_generation,
 )
-from models import POINT_COSTS
+from models import POINT_COSTS, CREATION_MODELS
+from services.async_generation import (
+    AsyncSubmitError, submit_async_generation, render_status_response,
+)
 
 
 # ── 카탈로그 분량별 요금 (promo.py / printout.py 공통) ─────────
@@ -175,15 +178,51 @@ def run_promo_generation(doc_type: str, type_meta: dict, type_guide: str,
     if extra_input:
         input_data.update(extra_input)
 
-    result = run_text_generation(
-        creation_type=doc_type,
-        brand=brand,
-        input_data=input_data,
-        system_prompt=build_system(label, brand),
-        user_prompt=build_user_prompt(label, type_guide, brand, product,
-                                      target, key_points, extra),
-        point_cost=point_cost,
-        ledger_note=ledger_note_override or label,
-        max_tokens=max_tokens,
-    )
-    return jsonify(result)
+    cost = point_cost if point_cost is not None else POINT_COSTS.get(doc_type, 0)
+    from services.claude_service import DEFAULT_MODEL
+    resolved_model = CREATION_MODELS.get(doc_type, DEFAULT_MODEL)
+
+    system_prompt = build_system(label, brand)
+    user_prompt = build_user_prompt(label, type_guide, brand, product,
+                                    target, key_points, extra)
+
+    from tasks.promo_task import generate_promo_text
+
+    try:
+        creation_id = submit_async_generation(
+            owner=current_user,
+            creation_type=doc_type,
+            cost=cost,
+            input_data=input_data,
+            task_delay_fn=generate_promo_text.delay,
+            task_kwargs={
+                'system_prompt': system_prompt,
+                'user_prompt': user_prompt,
+                'max_tokens': max_tokens,
+                'model': resolved_model,
+            },
+            model_used=resolved_model,
+            extra_row={'brand_id': brand['id']} if brand and brand.get('id') else None,
+            note_override=ledger_note_override or label,
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
+
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=cost)
+
+
+@create_bp.route('/promo-doc/status/<cid>', methods=['GET'])
+@login_required
+def promo_doc_status(cid):
+    """제안서/인쇄물 생성 Celery 태스크 완료 여부 폴링 (printout.py/promo.py 공유)."""
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        r = supabase.table('creations').select(
+            'id, status, output_data, user_id'
+        ).eq('id', cid).single().execute()
+        row = r.data
+    except Exception:
+        row = None
+    return render_status_response(row, current_user.id, done_fields={'text': 'text'})

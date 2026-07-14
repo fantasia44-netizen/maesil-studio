@@ -15,7 +15,7 @@ celery = Celery(
     backend=REDIS_URL,
     include=['tasks.shorts_task', 'tasks.banner_task', 'tasks.detail_page_task',
              'tasks.experience_task', 'tasks.image_task', 'tasks.detail_page_builder_task',
-             'tasks.blog_thumbnail_task', 'tasks.instagram_task'],
+             'tasks.blog_thumbnail_task', 'tasks.instagram_task', 'tasks.promo_task'],
 )
 
 celery.conf.update(
