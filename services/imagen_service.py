@@ -213,7 +213,7 @@ def _scene_visual_desc(topic: str) -> str:
     try:
         from services.claude_service import generate_text
         result = generate_text(
-            system=(
+            system_prompt=(
                 'Convert a Korean/English content topic into a SHORT English description of '
                 'concrete visual OBJECTS and a simple setting for a cute flat sticker illustration.\n'
                 'RULES:\n'
@@ -228,7 +228,7 @@ def _scene_visual_desc(topic: str) -> str:
                 '여름 다이어트 → fresh salad bowl, water bottle, measuring tape, dumbbell, fruit\n'
                 '블로그 마케팅 → laptop, pencil, lightbulb, speech bubbles, upward arrow'
             ),
-            prompt=topic,
+            user_prompt=topic,
             max_tokens=50,
             model='claude-sonnet-4-6',
         )
@@ -672,7 +672,7 @@ def _topic_to_bg_scene(topic: str) -> str:
     try:
         from services.claude_service import generate_text
         result = generate_text(
-            system=(
+            system_prompt=(
                 'Convert a blog topic keyword into a SHORT physical background scene '
                 'for a FLUX image generation prompt.\n'
                 '\n'
@@ -698,7 +698,7 @@ def _topic_to_bg_scene(topic: str) -> str:
                 'finance → coins and banknotes dark background bokeh\n'
                 'food → ingredients on kitchen counter natural light'
             ),
-            prompt=topic,
+            user_prompt=topic,
             max_tokens=50,
             model='claude-sonnet-4-6',
         )
