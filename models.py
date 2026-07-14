@@ -196,6 +196,7 @@ CREATION_LABELS = {
     'banner_text':      '텍스트 배너 이미지',
     # 영상
     'shorts_script':        '쇼츠 대본',
+    'shorts_scene_images':  '쇼츠 씬 이미지 미리보기',
     'shorts_video':         '쇼츠/릴스 영상',
     'shorts_video_kling':   '쇼츠/릴스 영상 (Kling 모션)',
     # 홍보 자료

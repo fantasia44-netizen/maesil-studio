@@ -13,6 +13,98 @@ _SOFT_LIMIT = int(os.environ.get('SHORTS_TASK_SOFT_LIMIT', 600))   # 10분
 _HARD_LIMIT = int(os.environ.get('SHORTS_TASK_HARD_LIMIT', 660))   # 11분
 
 
+@celery.task(bind=True, name='tasks.shorts_task.generate_preview_image',
+             max_retries=0, soft_time_limit=90, time_limit=120)
+def generate_preview_image(self, creation_id, user_id, flux_prompt, style,
+                          supabase_url, supabase_key):
+    """씬 1개 FLUX 미리보기 이미지 생성 — /shorts/preview-image가 씬마다 순차 호출.
+    무료 미리보기 단계라 포인트 환불 없음(과금 자체가 없음)."""
+    import sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+    from supabase import create_client
+    supabase = create_client(supabase_url, supabase_key)
+    try:
+        from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
+        from services.imagen_service import _generate_flux
+
+        style_mod   = SHORTS_STYLE_PRESETS.get(style, '')
+        full_prompt = (
+            flux_prompt +
+            (f', {style_mod}' if style_mod else '') +
+            ', 9:16 vertical frame, cinematic lighting' +
+            _NO_CJK + _NO_ANATOMY
+        )
+        img_url, _ = _generate_flux(full_prompt, 'flux_preview', '1080x1920')
+
+        supabase.table('creations').update({
+            'status': 'done',
+            'output_data': {'image_url': img_url, 'prompt_used': flux_prompt},
+        }).eq('id', creation_id).execute()
+        logger.info('[shorts_task] preview_image 완료 cid=%s', creation_id)
+    except Exception as e:
+        logger.error('[shorts_task] preview_image 오류 cid=%s: %s', creation_id, e, exc_info=True)
+        try:
+            supabase.table('creations').update({
+                'status': 'failed', 'output_data': {'error': str(e)[:200]},
+            }).eq('id', creation_id).execute()
+        except Exception:
+            pass
+        raise
+
+
+@celery.task(bind=True, name='tasks.shorts_task.generate_scene_images',
+             max_retries=0, soft_time_limit=180, time_limit=240)
+def generate_scene_images(self, creation_id, user_id, scenes, style,
+                          supabase_url, supabase_key):
+    """5씬 FLUX 이미지 일괄 생성(순차) — 메인 서버 블로킹 없이 워커에서 처리.
+    무료 미리보기 단계라 포인트 환불 없음(과금 자체가 없음)."""
+    import sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+    from supabase import create_client
+    supabase = create_client(supabase_url, supabase_key)
+    try:
+        from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
+        from services.imagen_service import _generate_flux
+        from services.kling_service import ensure_english_prompt
+
+        style_mod = SHORTS_STYLE_PRESETS.get(style, '')
+        results = []
+        for i, scene in enumerate(scenes):
+            try:
+                flux_prompt = ensure_english_prompt(scene.get('flux_prompt', '') or scene.get('narration', ''))
+                full_prompt = (
+                    flux_prompt +
+                    (f', {style_mod}' if style_mod else '') +
+                    ', 9:16 vertical frame, cinematic lighting' +
+                    _NO_CJK + _NO_ANATOMY
+                )
+                img_url, _ = _generate_flux(full_prompt, 'flux_standard', '1080x1920')
+                results.append({'idx': i, 'image_url': img_url, 'ok': True})
+            except Exception as e:
+                logger.error('[shorts_task] 씬%d 이미지 생성 실패: %s', i, e)
+                results.append({'idx': i, 'image_url': None, 'ok': False, 'error': str(e)[:100]})
+
+        supabase.table('creations').update({
+            'status': 'done', 'output_data': {'images': results},
+        }).eq('id', creation_id).execute()
+        logger.info('[shorts_task] scene_images 완료 cid=%s scenes=%d', creation_id, len(scenes))
+    except Exception as e:
+        logger.error('[shorts_task] scene_images 오류 cid=%s: %s', creation_id, e, exc_info=True)
+        try:
+            supabase.table('creations').update({
+                'status': 'failed', 'output_data': {'error': str(e)[:200]},
+            }).eq('id', creation_id).execute()
+        except Exception:
+            pass
+        raise
+
+
 @celery.task(
     bind=True,
     name='tasks.shorts_task.generate_shorts_video',

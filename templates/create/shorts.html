@@ -544,6 +544,7 @@
 .sb-card.product-scene { border-color:#7c3aed !important; background:#faf5ff; }
 </style>
 
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 const CSRF = document.getElementById('csrfToken').value;
 
@@ -901,14 +902,11 @@ async function loadAllSceneImages(forceRegen = false) {
           style:       selectedStyle || 'realistic_banner',
         }),
       });
-      const data = await res.json();
-      results.push({
-        idx: i,
-        ok: data.ok,
-        image_url: data.ok ? data.image_url : null,
-        error: data.message || '',
-      });
-      if (data.ok) _sceneImageUrls[i] = data.image_url;
+      const submit = await res.json();
+      if (!submit.ok) throw new Error(submit.message || '이미지 생성 실패');
+      const data = await pollTaskStatus('/create/shorts/preview-image/status/' + submit.id);
+      results.push({ idx: i, ok: true, image_url: data.image_url, error: '' });
+      _sceneImageUrls[i] = data.image_url;
     } catch (e) {
       results.push({idx: i, ok: false, image_url: null, error: e.message});
     }
@@ -992,8 +990,9 @@ async function regenSceneImage(idx) {
         style:       selectedStyle || 'realistic_banner',
       }),
     });
-    const data = await res.json();
-    if (data.ok && data.image_url) {
+    const submit = await res.json();
+    const data = submit.ok ? await pollTaskStatus('/create/shorts/preview-image/status/' + submit.id) : {};
+    if (submit.ok && data.image_url) {
       _sceneImageUrls[idx] = data.image_url;
       if (imgEl && imgEl.tagName === 'IMG') {
         imgEl.src = data.image_url;
@@ -1076,16 +1075,18 @@ async function loadPreviewImage() {
         style:       selectedStyle || 'realistic_banner',
       })
     });
-    const data = await res.json();
+    const submit = await res.json();
 
-    document.getElementById('imgPreviewLoading').classList.add('d-none');
-
-    if (!data.ok) {
+    if (!submit.ok) {
+      document.getElementById('imgPreviewLoading').classList.add('d-none');
       const errDiv = document.getElementById('imgPreviewError');
-      errDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+      errDiv.innerHTML = `<div class="alert alert-danger">${submit.message}</div>`;
       errDiv.classList.remove('d-none');
       return;
     }
+    const data = await pollTaskStatus('/create/shorts/preview-image/status/' + submit.id);
+
+    document.getElementById('imgPreviewLoading').classList.add('d-none');
 
     window._previewImageUrl = data.image_url;
     document.getElementById('previewImg').src = data.image_url;

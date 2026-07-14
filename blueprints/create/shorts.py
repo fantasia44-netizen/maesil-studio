@@ -318,7 +318,7 @@ def shorts_storyboard():
 @create_bp.route('/shorts/preview-image', methods=['POST'])
 @login_required
 def shorts_preview_image():
-    """씬1 flux_prompt → FLUX 이미지 생성 → URL 반환.
+    """씬1 flux_prompt → FLUX 이미지 생성 — 워커 제출, status 폴링.
 
     사용자가 이미지를 확인하고 [이 이미지로 진행] / [재생성] / [내 이미지 사용]을 선택.
     승인된 image_url을 /shorts/generate 에 ref_image_url로 전달하면 재생성 불필요.
@@ -337,23 +337,40 @@ def shorts_preview_image():
         return jsonify(ok=False, message='씬 프롬프트 정보가 없습니다. 스토리보드를 다시 생성해주세요.')
 
     from services.kling_service import ensure_english_prompt
-    from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
-    from services.imagen_service import _generate_flux
+    flux_prompt = ensure_english_prompt(flux_prompt)
 
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.shorts_task import generate_preview_image as preview_task
     try:
-        flux_prompt = ensure_english_prompt(flux_prompt)
-        style_mod   = SHORTS_STYLE_PRESETS.get(style, '')
-        full_prompt = (
-            flux_prompt +
-            (f', {style_mod}' if style_mod else '') +
-            ', 9:16 vertical frame, cinematic lighting' +
-            _NO_CJK + _NO_ANATOMY
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='shorts_scene_images', cost=0,
+            input_data={'style': style},
+            task_delay_fn=preview_task.delay,
+            task_kwargs=dict(flux_prompt=flux_prompt, style=style),
         )
-        img_url, _ = _generate_flux(full_prompt, 'flux_preview', '1080x1920')
-        return jsonify(ok=True, image_url=img_url, prompt_used=flux_prompt)
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
     except Exception as e:
-        logger.error('[shorts/preview-image] %s', e)
-        return jsonify(ok=False, message=f'이미지 생성 실패: {str(e)[:200]}')
+        logger.error(f'[shorts/preview-image] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
+
+    return jsonify(ok=True, id=creation_id, async_mode=True)
+
+
+@create_bp.route('/shorts/preview-image/status/<creation_id>', methods=['GET'])
+@login_required
+def shorts_preview_image_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(
+        row, current_user.id, done_fields={'image_url': 'image_url', 'prompt_used': 'prompt_used'})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -523,10 +540,10 @@ def shorts_my_images():
 @create_bp.route('/shorts/scene-images', methods=['POST'])
 @login_required
 def shorts_scene_images():
-    """5씬 FLUX 이미지 일괄 생성 → 이미지 확인 단계에서 사용자 검토.
+    """5씬 FLUX 이미지 일괄 생성 → 이미지 확인 단계에서 사용자 검토. 워커 제출, status 폴링.
 
     스토리보드 승인 후 호출. 영상 조립 전 이미지를 미리 확인/재생성할 수 있게 함.
-    Returns: {"ok": true, "images": [{"idx": 0, "image_url": "..."}, ...]}
+    완료 시 status 응답: {"ok": true, "status": "done", "images": [{"idx": 0, "image_url": "..."}, ...]}
     """
     data   = request.get_json(force=True) or {}
     scenes = data.get('scenes') or []
@@ -535,29 +552,37 @@ def shorts_scene_images():
     if not scenes:
         return jsonify(ok=False, message='씬 데이터가 없습니다.')
 
-    from services.shorts_service import SHORTS_STYLE_PRESETS, _NO_CJK, _NO_ANATOMY
-    from services.imagen_service import _generate_flux
-    from services.kling_service import ensure_english_prompt
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.shorts_task import generate_scene_images as scene_images_task
+    try:
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='shorts_scene_images', cost=0,
+            input_data={'scene_count': len(scenes), 'style': style},
+            task_delay_fn=scene_images_task.delay,
+            task_kwargs=dict(scenes=scenes, style=style),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
+    except Exception as e:
+        logger.error(f'[shorts/scene-images] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
 
-    style_mod = SHORTS_STYLE_PRESETS.get(style, '')
-    results = []
+    return jsonify(ok=True, id=creation_id, async_mode=True)
 
-    for i, scene in enumerate(scenes):
-        try:
-            flux_prompt = ensure_english_prompt(scene.get('flux_prompt', '') or scene.get('narration', ''))
-            full_prompt = (
-                flux_prompt +
-                (f', {style_mod}' if style_mod else '') +
-                ', 9:16 vertical frame, cinematic lighting' +
-                _NO_CJK + _NO_ANATOMY
-            )
-            img_url, _ = _generate_flux(full_prompt, 'flux_standard', '1080x1920')
-            results.append({'idx': i, 'image_url': img_url, 'ok': True})
-        except Exception as e:
-            logger.error('[shorts/scene-images] 씬%d 이미지 생성 실패: %s', i, e)
-            results.append({'idx': i, 'image_url': None, 'ok': False, 'error': str(e)[:100]})
 
-    return jsonify(ok=True, images=results)
+@create_bp.route('/shorts/scene-images/status/<creation_id>', methods=['GET'])
+@login_required
+def shorts_scene_images_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(row, current_user.id, done_fields={'images': 'images'})
 
 
 # ─────────────────────────────────────────────────────────────
