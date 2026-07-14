@@ -868,81 +868,8 @@ def blog_thumbnail_status(creation_id):
     return render_status_response(row, current_user.id, done_fields={'url': 'url', 'bg_url': 'bg_url'})
 
 
-# ─────────────────────────────────────────────────────────────
-# 디자인 카드형 썸네일 (슬롯 합성 엔진 — 캐릭터/아이콘/테마 조립)
-#   클래식(배경+글자)과 별개 모드. 서버 PIL 합성이라 AI 비용 없음 → 무료.
-#   모든 업체가 브랜드 캐릭터 업로드(선택) or 내장 팩으로 고퀄 카드 생성.
-# ─────────────────────────────────────────────────────────────
-@create_bp.route('/blog/thumbnail/design', methods=['POST'])
-@login_required
-def blog_thumbnail_design():
-    """디자인 카드형 썸네일 생성.
-
-    Request JSON:
-      line1        str   헤드라인 (자동 크기맞춤, ~40자)
-      sub          str   서브 문구 (선택)
-      badge        str   상단 알약 뱃지 텍스트 (선택)
-      cta          str   하단 CTA 바 텍스트 (선택)
-      theme        str   색 테마 (baby_blue/food_cream/fresh_green/warm_pink)
-      template     str   레이아웃 (char_right/char_left/char_center)
-      icon_kinds   list  장식 아이콘 (sun/drop/leaf/heart 중), 선택
-      character_data str base64 data URL — 브랜드 마스코트(투명 PNG), 선택
-      brand_name   str   @워터마크 (CTA 없을 때만 표시)
-    """
-    import base64 as _b64, time as _time
-    data = request.get_json(force=True) or {}
-    headline = (data.get('line1') or '').strip()[:40]
-    if not headline:
-        return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
-
-    sub        = (data.get('sub') or '').strip()[:40]
-    badge      = (data.get('badge') or '').strip()[:20]
-    cta        = (data.get('cta') or '').strip()[:24]
-    theme      = (data.get('theme') or 'baby_blue').strip()
-    template   = (data.get('template') or 'char_right').strip()
-    brand_name = (data.get('brand_name') or '').strip()[:24]
-    icons      = data.get('icon_kinds') if isinstance(data.get('icon_kinds'), list) else None
-    auto_cut   = data.get('auto_cutout', True) is not False   # 무료 자동 누끼 (기본 ON)
-
-    # 선택적 브랜드 마스코트 (base64 data URL → bytes)
-    mascot_bytes = None
-    char_data = (data.get('character_data') or '').strip()
-    if char_data.startswith('data:image/'):
-        try:
-            mascot_bytes = _b64.b64decode(char_data.split(',', 1)[1])
-        except Exception:
-            mascot_bytes = None
-
-    from services.thumbnail_studio import render_thumbnail
-    try:
-        img_bytes = render_thumbnail(
-            headline=headline, sub=sub, badge=badge, cta=cta,
-            theme=theme, template=template, icon_kinds=icons,
-            mascot_src=mascot_bytes, brand_name=brand_name,
-            auto_cut=auto_cut,
-        )
-    except Exception as e:
-        logger.error(f'[blog/thumbnail/design] 렌더 실패: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'디자인 카드 생성 실패 ({str(e)[:100]})')
-
-    # 업로드 (실패 시 data URL 폴백)
-    from services.imagen_service import upload_to_supabase
-    b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
-    try:
-        url = upload_to_supabase(
-            b64, current_user.id, f'blog_thumb_design_{int(_time.time())}.png')
-    except Exception as e:
-        logger.warning(f'[blog/thumbnail/design] 업로드 실패 → data URL 반환: {e}')
-        url = b64
-
-    _uid = str(getattr(current_user, 'id', '') or '')
-    _save_thumb_creation(url, 'design', 0, {
-        'line1': headline, 'sub': sub, 'badge': badge, 'cta': cta,
-        'theme': theme, 'template': template,
-    })
-    logger.info(f'[blog/thumbnail/design] 생성 완료 uid={_uid[:8]} '
-                f'theme={theme} tpl={template} char={"Y" if mascot_bytes else "N"}')
-    return jsonify(ok=True, url=url, style='design', cost=0)
+# (디자인 카드형 썸네일 모드 제거됨 — 클래식/AI 씬 투트랙으로 통합.
+#  render_thumbnail 은 AI 씬 텍스트 합성에서 계속 사용.)
 
 
 # ─────────────────────────────────────────────────────────────
