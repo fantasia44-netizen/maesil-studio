@@ -1209,8 +1209,8 @@ function updateThumbPreview() {
     const sameBg     = _thumbBgUrl && curBgTopic === _thumbLastBgTopic;
     if (caption) {
       caption.innerHTML = sameBg
-        ? '<i class="bi bi-exclamation-circle me-1" style="color:#f59e0b"></i>설정 변경됨 — <strong>텍스트만 재합성 (무료)</strong>을 눌러 반영하세요'
-        : '<i class="bi bi-exclamation-circle me-1" style="color:#f59e0b"></i>설정 변경됨 — 재생성하세요';
+        ? '<i class="bi bi-lightning-charge-fill me-1" style="color:#6366f1"></i>실시간 미리보기 — 다운로드용 확정본은 <strong>텍스트만 재합성 (무료)</strong>'
+        : '<i class="bi bi-lightning-charge-fill me-1" style="color:#6366f1"></i>실시간 미리보기 — 배경을 바꾸려면 <strong>재생성</strong>';
     }
     const btnText = document.getElementById('thumbGenBtnText');
     if (btnText) btnText.textContent = sameBg ? '텍스트만 재합성 (무료)' : '썸네일 다시 생성';
@@ -1306,6 +1306,21 @@ function updateThumbPreview() {
     markEl.style.textAlign = thumbAlign === 'right' ? 'right' : (thumbAlign === 'left' ? 'left' : 'center');
     markEl.style.paddingLeft  = '14px';
     markEl.style.paddingRight = '14px';
+  }
+
+  // ── 생성 후: 정적 PNG 대신 실제 배경 위에 CSS 텍스트를 실시간으로 표시 ──
+  //   글자 크기·자간·위치·정렬·색 조정이 즉시 반영됨.
+  //   (다운로드용 확정본은 '텍스트만 재합성(무료)'으로 서버에서 다시 굽는다.)
+  if (_thumbPreviewUrl) {
+    const _bgLive = document.getElementById('thumbPrevBgImg');
+    if (_thumbGeneratedBgUrl && _bgLive) {
+      _bgLive.style.backgroundImage = `url("${_thumbGeneratedBgUrl}")`;
+      const _tex = document.getElementById('thumbPrevTexture');
+      if (_tex) _tex.style.opacity = '0';   // 실제 배경 위엔 텍스처 라인 제거
+    }
+    document.getElementById('thumbRealPreview')?.classList.add('d-none');
+    const _mock = document.getElementById('thumbPreview');
+    if (_mock) _mock.style.opacity = '1';
   }
 }
 
@@ -1533,6 +1548,7 @@ async function transformChar() {
 
 // ── 썸네일 실제 이미지 생성 (미리보기) ───────────────────────
 let _thumbPreviewUrl   = null;   // 이미 생성된 PNG 합성본 URL 캐시
+let _thumbGeneratedBgUrl = '';   // 생성에 사용된 배경(업로드 사진/FLUX) URL — 생성 후 실시간 미리보기 배경으로 재사용
 let _thumbBgUrl        = null;   // FLUX로 생성한 배경 URL — 텍스트만 수정 시 재사용
 let _thumbLastBgTopic  = '';     // 마지막 FLUX 생성 시 사용된 bg_topic (바뀌면 신규 생성)
 
@@ -1646,6 +1662,7 @@ async function generateThumbPreview() {
       _thumbBgUrl       = data.bg_url;
       _thumbLastBgTopic = bgTopic;
     }
+    _thumbGeneratedBgUrl = data.bg_url || '';   // 생성 후 실시간 미리보기 배경
 
     // 실제 이미지 표시 (서버가 매번 고유 파일명 사용 → URL 자체가 달라 캐시 무관)
     const imgEl = document.getElementById('thumbRealImg');
