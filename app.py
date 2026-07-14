@@ -111,6 +111,18 @@ def _init_csrf(app):
             return jsonify(ok=False, message='서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'), 500
         return e
 
+    @app.errorhandler(413)
+    def request_entity_too_large(e):
+        # MAX_CONTENT_LENGTH 초과(대개 base64 이미지 업로드) — 기본은 HTML 에러 페이지라
+        # 프론트 fetch의 res.json()이 "Unexpected token '<'"로 깨짐. JSON으로 안내.
+        import logging
+        logging.getLogger(__name__).warning(f'[413] 요청 크기 초과: {request.path}')
+        if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(ok=False, message='업로드한 파일이 너무 큽니다. 사진 용량을 줄여서 다시 시도해 주세요.'), 413
+        from flask import flash
+        flash('업로드한 파일이 너무 큽니다.', 'warning')
+        return redirect(request.referrer or url_for('main.dashboard'))
+
 
 def _init_login(app):
     login_manager = LoginManager(app)

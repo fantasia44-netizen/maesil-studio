@@ -1235,20 +1235,38 @@ function setThumbAlign(align, el) {
 }
 
 // ── 배경 업로드 미리보기 ──────────────────────────────────────
-function previewBgUpload(input) {
+// 원본 그대로 base64 전송 시 휴대폰 사진(수 MB)이 서버 업로드 한도(10MB)를
+// 넘겨 "Unexpected token '<'" 에러(HTML 에러페이지를 JSON으로 파싱 시도)가
+// 났었음 → 클라이언트에서 리사이즈해 항상 가벼운 용량으로 전송.
+function _blogResizeImage(file, maxSide, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.round(img.width * r), h = Math.round(img.height * r);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+async function previewBgUpload(input) {
   const file = input.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    thumbUploadedBgUrl = e.target.result;  // base64
-    const bgDiv = document.getElementById('thumbPrevBgImg');
-    if (bgDiv) {
-      bgDiv.style.backgroundImage = `url('${thumbUploadedBgUrl}')`;
-      bgDiv.style.backgroundSize  = 'cover';
-    }
-    document.getElementById('thumbPrevTexture').style.opacity = '0';
-  };
-  reader.readAsDataURL(file);
+  const resized = await _blogResizeImage(file, 1600, 0.85);
+  if (!resized) { alert('이미지를 읽을 수 없습니다. 다른 파일로 시도해 주세요.'); return; }
+  thumbUploadedBgUrl = resized;  // base64 (리사이즈됨)
+  const bgDiv = document.getElementById('thumbPrevBgImg');
+  if (bgDiv) {
+    bgDiv.style.backgroundImage = `url('${thumbUploadedBgUrl}')`;
+    bgDiv.style.backgroundSize  = 'cover';
+  }
+  document.getElementById('thumbPrevTexture').style.opacity = '0';
 }
 
 // ── 실시간 미리보기 업데이트 ─────────────────────────────────
