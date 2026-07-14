@@ -248,6 +248,7 @@
 
 </div>
 
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 const CSRF = '{{ csrf_token() }}';
 let brandColor    = '{{ default_brand.primary_color or "#4b5cde" }}';
@@ -517,27 +518,27 @@ async function generateAll() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body: JSON.stringify({ brand_id: bid, brand_color: brandColor, section: sec }),
       });
-      const d = await r.json();
+      const submit = await r.json();
 
-      if (d.ok) {
-        done++;
-        item.className = 'plan-item done';
-        statusEl.textContent = '✅ 완료';
-        statusEl.className = 'plan-status ok';
-        resultUrls.push({ url: d.image_url, label: LABELS[sec.template] || sec.template, index: i });
-        addGalleryItem(d.image_url, LABELS[sec.template] || sec.template, i + 1);
-      } else if (d.error === 'points') {
-        setStatus('gen-status', '⚠️ 포인트 부족: ' + d.message, true);
-        item.className = 'plan-item error';
-        statusEl.textContent = '포인트 부족';
-        statusEl.className = 'plan-status err';
-        break;  // 포인트 부족 시 중단
-      } else {
-        failed++;
-        item.className = 'plan-item error';
-        statusEl.textContent = '❌ 실패';
-        statusEl.className = 'plan-status err';
+      if (!submit.ok) {
+        if (submit.error === 'points') {
+          setStatus('gen-status', '⚠️ 포인트 부족: ' + submit.message, true);
+          item.className = 'plan-item error';
+          statusEl.textContent = '포인트 부족';
+          statusEl.className = 'plan-status err';
+          break;  // 포인트 부족 시 중단
+        }
+        throw new Error(submit.message || '생성 실패');
       }
+
+      const d = await pollTaskStatus(
+        '{{ url_for("create.dpb_story_generate_section_status", creation_id="") }}' + submit.id);
+      done++;
+      item.className = 'plan-item done';
+      statusEl.textContent = '✅ 완료';
+      statusEl.className = 'plan-status ok';
+      resultUrls.push({ url: d.image_url, label: LABELS[sec.template] || sec.template, index: i });
+      addGalleryItem(d.image_url, LABELS[sec.template] || sec.template, i + 1);
     } catch (e) {
       failed++;
       item.className = 'plan-item error';

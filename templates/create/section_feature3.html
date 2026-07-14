@@ -253,6 +253,7 @@
 
 </div>
 
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 const CSRF = '{{ csrf_token() }}';
 let brandColor = '{{ default_brand.primary_color or "#4b5cde" }}';
@@ -362,13 +363,11 @@ async function generateBg() {
         quality: 'preview',
       }),
     });
-    const d = await r.json();
-    if (d.ok) {
-      setBgImage(d.image_url);
-      setStatus('bg-status', '✅ 완료', false, true);
-    } else {
-      setStatus('bg-status', d.message || '생성 실패', true);
-    }
+    const submit = await r.json();
+    if (!submit.ok) throw new Error(submit.message || '생성 실패');
+    const d = await pollTaskStatus('{{ url_for("create.dpb_gen_image_status", creation_id="") }}' + submit.id);
+    setBgImage(d.image_url);
+    setStatus('bg-status', '✅ 완료', false, true);
   } catch (e) {
     setStatus('bg-status', '오류: ' + e.message, true);
   } finally {
@@ -425,15 +424,14 @@ async function generate() {
         brand_color:  brandColor,
       }),
     });
-    const d = await r.json();
-    if (d.ok) {
-      showResult(d.image_url);
-      setStatus('gen-status', '✅ 이미지 생성 완료!', false, true);
-    } else if (d.error === 'points') {
-      setStatus('gen-status', '⚠️ ' + d.message, true);
-    } else {
-      setStatus('gen-status', d.message || '생성 실패', true);
+    const submit = await r.json();
+    if (!submit.ok) {
+      setStatus('gen-status', (submit.error === 'points' ? '⚠️ ' : '') + (submit.message || '생성 실패'), true);
+      return;
     }
+    const d = await pollTaskStatus('{{ url_for("create.dpb_section_feature3_status", creation_id="") }}' + submit.id);
+    showResult(d.image_url);
+    setStatus('gen-status', '✅ 이미지 생성 완료!', false, true);
   } catch (e) {
     setStatus('gen-status', '오류: ' + e.message, true);
   } finally {

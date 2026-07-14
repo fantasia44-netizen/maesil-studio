@@ -203,17 +203,13 @@ def dpb_gen_text():
 @create_bp.route('/detail-page/builder/gen-image', methods=['POST'])
 @login_required
 def dpb_gen_image():
-    """블록 이미지 FLUX 생성 (50P)"""
-    supabase = current_app.supabase
+    """블록 이미지 FLUX 생성 (50P) — 워커 제출, 완료는 /gen-image/status/<id> 폴링."""
     data = request.get_json(silent=True) or {}
 
-    brand_id        = data.get('brand_id', '')
-    block_role      = data.get('block_role', 'product')
-    block_label     = data.get('block_label', '이미지')
-    image_prompt    = data.get('image_prompt', '').strip()
-    product_name    = data.get('product_name', '').strip()
-    product_features= data.get('product_features', '').strip()
-    engine          = data.get('engine', 'flux_preview')
+    block_role   = data.get('block_role', 'product')
+    block_label  = data.get('block_label', '이미지')
+    image_prompt = data.get('image_prompt', '').strip()
+    engine       = data.get('engine', 'flux_preview')
 
     # 허용 엔진 + 포인트 비용 (imagen_service.IMAGE_COSTS 기준)
     _ENGINE_COSTS = {'flux_preview': 50, 'flux_standard': 300, 'flux_hq': 600}
@@ -227,27 +223,39 @@ def dpb_gen_image():
         image_prompt = _IMAGE_PROMPT_HINTS.get(block_role, 'commercial product photography, clean studio')
         image_prompt += ', photorealistic, high quality, 4k'
 
-    # 포인트 차감
-    from services.point_service import use_points, InsufficientPoints
-    creation_id = str(uuid.uuid4())
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.detail_page_builder_task import gen_image as gen_image_task
     try:
-        use_points(current_user, 'dp_block_image', creation_id,
-                   cost_override=cost, note_override=f'상세페이지 이미지 ({block_label})')
-    except InsufficientPoints as e:
-        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
-
-    # FLUX 생성 (_generate_flux 내부에서 한글 자동 번역됨)
-    try:
-        from services.imagen_service import generate_image, upload_to_supabase
-        image_url, prompt_en = generate_image(image_prompt, engine=engine, size='1024x1024')
-        logger.info(f'[DPB] gen-image done. prompt_en={prompt_en[:60]}')
-
-        # Supabase Storage에 업로드 (안정적인 URL 확보)
-        stable_url = upload_to_supabase(image_url, current_user.id, f'dpb_{block_role}.jpg')
-        return jsonify(ok=True, image_url=stable_url, prompt_used=prompt_en)
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='dp_block_image', cost=cost,
+            input_data={'image_prompt': image_prompt, 'engine': engine, 'block_label': block_label},
+            task_delay_fn=gen_image_task.delay,
+            task_kwargs=dict(image_prompt=image_prompt, engine=engine, block_role=block_role),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, error='points', message=str(e))
     except Exception as e:
-        logger.error(f'[DPB] gen-image error: {e}')
-        return jsonify(ok=False, message=f'이미지 생성 중 오류가 발생했습니다: {str(e)[:80]}')
+        logger.error(f'[DPB] gen-image 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
+
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=cost)
+
+
+@create_bp.route('/detail-page/builder/gen-image/status/<creation_id>', methods=['GET'])
+@login_required
+def dpb_gen_image_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(
+        row, current_user.id,
+        done_fields={'image_url': 'image_url', 'prompt_used': 'prompt_used'})
 
 
 # ════════════════════════════════════════════════════════════
@@ -293,7 +301,7 @@ def dpb_upload_image():
 @create_bp.route('/detail-page/builder/bg-replace', methods=['POST'])
 @login_required
 def dpb_bg_replace():
-    """제품 이미지 배경 교체 — Bria AI (80P).
+    """제품 이미지 배경 교체 — Bria AI (80P). 워커 제출, 완료는 status 폴링.
 
     기존 이미지(image_url)의 배경만 교체하고 제품·로고는 보존.
     bg_prompt: 새 배경 설명 (한국어 OK — 내부에서 영어 번역)
@@ -308,27 +316,37 @@ def dpb_bg_replace():
     if not bg_prompt:
         return jsonify(ok=False, message='새 배경 설명을 입력해 주세요.')
 
-    # 포인트 차감
-    from services.point_service import use_points, InsufficientPoints
-    creation_id = str(uuid.uuid4())
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.detail_page_builder_task import bg_replace as bg_replace_task
     try:
-        use_points(current_user, 'dp_bg_replace', creation_id,
-                   cost_override=80, note_override=f'상세페이지 배경 교체 ({block_label})')
-    except InsufficientPoints as e:
-        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
-
-    try:
-        from services.imagen_service import replace_background, upload_to_supabase, _translate_prompt, _has_korean
-
-        # 한국어 배경 설명 → 영어 번역
-        bg_en = _translate_prompt(bg_prompt) if _has_korean(bg_prompt) else bg_prompt
-
-        new_url = replace_background(image_url, bg_en)
-        stable_url = upload_to_supabase(new_url, current_user.id, f'dpb_bg_{uuid.uuid4().hex[:6]}.jpg')
-        return jsonify(ok=True, image_url=stable_url)
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='dp_bg_replace', cost=80,
+            input_data={'image_url': image_url, 'bg_prompt': bg_prompt, 'block_label': block_label},
+            task_delay_fn=bg_replace_task.delay,
+            task_kwargs=dict(image_url=image_url, bg_prompt=bg_prompt),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, error='points', message=str(e))
     except Exception as e:
-        logger.error(f'[DPB] bg-replace error: {e}')
-        return jsonify(ok=False, message=f'배경 교체 중 오류가 발생했습니다: {str(e)[:80]}')
+        logger.error(f'[DPB] bg-replace 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='배경 교체 요청 중 오류가 발생했습니다.')
+
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=80)
+
+
+@create_bp.route('/detail-page/builder/bg-replace/status/<creation_id>', methods=['GET'])
+@login_required
+def dpb_bg_replace_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(row, current_user.id, done_fields={'image_url': 'image_url'})
 
 
 # ════════════════════════════════════════════════════════════
@@ -364,28 +382,40 @@ def dpb_flux_text():
     if brand and brand.get('primary_color'):
         brand_color = brand['primary_color']
 
-    # 포인트 차감
-    from services.point_service import use_points, InsufficientPoints
-    creation_id = str(uuid.uuid4())
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.detail_page_builder_task import flux_text as flux_text_task
     try:
-        use_points(current_user, 'dp_flux_text', creation_id,
-                   cost_override=300, note_override=f'상세페이지 텍스트 조합 이미지 ({block_label})')
-    except InsufficientPoints as e:
-        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
-
-    try:
-        from services.imagen_service import generate_card_news, upload_to_supabase
-        data_url, prompt_used = generate_card_news(
-            texts=texts[:3],
-            background_prompt=bg_prompt,
-            brand_color=brand_color,
-            font_color=font_color,
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='dp_flux_text', cost=300,
+            input_data={'bg_prompt': bg_prompt, 'texts': texts, 'block_label': block_label},
+            task_delay_fn=flux_text_task.delay,
+            task_kwargs=dict(texts=texts[:3], bg_prompt=bg_prompt,
+                             brand_color=brand_color, font_color=font_color),
         )
-        stable_url = upload_to_supabase(data_url, current_user.id, f'dpb_txt_{uuid.uuid4().hex[:6]}.jpg')
-        return jsonify(ok=True, image_url=stable_url, prompt_used=prompt_used)
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, error='points', message=str(e))
     except Exception as e:
-        logger.error(f'[DPB] flux-text error: {e}')
-        return jsonify(ok=False, message=f'텍스트 조합 이미지 생성 중 오류가 발생했습니다: {str(e)[:80]}')
+        logger.error(f'[DPB] flux-text 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='텍스트 조합 이미지 요청 중 오류가 발생했습니다.')
+
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=300)
+
+
+@create_bp.route('/detail-page/builder/flux-text/status/<creation_id>', methods=['GET'])
+@login_required
+def dpb_flux_text_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(
+        row, current_user.id,
+        done_fields={'image_url': 'image_url', 'prompt_used': 'prompt_used'})
 
 
 # ════════════════════════════════════════════════════════════
@@ -536,35 +566,38 @@ def dpb_section_feature3_generate():
     if brand and brand.get('primary_color'):
         brand_color = brand['primary_color']
 
-    # 포인트 차감 (400P)
-    from services.point_service import use_points, InsufficientPoints
-    creation_id = str(uuid.uuid4())
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.detail_page_builder_task import feature3 as feature3_task
     try:
-        use_points(current_user, 'dp_feature3', creation_id,
-                   cost_override=400, note_override='상세페이지 소구포인트 3열 이미지')
-    except InsufficientPoints as e:
-        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
-
-    try:
-        from services.imagen_service import generate_feature3_section, upload_to_supabase
-        import base64
-        png_bytes = generate_feature3_section(
-            bg_image_url=bg_image_url,
-            headline=headline,
-            features=features[:3],
-            brand_color=brand_color,
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='dp_feature3', cost=400,
+            input_data={'headline': headline, 'bg_image_url': bg_image_url},
+            task_delay_fn=feature3_task.delay,
+            task_kwargs=dict(bg_image_url=bg_image_url, headline=headline,
+                             features=features[:3], brand_color=brand_color),
         )
-        # base64 data URL → upload to Supabase
-        b64 = base64.b64encode(png_bytes).decode()
-        data_url = f'data:image/png;base64,{b64}'
-        stable_url = upload_to_supabase(
-            data_url, current_user.id,
-            f'dpb_feat3_{uuid.uuid4().hex[:8]}.png'
-        )
-        return jsonify(ok=True, image_url=stable_url)
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, error='points', message=str(e))
     except Exception as e:
-        logger.error(f'[DPB] feature3 generate error: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'이미지 생성 중 오류가 발생했습니다: {str(e)[:120]}')
+        logger.error(f'[DPB] feature3 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
+
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=400)
+
+
+@create_bp.route('/detail-page/section/feature3/generate/status/<creation_id>', methods=['GET'])
+@login_required
+def dpb_section_feature3_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(row, current_user.id, done_fields={'image_url': 'image_url'})
 
 
 # ════════════════════════════════════════════════════════════
@@ -749,10 +782,10 @@ def dpb_story_plan():
 @create_bp.route('/detail-page/story/generate-section', methods=['POST'])
 @login_required
 def dpb_story_generate_section():
-    """단일 섹션 이미지 생성 (스토리 세트 배치용). 프론트에서 섹션별로 순차 호출."""
-    import base64 as _b64
-    supabase = current_app.supabase
-    data     = request.get_json(silent=True) or {}
+    """단일 섹션 이미지 생성 (스토리 세트 배치용). 프론트에서 섹션별로 순차 호출.
+    워커 제출 후 /story/generate-section/status/<id> 폴링으로 완료 확인."""
+    supabase    = current_app.supabase
+    data        = request.get_json(silent=True) or {}
     brand_id    = data.get('brand_id', '')
     brand_color = data.get('brand_color', '#4b5cde')
     section     = data.get('section', {})
@@ -772,97 +805,39 @@ def dpb_story_generate_section():
     }
     cost = COSTS.get(tmpl, 200)
 
-    from services.point_service import use_points, InsufficientPoints
-    from services.tz_utils import now_kst
-    creation_id = str(uuid.uuid4())
-
-    # creations 행 선삽입 (generating) — 이력 추적용
-    _insert_row = {
-        'id': creation_id,
-        'user_id': current_user.id,
-        'creation_type': 'detail_page_image',
-        'input_data': {
-            'template': tmpl,
-            'brand_id': brand_id,
-            'section_label': LABELS.get(tmpl, tmpl),
-        },
-        'output_data': {},
-        'points_used': cost,
-        'status': 'generating',
-        'created_at': now_kst().isoformat(),
-    }
-    if brand and brand.get('id'):
-        _insert_row['brand_id'] = brand['id']
-    if getattr(current_user, 'operator_id', None):
-        _insert_row['operator_id'] = current_user.operator_id
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.detail_page_builder_task import story_section as story_section_task
+    extra_row = {'brand_id': brand['id']} if brand and brand.get('id') else None
     try:
-        supabase.table('creations').insert(_insert_row).execute()
-    except Exception as _ie:
-        logger.warning(f'[DPB] creations insert 실패 (무시): {_ie}')
-
-    try:
-        use_points(current_user, 'detail_page_image', creation_id,
-                   cost_override=cost,
-                   note_override=f'상세페이지 {LABELS.get(tmpl, tmpl)} 이미지')
-    except InsufficientPoints as e:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, error='points', message=str(e) or '포인트가 부족합니다.')
-
-    try:
-        from services.imagen_service import (
-            generate_hero_section, generate_feature3_section,
-            generate_feature_highlight, generate_text_emphasis,
-            generate_cta_section, upload_to_supabase, generate_image,
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='detail_page_image', cost=cost,
+            input_data={'template': tmpl, 'brand_id': brand_id,
+                       'section_label': LABELS.get(tmpl, tmpl)},
+            extra_row=extra_row,
+            task_delay_fn=story_section_task.delay,
+            task_kwargs=dict(tmpl=tmpl, section=section, brand_color=brand_color),
         )
-
-        # 배경 이미지 — 제품사진 직접 선택 > AI 생성 > 단색 fallback
-        bg_url = section.get('_bg_override', '').strip()
-        if not bg_url and tmpl != 'text_emphasis' and section.get('bg_prompt'):
-            try:
-                bg_url, _ = generate_image(section['bg_prompt'], engine='flux_preview', size='1024x768')
-            except Exception as flux_err:
-                logger.warning(f'[DPB] story bg-image 실패, 단색 배경 사용: {flux_err}')
-
-        if tmpl == 'hero':
-            png = generate_hero_section(
-                bg_url, section.get('headline', ''), section.get('subtext', ''), brand_color)
-        elif tmpl == 'feature3':
-            png = generate_feature3_section(
-                bg_url, section.get('headline', ''), section.get('features', []), brand_color)
-        elif tmpl == 'feature_highlight':
-            png = generate_feature_highlight(
-                bg_url, section.get('number', '01'), section.get('title', ''),
-                section.get('desc', ''), brand_color, section.get('layout', 'left'))
-        elif tmpl == 'text_emphasis':
-            png = generate_text_emphasis(
-                section.get('main_text', ''), section.get('sub_text', ''), brand_color)
-        elif tmpl == 'cta':
-            png = generate_cta_section(
-                bg_url, section.get('cta_text', ''), section.get('sub_text', ''), brand_color)
-        else:
-            return jsonify(ok=False, message=f'알 수 없는 템플릿: {tmpl}')
-
-        b64 = _b64.b64encode(png).decode()
-        data_url = f'data:image/png;base64,{b64}'
-        stable_url = upload_to_supabase(
-            data_url, current_user.id,
-            f'dpb_{tmpl}_{uuid.uuid4().hex[:8]}.png'
-        )
-        # creations 업데이트 (done)
-        try:
-            supabase.table('creations').update({
-                'output_data': {'image_url': stable_url, 'template': tmpl},
-                'status': 'done',
-            }).eq('id', creation_id).execute()
-        except Exception as _ue:
-            logger.warning(f'[DPB] creations update(done) 실패 (무시): {_ue}')
-
-        return jsonify(ok=True, image_url=stable_url, template=tmpl, cost=cost)
-
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, error='points', message=str(e))
     except Exception as e:
-        logger.error(f'[DPB] story generate-section error: {e}', exc_info=True)
-        try:
-            supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        except Exception:
-            pass
-        return jsonify(ok=False, message=f'이미지 생성 오류: {str(e)[:120]}')
+        logger.error(f'[DPB] story generate-section 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
+
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=cost, template=tmpl)
+
+
+@create_bp.route('/detail-page/story/generate-section/status/<creation_id>', methods=['GET'])
+@login_required
+def dpb_story_generate_section_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(
+        row, current_user.id,
+        done_fields={'image_url': 'image_url', 'template': 'template'})

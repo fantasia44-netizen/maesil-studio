@@ -24,12 +24,14 @@ class AsyncSubmitError(Exception):
 
 def submit_async_generation(*, owner, creation_type: str, cost: int, input_data: dict,
                             task_delay_fn: Callable, task_kwargs: dict,
-                            model_used: str | None = None) -> str:
+                            model_used: str | None = None,
+                            extra_row: dict | None = None) -> str:
     """포인트 차감 + creations(status='generating') insert + Celery 태스크 제출.
 
     task_kwargs에는 creation_id/user_id/supabase_url/supabase_key를 넣지 않는다 —
     이 함수가 자동으로 주입한다(태스크는 Flask 컨텍스트가 없는 별도 프로세스이므로
     Supabase 접속 정보를 환경변수에서 재도출해 넘겨야 함).
+    extra_row: creations insert 행에 추가로 merge할 필드(예: brand_id).
 
     반환: creation_id. 잔액 부족 시 AsyncSubmitError(message) 발생.
     """
@@ -58,6 +60,8 @@ def submit_async_generation(*, owner, creation_type: str, cost: int, input_data:
                 row['model_used'] = model_used
             if getattr(owner, 'operator_id', None):
                 row['operator_id'] = owner.operator_id
+            if extra_row:
+                row.update(extra_row)
             supabase.table('creations').insert(row).execute()
         except Exception as e:
             logger.warning('[async_generation] creations insert 실패: %s', e)

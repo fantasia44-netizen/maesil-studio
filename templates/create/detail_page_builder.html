@@ -572,6 +572,7 @@
 {% endblock %}
 
 {% block extra_script %}
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 // ════════════════════════════════════════════
 // 전역 상태
@@ -965,16 +966,14 @@ async function confirmGenImage() {
         engine,
       }),
     });
-    const data = await res.json();
-    if (data.ok) {
-      setBlockImage(blockId, data.image_url);
-      _imgGenModal.hide();
-      toast('이미지 생성 완료 ✓', 'success');
-    } else {
-      toast(data.message || '이미지 생성 실패', 'error');
-    }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '이미지 생성 실패');
+    const data = await pollTaskStatus('{{ url_for("create.dpb_gen_image_status", creation_id="") }}' + submit.id);
+    setBlockImage(blockId, data.image_url);
+    _imgGenModal.hide();
+    toast('이미지 생성 완료 ✓', 'success');
   } catch (e) {
-    toast('네트워크 오류', 'error');
+    toast(e.message || '네트워크 오류', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-stars me-1"></i>생성하기';
@@ -1263,16 +1262,14 @@ async function confirmBgReplace() {
         block_label: b.label,
       }),
     });
-    const data = await res.json();
-    if (data.ok) {
-      setBlockImage(blockId, data.image_url);
-      _bgReplaceModal.hide();
-      toast('배경 교체 완료 ✓', 'success');
-    } else {
-      toast(data.message || '배경 교체 실패', 'error');
-    }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '배경 교체 실패');
+    const data = await pollTaskStatus('{{ url_for("create.dpb_bg_replace_status", creation_id="") }}' + submit.id);
+    setBlockImage(blockId, data.image_url);
+    _bgReplaceModal.hide();
+    toast('배경 교체 완료 ✓', 'success');
   } catch (e) {
-    toast('네트워크 오류', 'error');
+    toast(e.message || '네트워크 오류', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-layers me-1"></i>배경 교체';
@@ -1345,16 +1342,14 @@ async function confirmFluxText() {
         block_label: b.label,
       }),
     });
-    const data = await res.json();
-    if (data.ok) {
-      setBlockImage(blockId, data.image_url);
-      _fluxTextModal.hide();
-      toast('텍스트 조합 이미지 생성 완료 ✓', 'success');
-    } else {
-      toast(data.message || '생성 실패', 'error');
-    }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '생성 실패');
+    const data = await pollTaskStatus('{{ url_for("create.dpb_flux_text_status", creation_id="") }}' + submit.id);
+    setBlockImage(blockId, data.image_url);
+    _fluxTextModal.hide();
+    toast('텍스트 조합 이미지 생성 완료 ✓', 'success');
   } catch (e) {
-    toast('네트워크 오류', 'error');
+    toast(e.message || '네트워크 오류', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-type me-1"></i>생성하기';

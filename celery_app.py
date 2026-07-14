@@ -14,7 +14,7 @@ celery = Celery(
     broker=REDIS_URL,
     backend=REDIS_URL,
     include=['tasks.shorts_task', 'tasks.banner_task', 'tasks.detail_page_task',
-             'tasks.experience_task', 'tasks.image_task'],
+             'tasks.experience_task', 'tasks.image_task', 'tasks.detail_page_builder_task'],
 )
 
 celery.conf.update(
