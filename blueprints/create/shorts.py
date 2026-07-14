@@ -429,7 +429,7 @@ def shorts_translate_prompt():
     )
 
     try:
-        flux_prompt = generate_text(system, prompt, max_tokens=200, model='claude-haiku-4-5').strip()
+        flux_prompt = generate_text(system, prompt, max_tokens=200, model='claude-haiku-4-5-20251001').strip()
         # 따옴표·마크다운 제거
         flux_prompt = flux_prompt.strip('"\'`').strip()
         return jsonify(ok=True, flux_prompt=flux_prompt)
