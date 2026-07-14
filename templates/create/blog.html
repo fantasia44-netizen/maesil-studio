@@ -1579,12 +1579,12 @@ async function aiCutoutChar() {
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({ character_data: _thumbCharData }),
     });
-    const j = await res.json();
-    if (j.ok && j.character_data) {
-      _setThumbChar(j.character_data);
-      _thumbCharMsg('누끼 완료! (-' + j.cost + 'P)', 'ok');
-    } else { _thumbCharMsg(j.message || 'AI 누끼에 실패했습니다.', 'err'); }
-  } catch (e) { _thumbCharMsg('요청 실패: ' + e, 'err'); }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || 'AI 누끼에 실패했습니다.');
+    const j = await pollTaskStatus('{{ url_for("create.blog_thumbnail_cutout_status", creation_id="") }}' + submit.id);
+    _setThumbChar(j.character_data);
+    _thumbCharMsg('누끼 완료! (-' + submit.cost + 'P)', 'ok');
+  } catch (e) { _thumbCharMsg(e.message || '요청 실패: ' + e, 'err'); }
   finally { btn.disabled = false; btn.innerHTML = old; }
 }
 async function transformChar() {
@@ -1602,12 +1602,12 @@ async function transformChar() {
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({ character_data: _thumbCharData, style }),
     });
-    const j = await res.json();
-    if (j.ok && j.character_data) {
-      _setThumbChar(j.character_data);
-      _thumbCharMsg('변형 완료! (-' + j.cost + 'P)', 'ok');
-    } else { _thumbCharMsg(j.message || '캐릭터 변형에 실패했습니다.', 'err'); }
-  } catch (e) { _thumbCharMsg('요청 실패: ' + e, 'err'); }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '캐릭터 변형에 실패했습니다.');
+    const j = await pollTaskStatus('{{ url_for("create.blog_thumbnail_transform_character_status", creation_id="") }}' + submit.id);
+    _setThumbChar(j.character_data);
+    _thumbCharMsg('변형 완료! (-' + submit.cost + 'P)', 'ok');
+  } catch (e) { _thumbCharMsg(e.message || '요청 실패: ' + e, 'err'); }
   finally { btn.disabled = false; btn.innerHTML = old; }
 }
 
@@ -1727,8 +1727,18 @@ async function generateThumbPreview() {
       }),
     });
     }
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.message || '생성 실패');
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '생성 실패');
+
+    let data;
+    if (submit.async_mode) {
+      const statusUrl = _mode === 'scene'
+        ? '{{ url_for("create.blog_thumbnail_scene_status", creation_id="") }}'
+        : '{{ url_for("create.blog_thumbnail_status", creation_id="") }}';
+      data = await pollTaskStatus(statusUrl + submit.id);
+    } else {
+      data = submit;   // design(항상 동기) 또는 classic 무료 경로(즉시 응답)
+    }
 
     _thumbPreviewUrl = data.url;
     // FLUX 배경 URL 저장 → 다음 재합성 시 재사용 (100P 절약)
@@ -1746,7 +1756,7 @@ async function generateThumbPreview() {
     if (btnText) btnText.textContent = '재생성';
     if (caption) caption.innerHTML =
       `<i class="bi bi-check-circle-fill me-1" style="color:#22c55e"></i>실제 생성된 이미지` +
-      (data.cost ? ` · ${data.cost}P 사용` : '');
+      (submit.cost ? ` · ${submit.cost}P 사용` : '');
     document.getElementById('thumbDownloadBtn')?.classList.remove('d-none');
 
   } catch (e) {

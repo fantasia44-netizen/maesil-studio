@@ -785,197 +785,87 @@ def blog_thumbnail():
     if not line1:
         return jsonify(ok=False, message='메인 텍스트를 입력해 주세요.')
 
-    # ── 포인트 처리 + creations 행 1개 생성 (마지막에 done으로 UPDATE) ──
     # existing_bg_url이 있으면 FLUX 호출 안 함 → 무료 (텍스트만 재합성)
     will_generate_flux = use_flux and not existing_bg_url
-    cost = 100 if will_generate_flux else 0
-    import uuid as _uuid2
-    cid = str(_uuid2.uuid4())   # 무료 모드에서도 cid 정의 (이후 update에서 사용)
 
-    if cost:
-        from services.point_service import get_balance, use_points, InsufficientPoints
-        balance = get_balance(current_user)
-        if balance < cost:
-            return jsonify(ok=False,
-                           message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
+    # ── 무료 경로: 기존 배경 재사용 / 직접 업로드 / PIL 그라데이션 — 빠르므로 동기 처리 ──
+    if not will_generate_flux:
+        bg_url = bg_upload_data or existing_bg_url or None
+        if bg_upload_data:
+            logger.info('[thumbnail] 업로드 배경 사용 (base64)')
+        elif existing_bg_url:
+            logger.info(f'[thumbnail] 기존 배경 재사용: {bg_url[:80]}')
 
-        # brand_id 자동 결정 (creations NOT NULL 제약 회피 — 운영자 환경 호환)
-        # 클라이언트가 brand_id를 보내지 않으므로 기본 브랜드로 fallback
-        _brand_id_for_thumb = (data.get('brand_id') or '').strip()
-        if not _brand_id_for_thumb:
-            try:
-                _default = get_default_brand(current_app.supabase)
-                _brand_id_for_thumb = (_default or {}).get('id') or None
-            except Exception:
-                _brand_id_for_thumb = None
-
-        try:
-            now_s = now_kst().isoformat()
-            if current_app.supabase:
-                _row = {
-                    'id': cid, 'user_id': current_user.id,
-                    'creation_type': 'blog_thumbnail',
-                    'input_data': {
-                        'line1': line1, 'line2': line2,
-                        'accent': accent_color, 'bg_topic': bg_topic,
-                    },
-                    'output_data': {}, 'points_used': cost,
-                    'status': 'pending',
-                    'created_at': now_s, 'updated_at': now_s,
-                }
-                if _brand_id_for_thumb:
-                    _row['brand_id'] = _brand_id_for_thumb
-                if getattr(current_user, 'operator_id', None):
-                    _row['operator_id'] = current_user.operator_id
-                try:
-                    current_app.supabase.table('creations').insert(_row).execute()
-                except Exception as ins_e:
-                    # brand_id 컬럼이 NOT NULL인데 fallback도 실패한 경우 → operator_id 빼고 재시도
-                    logger.warning(f'[blog/thumbnail] insert 1차 실패 → 최소 컬럼 재시도: {ins_e}')
-                    _min_row = {k: v for k, v in _row.items()
-                                if k in ('id','user_id','operator_id','brand_id','creation_type',
-                                         'input_data','output_data','points_used','status',
-                                         'created_at','updated_at')}
-                    current_app.supabase.table('creations').insert(_min_row).execute()
-            use_points(current_user, 'blog_thumbnail', cid, cost_override=cost)
-            logger.info(
-                f'[blog/thumbnail] 포인트 차감 완료 cid={cid[:8]} cost={cost}P '
-                f'uid={current_user.id[:8]} oid={(getattr(current_user,"operator_id","") or "")[:8]} '
-                f'brand={(_brand_id_for_thumb or "")[:8]}'
-            )
-        except InsufficientPoints as e:
-            return jsonify(ok=False, message=str(e))
-        except Exception as e:
-            # 사일런트 무시 → 사용자에게 명확히 알림
-            logger.error(f'[blog/thumbnail] 포인트/DB 처리 실패: {e}', exc_info=True)
-            return jsonify(
-                ok=False,
-                message=f'썸네일 생성을 시작할 수 없습니다. ({str(e)[:120]})'
-            )
-
-    # ── FLUX 배경 생성 (또는 기존 배경 재사용 / 직접 업로드) ───
-    bg_url = None
-    if bg_upload_data:
-        # 직접 업로드한 이미지를 background_url로 직접 사용 (base64 data URL)
-        bg_url = bg_upload_data
-        logger.info('[thumbnail] 업로드 배경 사용 (base64)')
-    elif existing_bg_url:
-        # 기존 배경 재사용 (텍스트 수정 or 이전 생성 배경 선택)
-        bg_url = existing_bg_url
-        logger.info(f'[thumbnail] 기존 배경 재사용: {bg_url[:80]}')
-    elif use_flux:
-        from services.imagen_service import _generate_flux
-        from services.claude_service import generate_text as _gen_text
-
-        # 썸네일 배경 — 블로그 글 내용 + 이미지 프롬프트 맥락으로 Sonnet이 배경 생성
-        # 유저가 배경 키워드를 입력하지 않아도 글 내용에서 의도 파악 가능
-        # bg_topic(유저 직접 지시)를 최우선으로 배치
-        context_parts = []
-        if bg_topic:
-            context_parts.append(f'[유저 배경 키워드 — 최우선 지시]\n{bg_topic}')
-        if image_prompts:
-            context_parts.append(
-                f'[이미 생성된 블로그 이미지 프롬프트 (영문 FLUX 형식)]\n{image_prompts}'
-            )
-        if blog_text:
-            context_parts.append(f'[블로그 글 내용 발췌 — 보조 참고]\n{blog_text[:600]}')
-
-        context_str = '\n\n'.join(context_parts) if context_parts else '배경 키워드 없음'
-
-        # generate_text(system_prompt, user_prompt, max_tokens, model) — 위치 인수
-        _THUMB_BG_SYSTEM = (
-            'You write a FLUX image generation prompt for a blog thumbnail background.\n'
-            '\n'
-            'PRIORITY ORDER (follow strictly):\n'
-            '1. [유저 배경 키워드] = USER\'S DIRECT INSTRUCTION — must be honored exactly.\n'
-            '   If user says "창고" → generate warehouse. No exceptions.\n'
-            '2. [이미지 프롬프트] = reference for visual style and mood.\n'
-            '3. [블로그 글 내용] = supplementary context only.\n'
-            '\n'
-            'If [유저 배경 키워드] is empty, infer the best background from '
-            'the image prompts and blog content.\n'
-            '\n'
-            'OUTPUT FORMAT: 50-70 word English FLUX prompt only.\n'
-            '- Describe exact physical objects, materials, lighting angles\n'
-            '- End with: "photorealistic DSLR photography, dark exposure, '
-            'no people, no text in image"\n'
-            '- NO: futuristic, sci-fi, cyberpunk, neon, glowing panels, '
-            'city streets, night market, rain, charts, graphs, screens\n'
-            '- Korean input → translate to English first\n'
-            '- Output the prompt only, no explanation, no quotes.'
+        from services.imagen_service import generate_blog_thumbnail, upload_to_supabase
+        img_bytes = generate_blog_thumbnail(
+            line1=line1, line2=line2, background_url=bg_url, brand_name=brand_name,
+            accent_color=accent_color, line1_color=line1_color, use_quotes=use_quotes,
+            text_y_pct=text_y_pct, font_size_pct=font_size_pct,
+            overlay_darkness=overlay_darkness, text_align=text_align,
+            letter_spacing=letter_spacing, text_bg_color=text_bg_color,
+            text_bg_opacity=text_bg_opacity,
         )
+        b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
         try:
-            bg_prompt = _gen_text(
-                _THUMB_BG_SYSTEM,
-                context_str,
-                max_tokens=220,
-                model='claude-sonnet-4-6',
-            )
-            bg_prompt = bg_prompt.strip().strip('"\'').strip()
-            logger.info(
-                f'[thumbnail] context_len={len(context_str)} '
-                f'bg_topic={bg_topic[:50]!r} '
-                f'→ FLUX prompt: {bg_prompt[:200]}'
-            )
-        except Exception as e:
-            logger.warning(f'[thumbnail] 배경 프롬프트 생성 실패 → 폴백 사용: {e}')
-            bg_prompt = (
-                'dark atmospheric interior space with dramatic directional lighting, '
-                'photorealistic DSLR photography, dark exposure, '
-                'no people, no text in image'
-            )
+            import time as _time
+            public_url = upload_to_supabase(b64, current_user.id,
+                                            f'blog_thumbnail_{int(_time.time())}.png')
+        except Exception:
+            public_url = b64   # 스토리지 실패 시 base64 직접
+        return jsonify(ok=True, url=public_url, cost=0, bg_url=bg_url or '', async_mode=False)
 
+    # ── 유료 경로: FLUX 신규 배경 생성 — 워커 제출 ───────────────
+    # brand_id 자동 결정 (creations NOT NULL 제약 회피 — 운영자 환경 호환)
+    _brand_id_for_thumb = (data.get('brand_id') or '').strip()
+    if not _brand_id_for_thumb:
         try:
-            bg_url, _ = _generate_flux(bg_prompt, 'flux_standard', '1080x1080')
-            logger.info(f'[thumbnail] FLUX 배경 생성 완료: {bg_url[:80]}')
-        except Exception as e:
-            logger.warning(f'[blog/thumbnail] FLUX 배경 실패 → PIL 폴백: {e}')
+            _default = get_default_brand(current_app.supabase)
+            _brand_id_for_thumb = (_default or {}).get('id') or None
+        except Exception:
+            _brand_id_for_thumb = None
 
-    # ── PIL 합성 ──────────────────────────────────────────────
-    from services.imagen_service import generate_blog_thumbnail, upload_to_supabase
-    img_bytes = generate_blog_thumbnail(
-        line1=line1, line2=line2,
-        background_url=bg_url,
-        brand_name=brand_name,
-        accent_color=accent_color,
-        line1_color=line1_color,
-        use_quotes=use_quotes,
-        text_y_pct=text_y_pct,
-        font_size_pct=font_size_pct,
-        overlay_darkness=overlay_darkness,
-        text_align=text_align,
-        letter_spacing=letter_spacing,
-        text_bg_color=text_bg_color,
-        text_bg_opacity=text_bg_opacity,
-    )
-    b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
-
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.blog_thumbnail_task import classic_thumbnail as classic_task
     try:
-        import time as _time
-        _fname = f'blog_thumbnail_{int(_time.time())}.png'
-        public_url = upload_to_supabase(b64, current_user.id, _fname)
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='blog_thumbnail', cost=100,
+            input_data={'line1': line1, 'line2': line2,
+                       'accent': accent_color, 'bg_topic': bg_topic},
+            extra_row={'brand_id': _brand_id_for_thumb} if _brand_id_for_thumb else None,
+            task_delay_fn=classic_task.delay,
+            task_kwargs=dict(
+                line1=line1, line2=line2, brand_name=brand_name, accent_color=accent_color,
+                use_quotes=use_quotes, bg_topic=bg_topic, blog_text=blog_text,
+                image_prompts=image_prompts, text_y_pct=text_y_pct, font_size_pct=font_size_pct,
+                overlay_darkness=overlay_darkness, text_align=text_align,
+                line1_color=line1_color, letter_spacing=letter_spacing,
+                text_bg_color=text_bg_color, text_bg_opacity=text_bg_opacity,
+            ),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
+    except Exception as e:
+        logger.error(f'[blog/thumbnail] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message=f'썸네일 생성을 시작할 수 없습니다. ({str(e)[:120]})')
+
+    logger.info(f'[blog/thumbnail] 제출 완료 cid={creation_id[:8]} '
+                f'uid={current_user.id[:8]} brand={(_brand_id_for_thumb or "")[:8]}')
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=100)
+
+
+@create_bp.route('/blog/thumbnail/status/<creation_id>', methods=['GET'])
+@login_required
+def blog_thumbnail_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
     except Exception:
-        public_url = b64   # 스토리지 실패 시 base64 직접
-
-    # ── creations 행을 done으로 UPDATE (재사용 갤러리용 bg_url + thumbnail 저장) ──
-    # FLUX 신규 생성 시만 pending 행이 있음 → 그 행을 done으로 마감
-    if will_generate_flux and bg_url and current_app.supabase:
-        try:
-            now_s = now_kst().isoformat()
-            current_app.supabase.table('creations').update({
-                'output_data': {
-                    'bg_url': bg_url,
-                    'thumbnail_url': public_url,
-                },
-                'status': 'done',
-                'updated_at': now_s,
-            }).eq('id', cid).execute()
-            logger.info(f'[blog/thumbnail] creations 저장 완료 cid={cid[:8]} bg={bg_url[:60]}')
-        except Exception as e:
-            logger.warning(f'[blog/thumbnail] creations 업데이트 실패: {e}')
-
-    # bg_url: 프론트가 이 URL을 기억해서 텍스트만 수정 시 재사용 (100P 절약)
-    return jsonify(ok=True, url=public_url, cost=cost, bg_url=bg_url or '')
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(row, current_user.id, done_fields={'url': 'url', 'bg_url': 'bg_url'})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1062,21 +952,6 @@ _CUTOUT_COST    = 30
 _TRANSFORM_COST = 100
 
 
-def _charge_ai_points(cost: int, note: str) -> str | None:
-    """AI 부가기능 포인트 차감. 성공 시 None, 부족/실패 시 사용자 메시지 반환."""
-    import uuid as _uuid
-    from services.point_service import get_balance, use_points, InsufficientPoints
-    try:
-        if get_balance(current_user) < cost:
-            bal = get_balance(current_user)
-            return f'포인트가 부족합니다. (필요: {cost}P, 잔액: {bal}P)'
-        use_points(current_user, 'blog_thumbnail', str(_uuid.uuid4()),
-                   cost_override=cost, note_override=note)
-        return None
-    except InsufficientPoints as e:
-        return str(e)
-
-
 def _save_thumb_creation(url: str, style: str, cost: int, meta: dict) -> None:
     """썸네일 생성물을 creations에 기록 — 생성 이력 노출·재사용용. 실패해도 응답엔 영향 없음."""
     if not current_app.supabase or not url:
@@ -1114,54 +989,69 @@ def _save_thumb_creation(url: str, style: str, cost: int, meta: dict) -> None:
 @create_bp.route('/blog/thumbnail/cutout', methods=['POST'])
 @login_required
 def blog_thumbnail_cutout():
-    """캐릭터 이미지 AI 정밀 누끼 → 투명 PNG data URL 반환."""
-    import base64 as _b64
+    """캐릭터 이미지 AI 정밀 누끼 — 워커 제출, 완료는 status 폴링."""
     data = request.get_json(force=True) or {}
     char_data = (data.get('character_data') or '').strip()
     if not char_data.startswith('data:image/'):
         return jsonify(ok=False, message='캐릭터 이미지를 먼저 업로드해 주세요.')
 
-    _uid = str(getattr(current_user, 'id', '') or '')
-    from services.imagen_service import remove_background_ai
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.blog_thumbnail_task import cutout as cutout_task
     try:
-        result_url = remove_background_ai(char_data, _uid or 'anon')
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='blog_thumbnail', cost=_CUTOUT_COST,
+            input_data={'action': 'cutout'},
+            task_delay_fn=cutout_task.delay,
+            task_kwargs=dict(character_data=char_data),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
     except Exception as e:
-        logger.error(f'[blog/thumbnail/cutout] AI 누끼 실패: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'AI 누끼 실패 ({str(e)[:100]})')
+        logger.error(f'[blog/thumbnail/cutout] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='AI 누끼 요청 중 오류가 발생했습니다.')
 
-    # 결과(투명 PNG) → 내부 구멍 복원 후 data URL 로 변환
-    #   흰 선화 캐릭터는 AI 매팅이 몸통(넓은 흰 면적)을 배경으로 오인해 뚫는데,
-    #   외곽선에 둘러싸인 구멍을 흰색으로 되메워 흰곰 몸통을 살린다.
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=_CUTOUT_COST)
+
+
+@create_bp.route('/blog/thumbnail/cutout/status/<creation_id>', methods=['GET'])
+@login_required
+def blog_thumbnail_cutout_status(creation_id):
+    """AI 누끼 결과 URL → data URL로 재조립해 반환 (프론트 계약 유지)."""
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
     try:
-        r = requests.get(result_url, timeout=30)
-        r.raise_for_status()
-        from io import BytesIO as _BIO
-        from PIL import Image as _Img
-        from services.thumbnail_studio import fill_alpha_holes
-        im = fill_alpha_holes(_Img.open(_BIO(r.content)))
-        _buf = _BIO(); im.save(_buf, format='PNG')
-        out = f"data:image/png;base64,{_b64.b64encode(_buf.getvalue()).decode()}"
-    except Exception as e:
-        logger.warning(f'[blog/thumbnail/cutout] 결과 후처리 실패 → 원본 반환: {e}')
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    if not row or row.get('user_id') != current_user.id:
+        return jsonify(ok=False, status='error', message='권한이 없거나 찾을 수 없습니다.')
+
+    status = row.get('status', '')
+    if status == 'done':
+        result_url = (row.get('output_data') or {}).get('result_url', '')
         try:
+            import base64 as _b64
+            r = requests.get(result_url, timeout=30)
+            r.raise_for_status()
             out = f"data:image/png;base64,{_b64.b64encode(r.content).decode()}"
-        except Exception:
+        except Exception as e:
+            logger.warning(f'[blog/thumbnail/cutout/status] 결과 fetch 실패: {e}')
             out = result_url
-
-    err = _charge_ai_points(_CUTOUT_COST, '캐릭터 AI 누끼')
-    if err:
-        return jsonify(ok=False, message=err)
-    logger.info(f'[blog/thumbnail/cutout] 완료 uid={_uid[:8]} cost={_CUTOUT_COST}P')
-    return jsonify(ok=True, character_data=out, cost=_CUTOUT_COST)
+        return jsonify(ok=True, status='done', character_data=out)
+    elif status == 'failed':
+        od = row.get('output_data') or {}
+        return jsonify(ok=False, status='failed',
+                       message=(od.get('error') or 'AI 누끼 실패') + ' (포인트는 환불되었습니다)')
+    else:
+        return jsonify(ok=True, status='generating')
 
 
 @create_bp.route('/blog/thumbnail/transform-character', methods=['POST'])
 @login_required
 def blog_thumbnail_transform_character():
-    """캐릭터 이미지 변형(img2img) → 변형된 투명 PNG data URL 반환."""
-    import base64 as _b64
-    from io import BytesIO as _BytesIO
-    from PIL import Image as _Image
+    """캐릭터 이미지 변형(img2img) — 워커 제출, 완료는 status 폴링."""
     data = request.get_json(force=True) or {}
     char_data = (data.get('character_data') or '').strip()
     style     = (data.get('style') or '').strip()[:120]
@@ -1170,33 +1060,57 @@ def blog_thumbnail_transform_character():
     if not style:
         return jsonify(ok=False, message='원하는 변형 스타일을 입력해 주세요.')
 
-    _uid = str(getattr(current_user, 'id', '') or '')
-    from services.imagen_service import transform_character
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.blog_thumbnail_task import transform_character as transform_task
     try:
-        result_url = transform_character(char_data, style, _uid or 'anon')
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='blog_thumbnail', cost=_TRANSFORM_COST,
+            input_data={'action': 'transform', 'style': style},
+            task_delay_fn=transform_task.delay,
+            task_kwargs=dict(character_data=char_data, style=style),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
     except Exception as e:
-        logger.error(f'[blog/thumbnail/transform] 변형 실패: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'캐릭터 변형 실패 ({str(e)[:100]})')
+        logger.error(f'[blog/thumbnail/transform] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='캐릭터 변형 요청 중 오류가 발생했습니다.')
 
-    # 결과(흰 배경 스티커) → 무료 누끼로 투명 처리 후 data URL 반환
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=_TRANSFORM_COST)
+
+
+@create_bp.route('/blog/thumbnail/transform-character/status/<creation_id>', methods=['GET'])
+@login_required
+def blog_thumbnail_transform_character_status(creation_id):
+    """캐릭터 변형 결과 URL → data URL로 재조립해 반환 (프론트 계약 유지)."""
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
     try:
-        r = requests.get(result_url, timeout=30)
-        r.raise_for_status()
-        from services.thumbnail_studio import auto_cutout
-        cut = auto_cutout(_Image.open(_BytesIO(r.content)))
-        buf = _BytesIO()
-        cut.save(buf, format='PNG')
-        out = f"data:image/png;base64,{_b64.b64encode(buf.getvalue()).decode()}"
-    except Exception as e:
-        logger.warning(f'[blog/thumbnail/transform] 후처리 실패 → 원본 URL 반환: {e}')
-        out = result_url
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    if not row or row.get('user_id') != current_user.id:
+        return jsonify(ok=False, status='error', message='권한이 없거나 찾을 수 없습니다.')
 
-    err = _charge_ai_points(_TRANSFORM_COST, '캐릭터 AI 변형')
-    if err:
-        return jsonify(ok=False, message=err)
-    logger.info(f'[blog/thumbnail/transform] 완료 uid={_uid[:8]} '
-                f'style="{style[:30]}" cost={_TRANSFORM_COST}P')
-    return jsonify(ok=True, character_data=out, cost=_TRANSFORM_COST)
+    status = row.get('status', '')
+    if status == 'done':
+        result_url = (row.get('output_data') or {}).get('result_url', '')
+        try:
+            import base64 as _b64
+            r = requests.get(result_url, timeout=30)
+            r.raise_for_status()
+            out = f"data:image/png;base64,{_b64.b64encode(r.content).decode()}"
+        except Exception as e:
+            logger.warning(f'[blog/thumbnail/transform/status] 결과 fetch 실패: {e}')
+            out = result_url
+        return jsonify(ok=True, status='done', character_data=out)
+    elif status == 'failed':
+        od = row.get('output_data') or {}
+        return jsonify(ok=False, status='failed',
+                       message=(od.get('error') or '캐릭터 변형 실패') + ' (포인트는 환불되었습니다)')
+    else:
+        return jsonify(ok=True, status='generating')
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1291,8 +1205,7 @@ def blog_thumbnail_mascot_save():
 @create_bp.route('/blog/thumbnail/scene', methods=['POST'])
 @login_required
 def blog_thumbnail_scene():
-    """AI 씬 썸네일 — 마스코트 레퍼런스로 장면 생성 후 상단 텍스트 하이브리드 합성."""
-    import base64 as _b64, time as _time
+    """AI 씬 썸네일 — 워커 제출, 완료는 status 폴링."""
     data = request.get_json(force=True) or {}
     headline = (data.get('line1') or '').strip()[:40]
     topic    = (data.get('topic') or data.get('line1') or '').strip()[:80]
@@ -1308,63 +1221,45 @@ def blog_thumbnail_scene():
     # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 (현재 브랜드에) 등록된 마스코트.
     #   없으면(캐릭터 브랜딩 없는 일반 업체) refs=[] → 소품·장면만 그리는 모드로 진행.
     brand_id = (data.get('brand_id') or '').strip() or None
-    refs = []
     char_data = (data.get('character_data') or '').strip()
     if char_data.startswith('data:image/'):
         refs = [char_data]
     else:
         refs = _get_registered_mascot_urls(brand_id)
 
-    _uid = str(getattr(current_user, 'id', '') or '')
-
-    # 색 테마 → AI 배경 색 팔레트 (텍스트뿐 아니라 배경색도 테마 연동)
-    _THEME_BG = {
-        'baby_blue':   'soft pastel baby blue',
-        'food_cream':  'warm cream and soft orange',
-        'fresh_green': 'fresh pastel mint green',
-        'warm_pink':   'soft warm pink',
-    }
-    bg_color = _THEME_BG.get(theme, 'soft pastel')
-
-    # 1) AI 씬 생성
-    from services.imagen_service import generate_scene, upload_to_supabase
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.blog_thumbnail_task import scene as scene_task
     try:
-        scene_url = generate_scene(refs, topic, _uid or 'anon', bg_color=bg_color)
-    except Exception as e:
-        logger.error(f'[blog/thumbnail/scene] 씬 생성 실패: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'AI 씬 생성 실패 ({str(e)[:100]})')
-
-    # 2) 씬 이미지 fetch → 상단 텍스트 하이브리드 합성
-    from services.thumbnail_studio import render_thumbnail
-    try:
-        r = requests.get(scene_url, timeout=60)
-        r.raise_for_status()
-        img_bytes = render_thumbnail(
-            headline=headline, sub=sub, badge=badge, cta=cta, theme=theme,
-            bg_image=r.content, title_style=title_style,
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type='blog_thumbnail', cost=_SCENE_COST,
+            input_data={'line1': headline, 'sub': sub, 'badge': badge, 'cta': cta,
+                       'topic': topic, 'theme': theme, 'title_style': title_style},
+            task_delay_fn=scene_task.delay,
+            task_kwargs=dict(headline=headline, sub=sub, badge=badge, cta=cta,
+                            theme=theme, title_style=title_style, topic=topic, refs=refs),
         )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
     except Exception as e:
-        logger.error(f'[blog/thumbnail/scene] 텍스트 합성 실패: {e}', exc_info=True)
-        return jsonify(ok=False, message=f'텍스트 합성 실패 ({str(e)[:100]})')
+        logger.error(f'[blog/thumbnail/scene] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='AI 씬 생성 요청 중 오류가 발생했습니다.')
 
-    # 3) 업로드 + 포인트 차감
-    b64 = f"data:image/png;base64,{_b64.b64encode(img_bytes).decode()}"
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=_SCENE_COST)
+
+
+@create_bp.route('/blog/thumbnail/scene/status/<creation_id>', methods=['GET'])
+@login_required
+def blog_thumbnail_scene_status(creation_id):
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
     try:
-        url = upload_to_supabase(b64, _uid, f'blog_thumb_scene_{int(_time.time())}.png')
-    except Exception as e:
-        logger.warning(f'[blog/thumbnail/scene] 업로드 실패 → data URL 반환: {e}')
-        url = b64
-
-    err = _charge_ai_points(_SCENE_COST, 'AI 씬 썸네일')
-    if err:
-        return jsonify(ok=False, message=err)
-    _save_thumb_creation(url, 'scene', _SCENE_COST, {
-        'line1': headline, 'sub': sub, 'badge': badge, 'cta': cta,
-        'topic': topic, 'theme': theme, 'title_style': title_style,
-    })
-    logger.info(f'[blog/thumbnail/scene] 완료 uid={_uid[:8]} theme={theme} '
-                f'topic="{topic[:30]}" char={"Y" if refs else "N"} cost={_SCENE_COST}P')
-    return jsonify(ok=True, url=url, style='scene', cost=_SCENE_COST)
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(row, current_user.id, done_fields={'url': 'url', 'style': 'style'})
 
 
 # ─────────────────────────────────────────────────────────────
