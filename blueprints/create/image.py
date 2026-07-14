@@ -4,7 +4,6 @@ from flask import request, jsonify, current_app
 from flask_login import login_required, current_user
 from blueprints.create import create_bp
 from models import POINT_COSTS
-from services.tz_utils import now_kst
 from services.rate_limiter import check_ai_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -21,10 +20,10 @@ ENGINE_COST_MAP = {
 @create_bp.route('/image/generate', methods=['POST'])
 @login_required
 def image_generate():
+    """이미지 생성 — Celery 워커에 제출 후 즉시 반환. 완료 여부는 /image/status/<id> 폴링."""
     err = check_ai_rate_limit('image_generate', max_per_hour=100)
     if err:
         return jsonify(ok=False, message=err), 429
-    supabase = current_app.supabase
     data = request.json or {}
 
     engine      = data.get('engine', 'flux_standard')
@@ -38,81 +37,55 @@ def image_generate():
 
     if not prompt:
         return jsonify(ok=False, message='프롬프트를 입력하세요.')
+    if engine == 'bg_replace' and not reference_image_url:
+        return jsonify(ok=False, message='배경 교체는 원본 이미지 URL이 필요합니다.')
 
     cost_key = ENGINE_COST_MAP.get(engine, 'img_preview')
     cost = POINT_COSTS.get(cost_key, 50)
 
-    # 포인트 확인 (User 객체 전달 — operator 풀 자동 라우팅)
-    from services.point_service import get_balance, use_points, InsufficientPoints
-    balance = get_balance(current_user)
-    if balance < cost:
-        return jsonify(ok=False, message=f'포인트가 부족합니다. (필요: {cost}P, 잔액: {balance}P)')
-
-    # creation 행 생성
-    import uuid
-    creation_id = str(uuid.uuid4())
+    from services.async_generation import submit_async_generation, AsyncSubmitError
+    from tasks.image_task import generate_image_task
     try:
-        _row = {
-            'id': creation_id,
-            'user_id': current_user.id,
-            'creation_type': cost_key,
-            'input_data': {'prompt': prompt, 'engine': engine, 'size': size},
-            'output_data': {},
-            'points_used': cost,
-            'status': 'generating',
-            'model_used': engine,
-            'created_at': now_kst().isoformat(),
-        }
-        if getattr(current_user, 'operator_id', None):
-            _row['operator_id'] = current_user.operator_id
-        supabase.table('creations').insert(_row).execute()
+        creation_id = submit_async_generation(
+            owner=current_user, creation_type=cost_key, cost=cost,
+            input_data={'prompt': prompt, 'engine': engine, 'size': size},
+            model_used=engine,
+            task_delay_fn=generate_image_task.delay,
+            task_kwargs=dict(
+                engine=engine, prompt=prompt, size=size, style_preset=style_preset,
+                brand_color=brand_color, texts=texts,
+                reference_image_url=reference_image_url,
+            ),
+        )
+    except AsyncSubmitError as e:
+        return jsonify(ok=False, message=str(e))
     except Exception as e:
-        logger.error(f'[IMAGE] creation insert error: {e}')
+        logger.error(f'[IMAGE] 제출 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='이미지 생성 요청 중 오류가 발생했습니다.')
 
-    # 포인트 선차감 — 생성 전 차감하여 동시 요청 race condition 방지
+    return jsonify(ok=True, id=creation_id, async_mode=True, cost=cost)
+
+
+@create_bp.route('/image/status/<creation_id>', methods=['GET'])
+@login_required
+def image_status(creation_id):
+    """이미지 생성 Celery 태스크 완료 여부 폴링."""
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
     try:
-        use_points(current_user, cost_key, creation_id)
-    except InsufficientPoints:
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message='포인트가 부족합니다.')
+        r = supabase.table('creations').select(
+            'id, status, output_data, user_id'
+        ).eq('id', creation_id).single().execute()
+        row = r.data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
 
-    import time
-    start = time.time()
-    try:
-        from services.imagen_service import generate_image, generate_card_news, upload_to_supabase
-
-        translated_prompt = ''
-        if engine == 'card_news':
-            image_url, translated_prompt = generate_card_news(texts or [prompt], prompt, brand_color)
-        elif engine == 'bg_replace':
-            # Bria 배경 교체 — reference_image_url = 누끼컷, prompt = 배경 설명
-            if not reference_image_url:
-                supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-                return jsonify(ok=False, message='배경 교체는 원본 이미지 URL이 필요합니다.')
-            from services.imagen_service import replace_background
-            image_url = replace_background(reference_image_url, prompt)
-        else:
-            image_url, translated_prompt = generate_image(prompt, engine, style_preset, size, brand_color)
-
-        # Supabase Storage 업로드
-        filename = f'{engine}_{creation_id[:8]}.jpg'
-        public_url = upload_to_supabase(image_url, current_user.id, filename)
-
-        gen_ms = int((time.time() - start) * 1000)
-
-        supabase.table('creations').update({
-            'output_data': {'image_url': public_url},
-            'status': 'done',
-            'generation_ms': gen_ms,
-        }).eq('id', creation_id).execute()
-
-        return jsonify(ok=True, image_url=public_url, creation_id=creation_id, cost=cost,
-                       translated_prompt=translated_prompt or None)
-
-    except Exception as e:
-        logger.error(f'[IMAGE] generate error: {e}')
-        supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
-        return jsonify(ok=False, message=f'이미지 생성 실패: {str(e)}')
+    return render_status_response(
+        row, current_user.id,
+        done_fields={'image_url': 'image_url', 'translated_prompt': 'translated_prompt'},
+    )
 
 
 # ──────────────────────────────────────────

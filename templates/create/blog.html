@@ -1049,6 +1049,7 @@
 {% endblock %}
 
 {% block extra_script %}
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
 // 블로그 썸네일 비주얼 에디터
@@ -2616,11 +2617,13 @@ async function generateAllImages() {
             size: '1024x1024',
           })
         });
-        const data = await res.json();
+        const submit = await res.json();
+        if (!submit.ok) throw new Error(submit.message || '배경 교체 실패');
+        const data = await pollTaskStatus('/create/image/status/' + submit.id);
         generatedImages.push({
           role: '메인 제품 이미지 (배경 교체)',
-          url:  data.ok ? data.image_url : productImageUrl,
-          isOriginal: !data.ok,
+          url:  data.image_url,
+          isOriginal: false,
         });
       } catch {
         generatedImages.push({ role: '메인 제품 이미지', url: productImageUrl, isOriginal: true });
@@ -2659,12 +2662,10 @@ async function generateAllImages() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body: JSON.stringify({ engine: 'flux_dev', prompt, size })
       });
-      const data = await res.json();
-      generatedImages.push({
-        role,
-        url:   data.ok ? data.image_url : null,
-        error: data.ok ? null : data.message,
-      });
+      const submit = await res.json();
+      if (!submit.ok) throw new Error(submit.message || '이미지 생성 실패');
+      const data = await pollTaskStatus('/create/image/status/' + submit.id);
+      generatedImages.push({ role, url: data.image_url, error: null });
     } catch (err) {
       generatedImages.push({ role, url: null, error: err.message });
     }
@@ -3014,8 +3015,9 @@ async function blogRegenGenerate() {
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
       body: JSON.stringify({ engine: 'flux_dev', prompt: fullPrompt, size })
     });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.message);
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message);
+    const data = await pollTaskStatus('/create/image/status/' + submit.id);
     _blogRegenNewUrl = data.image_url;
     document.getElementById('blogRegenPreviewImg').src = data.image_url;
     document.getElementById('blogRegenPreview').classList.remove('d-none');

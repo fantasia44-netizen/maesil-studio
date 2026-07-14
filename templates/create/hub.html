@@ -152,6 +152,7 @@
 {% endblock %}
 
 {% block extra_script %}
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
 const CSRF = '{{ csrf_token() }}';
 const COSTS = {
@@ -208,19 +209,17 @@ async function generateImage() {
         texts,
       })
     });
-    const data = await res.json();
-    if (data.ok) {
-      currentImageUrl = data.image_url;
-      document.getElementById('resultImg').src = data.image_url;
-      document.getElementById('downloadBtn').href = data.image_url;
-      document.getElementById('imageResult').classList.remove('d-none');
-      addRecentImage(data.image_url, engine);
-    } else {
-      alert(data.message || '이미지 생성 실패');
-      document.getElementById('placeholder').classList.remove('d-none');
-    }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '이미지 생성 실패');
+
+    const data = await pollTaskStatus('/create/image/status/' + submit.id);
+    currentImageUrl = data.image_url;
+    document.getElementById('resultImg').src = data.image_url;
+    document.getElementById('downloadBtn').href = data.image_url;
+    document.getElementById('imageResult').classList.remove('d-none');
+    addRecentImage(data.image_url, engine);
   } catch(e) {
-    alert('오류가 발생했습니다.');
+    alert(e.message || '오류가 발생했습니다.');
     document.getElementById('placeholder').classList.remove('d-none');
   } finally {
     document.getElementById('loadingState').classList.add('d-none');

@@ -1557,10 +1557,15 @@ def generate_blog_thumbnail(
     return buf.getvalue()
 
 
-def upload_to_supabase(image_data: str, user_id: str, filename: str) -> str:
-    """이미지(URL 또는 base64 data URL) → Supabase Storage → 공개 URL"""
-    from flask import current_app
-    supabase = current_app.supabase
+def upload_to_supabase(image_data: str, user_id: str, filename: str, supabase=None) -> str:
+    """이미지(URL 또는 base64 data URL) → Supabase Storage → 공개 URL.
+
+    supabase: Celery 워커 등 Flask 앱 컨텍스트가 없는 곳에서는 클라이언트를 직접 전달.
+    생략 시(기존 호출처 전부) current_app.supabase로 폴백 — 하위호환 유지.
+    """
+    if supabase is None:
+        from flask import current_app
+        supabase = current_app.supabase
     if not supabase:
         return image_data
 
