@@ -123,6 +123,7 @@ def run_logo_pipeline(
     primary_color: str,
     extra: str,
     supabase,
+    user_id: str | None = None,
 ) -> None:
     """Ideogram V3으로 로고 시안 3개 생성 후 creation 갱신."""
     import json, re
@@ -224,4 +225,8 @@ def run_logo_pipeline(
 
     except Exception as e:
         logger.error('[logo_pipeline] 오류 (%s): %s', creation_id, e)
-        _update('failed', {'error': str(e)})
+        if user_id:
+            from services.async_generation import mark_task_failed
+            mark_task_failed(supabase, creation_id, e, '로고 생성 실패 — 자동 환불', user_id)
+        else:
+            _update('failed', {'error': str(e)})

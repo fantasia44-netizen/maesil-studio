@@ -581,7 +581,8 @@ def run_banner_pipeline(
 
     except Exception as e:
         logger.error('[banner] 파이프라인 오류 (%s): %s', creation_id, e)
-        _update('failed', {'error': str(e)})
+        from services.async_generation import mark_task_failed
+        mark_task_failed(supabase, creation_id, e, '배너 생성 실패 — 자동 환불', user_id)
 
 
 # ════════════════════════════════════════════════════════
@@ -944,4 +945,5 @@ def run_product_banner_pipeline(
 
     except Exception as e:
         logger.error('[product_banner] 파이프라인 오류 (%s): %s', creation_id, e)
-        _update('failed', {'error': str(e)})
+        from services.async_generation import mark_task_failed
+        mark_task_failed(supabase, creation_id, e, '상품 배너 생성 실패 — 자동 환불', user_id)

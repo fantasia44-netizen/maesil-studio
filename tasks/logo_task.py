@@ -41,4 +41,5 @@ def generate_logo(
         primary_color=primary_color,
         extra=extra,
         supabase=supabase,
+        user_id=user_id,
     )
