@@ -15,7 +15,7 @@
 
           <div class="mb-3">
             <label class="form-label fw-semibold">브랜드명 <span class="text-danger">*</span></label>
-            <input type="text" name="name" class="form-control" value="{{ brand.name if brand else '' }}" required>
+            <input type="text" name="name" class="form-control" value="{{ (brand.name or '') if brand else '' }}" required>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">업종</label>
