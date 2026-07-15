@@ -28,7 +28,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">타겟 고객</label>
-            <input type="text" name="target_customer" class="form-control" value="{{ brand.target_customer if brand else '' }}" placeholder="예: 20-30대 여성">
+            <input type="text" name="target_customer" class="form-control" value="{{ (brand.target_customer or '') if brand else '' }}" placeholder="예: 20-30대 여성">
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">톤앤매너 <span class="text-muted small">(쉼표 구분)</span></label>
@@ -72,7 +72,7 @@
             <label class="form-label fw-semibold">브랜드 설명 · AI 생성 방향</label>
             <div class="text-muted small mb-1">브랜드 스토리, 주력 상품, 홍보 방향 등을 자유롭게 적으면 모든 콘텐츠 생성에 반영됩니다</div>
             <textarea name="extra_context" class="form-control" rows="3"
-              placeholder="예: 브랜드 감성·스토리 위주로 홍보 (제조사 노출 최소화)&#10;예: 제조 품질·공정·인증 신뢰도 강조&#10;예: B2B 납품·유통 파트너 대상, 공급 조건 중심&#10;예: 소비자 직판 위주, 창업 스토리와 가성비 강조">{{ brand.extra_context if brand else '' }}</textarea>
+              placeholder="예: 브랜드 감성·스토리 위주로 홍보 (제조사 노출 최소화)&#10;예: 제조 품질·공정·인증 신뢰도 강조&#10;예: B2B 납품·유통 파트너 대상, 공급 조건 중심&#10;예: 소비자 직판 위주, 창업 스토리와 가성비 강조">{{ (brand.extra_context or '') if brand else '' }}</textarea>
           </div>
 
           {# ── 회사 정보 (접기/펼치기) ── #}
@@ -90,12 +90,12 @@
               <div class="col-6">
                 <label class="form-label fw-semibold small">창업 연도</label>
                 <input type="number" name="founded_year" class="form-control form-control-sm"
-                  value="{{ brand.founded_year if brand else '' }}" placeholder="예: 2018" min="1900" max="2099">
+                  value="{{ (brand.founded_year or '') if brand else '' }}" placeholder="예: 2018" min="1900" max="2099">
               </div>
               <div class="col-6">
                 <label class="form-label fw-semibold small">대표자명</label>
                 <input type="text" name="ceo_name" class="form-control form-control-sm"
-                  value="{{ brand.ceo_name if brand else '' }}" placeholder="예: 홍길동">
+                  value="{{ (brand.ceo_name or '') if brand else '' }}" placeholder="예: 홍길동">
               </div>
             </div>
 
@@ -103,31 +103,31 @@
               <div class="col-6">
                 <label class="form-label fw-semibold small">직원 수</label>
                 <input type="text" name="employee_count" class="form-control form-control-sm"
-                  value="{{ brand.employee_count if brand else '' }}" placeholder="예: 15명">
+                  value="{{ (brand.employee_count or '') if brand else '' }}" placeholder="예: 15명">
               </div>
               <div class="col-6">
                 <label class="form-label fw-semibold small">연락처</label>
                 <input type="text" name="contact_phone" class="form-control form-control-sm"
-                  value="{{ brand.contact_phone if brand else '' }}" placeholder="예: 02-1234-5678">
+                  value="{{ (brand.contact_phone or '') if brand else '' }}" placeholder="예: 02-1234-5678">
               </div>
             </div>
 
             <div class="mb-3">
               <label class="form-label fw-semibold small">이메일</label>
               <input type="email" name="contact_email" class="form-control form-control-sm"
-                value="{{ brand.contact_email if brand else '' }}" placeholder="예: contact@brand.com">
+                value="{{ (brand.contact_email or '') if brand else '' }}" placeholder="예: contact@brand.com">
             </div>
 
             <div class="mb-3">
               <label class="form-label fw-semibold small">홈페이지</label>
               <input type="text" name="website" class="form-control form-control-sm"
-                value="{{ brand.website if brand else '' }}" placeholder="예: https://www.brand.com">
+                value="{{ (brand.website or '') if brand else '' }}" placeholder="예: https://www.brand.com">
             </div>
 
             <div class="mb-3">
               <label class="form-label fw-semibold small">주소</label>
               <input type="text" name="address" class="form-control form-control-sm"
-                value="{{ brand.address if brand else '' }}" placeholder="예: 서울시 강남구 ○○로 123">
+                value="{{ (brand.address or '') if brand else '' }}" placeholder="예: 서울시 강남구 ○○로 123">
             </div>
 
             <hr class="my-3">
@@ -136,19 +136,19 @@
             <div class="mb-3">
               <label class="form-label fw-semibold small">인증·수상 이력</label>
               <textarea name="certifications" class="form-control form-control-sm" rows="2"
-                placeholder="예: ISO 9001 인증, 2023 K-뷰티 어워드 수상, 중소기업청 인증">{{ brand.certifications if brand else '' }}</textarea>
+                placeholder="예: ISO 9001 인증, 2023 K-뷰티 어워드 수상, 중소기업청 인증">{{ (brand.certifications or '') if brand else '' }}</textarea>
             </div>
 
             <div class="mb-3">
               <label class="form-label fw-semibold small">핵심 성과 수치</label>
               <textarea name="key_stats" class="form-control form-control-sm" rows="2"
-                placeholder="예: 누적 판매 50만개 돌파, 재구매율 72%, 고객 만족도 97%, 월 매출 3억">{{ brand.key_stats if brand else '' }}</textarea>
+                placeholder="예: 누적 판매 50만개 돌파, 재구매율 72%, 고객 만족도 97%, 월 매출 3억">{{ (brand.key_stats or '') if brand else '' }}</textarea>
             </div>
 
             <div class="mb-4">
               <label class="form-label fw-semibold small">주요 거래처 · 납품처</label>
               <textarea name="references_text" class="form-control form-control-sm" rows="2"
-                placeholder="예: 이마트, 롯데마트 납품, 쿠팡 공식 판매, GS홈쇼핑 방영">{{ brand.references_text if brand else '' }}</textarea>
+                placeholder="예: 이마트, 롯데마트 납품, 쿠팡 공식 판매, GS홈쇼핑 방영">{{ (brand.references_text or '') if brand else '' }}</textarea>
             </div>
           </div>
 
@@ -172,13 +172,26 @@ function toggleSection(id) {
   el.style.display = open ? 'block' : 'none';
   if (icon) icon.className = open ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
 }
+function _openCompanySection() {
+  const el = document.getElementById('companyInfo');
+  if (!el || el.style.display !== 'none') return;
+  el.style.display = 'block';
+  const icon = document.getElementById('companyInfoIcon');
+  if (icon) icon.className = 'bi bi-chevron-up';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  const hasCompany = {{ 'true' if brand and (brand.founded_year or brand.ceo_name or brand.contact_phone or brand.certifications or brand.key_stats or brand.references_text) else 'false' }};
-  if (hasCompany) {
-    document.getElementById('companyInfo').style.display = 'block';
-    const icon = document.getElementById('companyInfoIcon');
-    if (icon) icon.className = 'bi bi-chevron-up';
-  }
+  const hasCompany = {{ 'true' if brand and (brand.founded_year or brand.ceo_name or brand.employee_count or brand.contact_phone or brand.contact_email or brand.website or brand.address or brand.certifications or brand.key_stats or brand.references_text) else 'false' }};
+  if (hasCompany) _openCompanySection();
+
+  // 접힌 섹션 안의 필드가 검증 실패하면 브라우저가 "not focusable" 이라며
+  // submit 을 조용히 무시한다(저장 눌러도 무반응). → 섹션을 펼쳐 원인이 보이게.
+  // invalid 이벤트는 버블링하지 않으므로 캡처 단계에서 수신.
+  const form = document.querySelector('form');
+  if (form) form.addEventListener('invalid', (e) => {
+    const sec = document.getElementById('companyInfo');
+    if (sec && sec.contains(e.target)) _openCompanySection();
+  }, true);
 });
 </script>
 {% endblock %}
