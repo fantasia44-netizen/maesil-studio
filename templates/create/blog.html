@@ -401,7 +401,18 @@
           <div id="thumbScenePanel" class="d-none">
             <div class="alert alert-primary py-2 px-2 mb-2" style="font-size:.72rem">
               <i class="bi bi-stars me-1"></i><b>상황 장면 일러스트</b>가 그려지고 상단에 선명한 한글 텍스트가 얹힙니다.
-              브랜드 캐릭터가 있으면 <b>주인공</b>으로, 없으면 <b>주제 소품·장면만</b> 그립니다. (장당 <b>200P</b>)
+              아래에서 <b>그림체 시안</b>을 고르세요. (장당 <b>200P</b>)
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">그림체 시안</label>
+              <select id="thumbScStyle" class="form-select form-select-sm" onchange="onSceneStyleChange()">
+                <option value="cute_char">캐릭터 아기자기 — 등록 캐릭터가 주인공</option>
+                <option value="pastel_person">파스텔 인물 — 사람 등장, 부드러운 파스텔</option>
+                <option value="photo_person">실사 라이프스타일 — 사람 등장, 사진 느낌</option>
+                <option value="webtoon_person">한국 웹툰 — 사람 등장, 웹툰 그림체</option>
+                <option value="flat_person">미니멀 플랫 — 사람 등장, 단순 도형</option>
+              </select>
+              <div id="thumbScStyleHint" class="text-muted mt-1" style="font-size:.68rem"></div>
             </div>
             <button type="button" id="thumbScAutofillBtn" class="btn btn-outline-primary btn-sm w-100 mb-2"
                     onclick="autofillScene(true)" style="font-size:.74rem">
@@ -452,7 +463,7 @@
               <input id="thumbScTopic" class="form-control form-control-sm" maxlength="80"
                      placeholder="예: 아기와 함께 자동차로 장거리 여행">
               <div class="text-muted mt-1" style="font-size:.68rem">
-                이 주제로 캐릭터가 연출됩니다. 구체적일수록 장면이 정확해집니다.
+                이 주제로 장면이 연출됩니다. 구체적일수록 장면이 정확해집니다.
               </div>
             </div>
           </div>
@@ -1392,23 +1403,42 @@ function _splitThumbTitle(title) {
 let _thumbCharData = null;   // 업로드한 브랜드 캐릭터 (base64 data URL)
 let _mascotLoaded = false;   // 등록된 브랜드 마스코트 자동 로드 여부(브랜드별)
 let _thumbCharAuto = false;  // 현재 캐릭터가 '등록 마스코트 자동로드'인지(수동 업로드=false)
+let _thumbSceneMode = false; // 현재 AI 씬 모드인지
+
+// 그림체 시안별 안내. 'cute_char' 외 시안은 사람이 등장 → 브랜드 캐릭터를 쓰지 않는다
+// (서버도 동일하게 판단해서 마스코트를 자동으로 뺀다 — imagen_service.SCENE_STYLES).
+const SCENE_STYLE_HINT = {
+  cute_char:      '브랜드 캐릭터가 있으면 주인공으로, 없으면 주제 소품·장면만 그립니다.',
+  pastel_person:  '사람이 등장하는 부드러운 파스텔 일러스트. 브랜드 캐릭터는 쓰지 않습니다.',
+  photo_person:   '사람이 등장하는 실사 사진 느낌. 브랜드 캐릭터는 쓰지 않습니다.',
+  webtoon_person: '사람이 등장하는 웹툰 그림체. 브랜드 캐릭터는 쓰지 않습니다.',
+  flat_person:    '사람을 단순한 도형으로 표현한 플랫 일러스트. 브랜드 캐릭터는 쓰지 않습니다.',
+};
+function onSceneStyleChange() {
+  const v = document.getElementById('thumbScStyle')?.value || 'cute_char';
+  const usesChar = _thumbSceneMode && v === 'cute_char';
+  document.getElementById('thumbCharShared')?.classList.toggle('d-none', !usesChar);
+  const hint = document.getElementById('thumbScStyleHint');
+  if (hint) hint.textContent = SCENE_STYLE_HINT[v] || '';
+  // 캐릭터 사용 시안 진입 시 등록된 브랜드 마스코트 1회 자동 로드
+  if (usesChar && !_mascotLoaded) { _mascotLoaded = true; _autoLoadMascot(); }
+}
 function setThumbMode(mode) {
   const scene  = mode === 'scene';
-  const usesChar = scene;   // 캐릭터 블록은 AI 씬에서만 사용
+  _thumbSceneMode = scene;
   document.getElementById('thumbScenePanel')?.classList.toggle('d-none', !scene);
-  document.getElementById('thumbCharShared')?.classList.toggle('d-none', !usesChar);
   ['thumbTabNav', 'thumbTabBg', 'thumbTabText', 'thumbTabStyle'].forEach(id => {
     const el = document.getElementById(id);
     // AI 씬에선 클래식 탭 전부 숨김. 클래식 복귀 시 현재 탭만 다시 표시.
-    if (el) el.classList.toggle('d-none', usesChar);
+    if (el) el.classList.toggle('d-none', scene);
   });
-  if (!usesChar && typeof switchThumbTab === 'function') switchThumbTab('bg');
+  if (!scene && typeof switchThumbTab === 'function') switchThumbTab('bg');
   const bt = document.getElementById('thumbGenBtnText');
   if (bt) bt.textContent = scene ? 'AI 씬 생성 (200P)' : '썸네일 미리보기 생성';
   const _sub = document.getElementById('thumbCharSubtitle');
   if (_sub) _sub.textContent = 'AI 씬은 캐릭터를 장면에 맞게 자동으로 그립니다';
-  // 캐릭터 사용 모드 진입 시 등록된 브랜드 마스코트 1회 자동 로드
-  if (usesChar && !_mascotLoaded) { _mascotLoaded = true; _autoLoadMascot(); }
+  // 캐릭터 블록 표시 여부는 모드 + 그림체 시안이 함께 결정
+  onSceneStyleChange();
   // AI 씬 진입 시 소구포인트에서 빈 필드 자동 채우기
   if (scene) autofillScene(false);
 }
@@ -1593,7 +1623,7 @@ async function generateThumbPreview() {
   try {
     let res;
     if (_mode === 'scene') {
-      if (loadTxt) loadTxt.textContent = 'AI가 캐릭터로 장면을 그리는 중... (약 15~30초)';
+      if (loadTxt) loadTxt.textContent = 'AI가 장면을 그리는 중... (약 15~30초)';
       res = await fetch('{{ url_for("create.blog_thumbnail_scene") }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
@@ -1605,6 +1635,7 @@ async function generateThumbPreview() {
           theme:          document.getElementById('thumbScTheme')?.value || 'baby_blue',
           title_style:    document.getElementById('thumbScTitleStyle')?.value || 'banner',
           topic:          document.getElementById('thumbScTopic')?.value.trim() || '',
+          scene_style:    document.getElementById('thumbScStyle')?.value || 'cute_char',
           brand_id:       document.getElementById('brandSelect')?.value || '',
           character_data: _thumbCharData || '',
         }),

@@ -1145,14 +1145,23 @@ def blog_thumbnail_scene():
     theme = (data.get('theme') or 'baby_blue').strip()
     title_style = 'plate' if (data.get('title_style') == 'plate') else 'banner'
 
+    from services.imagen_service import SCENE_STYLES, SCENE_STYLE_DEFAULT
+    scene_style = (data.get('scene_style') or '').strip()
+    if scene_style not in SCENE_STYLES:
+        scene_style = SCENE_STYLE_DEFAULT
+
     # 마스코트 레퍼런스: 이번 세션 업로드 우선, 없으면 (현재 브랜드에) 등록된 마스코트.
     #   없으면(캐릭터 브랜딩 없는 일반 업체) refs=[] → 소품·장면만 그리는 모드로 진행.
-    brand_id = (data.get('brand_id') or '').strip() or None
-    char_data = (data.get('character_data') or '').strip()
-    if char_data.startswith('data:image/'):
-        refs = [char_data]
+    #   인물 그림체 시안은 캐릭터를 쓰지 않으므로 조회 자체를 건너뛴다.
+    if SCENE_STYLES[scene_style]['subject'] != 'mascot':
+        refs = []
     else:
-        refs = _get_registered_mascot_urls(brand_id)
+        brand_id = (data.get('brand_id') or '').strip() or None
+        char_data = (data.get('character_data') or '').strip()
+        if char_data.startswith('data:image/'):
+            refs = [char_data]
+        else:
+            refs = _get_registered_mascot_urls(brand_id)
 
     from services.async_generation import submit_async_generation, AsyncSubmitError
     from tasks.blog_thumbnail_task import scene as scene_task
@@ -1160,10 +1169,12 @@ def blog_thumbnail_scene():
         creation_id = submit_async_generation(
             owner=current_user, creation_type='blog_thumbnail', cost=_SCENE_COST,
             input_data={'line1': headline, 'sub': sub, 'badge': badge, 'cta': cta,
-                       'topic': topic, 'theme': theme, 'title_style': title_style},
+                       'topic': topic, 'theme': theme, 'title_style': title_style,
+                       'scene_style': scene_style},
             task_delay_fn=scene_task.delay,
             task_kwargs=dict(headline=headline, sub=sub, badge=badge, cta=cta,
-                            theme=theme, title_style=title_style, topic=topic, refs=refs),
+                            theme=theme, title_style=title_style, topic=topic, refs=refs,
+                            style=scene_style),
         )
     except AsyncSubmitError as e:
         return jsonify(ok=False, message=str(e))

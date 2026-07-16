@@ -77,6 +77,55 @@ STYLE_PRESETS = {
     'lifestyle':  'lifestyle photography, natural lighting, warm tones, authentic, candid, aspirational',
 }
 
+# ── AI 씬 그림체 시안 (generate_scene 전용) ──────────────
+#   subject 'mascot' → 등록 캐릭터를 주인공으로 리포즈(edit). 캐릭터 없으면 소품·장면만.
+#   subject 'person' → 사람이 등장하는 장면(text-to-image). 마스코트는 자동 제외한다 —
+#                      곰 캐릭터를 실사·인물 그림체에 억지로 넣으면 결과가 무너지므로.
+#   bg      'flat'   → 배경을 납작한 단색 팔레트로(색 테마 연동). 'photo' → 아웃포커스 실사 배경.
+SCENE_STYLE_DEFAULT = 'cute_char'
+SCENE_STYLES = {
+    'cute_char': {
+        'label': '캐릭터 아기자기',
+        'subject': 'mascot',
+        'bg': 'flat',
+        'look': ('Bright cheerful colors, thick clean black outlines, '
+                 'korean kids storybook sticker style, square 1:1 composition.'),
+    },
+    'pastel_person': {
+        'label': '파스텔 인물',
+        'subject': 'person',
+        'bg': 'flat',
+        'look': ('Soft pastel color palette with gentle muted tones, NO black outlines — '
+                 'forms defined by soft flat color fills and subtle shading, '
+                 'modern korean editorial blog illustration, warm calm friendly mood, '
+                 'square 1:1 composition.'),
+    },
+    'photo_person': {
+        'label': '실사 라이프스타일',
+        'subject': 'person',
+        'bg': 'photo',
+        'look': ('Photorealistic lifestyle photography, natural soft daylight, '
+                 'shallow depth of field, warm authentic tones, candid unposed moment, '
+                 'korean everyday setting, square 1:1 composition.'),
+    },
+    'webtoon_person': {
+        'label': '한국 웹툰',
+        'subject': 'person',
+        'bg': 'flat',
+        'look': ('Korean webtoon style, clean confident line art, soft cel shading, '
+                 'expressive lively faces, vibrant but harmonious colors, '
+                 'square 1:1 composition.'),
+    },
+    'flat_person': {
+        'label': '미니멀 플랫',
+        'subject': 'person',
+        'bg': 'flat',
+        'look': ('Minimal flat vector illustration, simple geometric shapes, '
+                 'limited clean color palette, no outlines, generous negative space, '
+                 'modern editorial infographic aesthetic, square 1:1 composition.'),
+    },
+}
+
 
 # ════════════════════════════════════════════════════════
 # 메인 진입점
@@ -200,11 +249,48 @@ def transform_character(image_data: str, style_prompt: str,
     raise ValueError(f'캐릭터 변형 응답 파싱 실패: {data}')
 
 
-def _scene_visual_desc(topic: str) -> str:
+_SCENE_DESC_SYSTEM = {
+    'object': (
+        'Convert a Korean/English content topic into a SHORT English description of '
+        'concrete visual OBJECTS and a simple setting for a cute flat sticker illustration.\n'
+        'RULES:\n'
+        '- List relevant physical objects/props/food/tools for the topic.\n'
+        '- NEVER include brand names, company names, platform names, app names or any '
+        'proper nouns (e.g. Coupang, Naver, Amazon, Instagram) — use generic objects instead.\n'
+        '- NEVER request any text, letters, labels, numbers or writing.\n'
+        '- Output: 6-14 English words only. No quotes. No explanation.\n'
+        'EXAMPLES:\n'
+        '쿠팡·네이버 양쪽에서 파는 셀러 → shopping boxes, delivery cart, growth arrows, coins, balance scale\n'
+        '이유식 만들기 → baby food bowl, fresh vegetables, cooking pot, spoon, cutting board\n'
+        '여름 다이어트 → fresh salad bowl, water bottle, measuring tape, dumbbell, fruit\n'
+        '블로그 마케팅 → laptop, pencil, lightbulb, speech bubbles, upward arrow'
+    ),
+    'person': (
+        'Convert a Korean/English content topic into a SHORT English description of a scene '
+        'with PEOPLE for an editorial thumbnail image.\n'
+        'RULES:\n'
+        '- Say who the person is and what action they are doing, plus 2-4 relevant objects/props '
+        'and the setting.\n'
+        '- Keep it to one or two people. Prefer korean people in an everyday korean setting.\n'
+        '- NEVER include brand names, company names, platform names, app names or any '
+        'proper nouns (e.g. Coupang, Naver, Amazon, Instagram) — describe generically instead.\n'
+        '- NEVER request any text, letters, labels, numbers or writing.\n'
+        '- Output: 8-16 English words only. No quotes. No explanation.\n'
+        'EXAMPLES:\n'
+        '쿠팡·네이버 양쪽에서 파는 셀러 → young seller packing shipping boxes at a desk with laptop and tape\n'
+        '이유식 만들기 → mother cooking baby food in a bright kitchen, bowl, vegetables, pot\n'
+        '여름 다이어트 → woman preparing a fresh salad at home, water bottle, measuring tape\n'
+        '블로그 마케팅 → person typing on a laptop at a cafe desk, notebook, coffee cup'
+    ),
+}
+
+
+def _scene_visual_desc(topic: str, mode: str = 'object') -> str:
     """씬 주제(한글/영문) → 브랜드명 없는 영어 오브젝트/장면 묘사.
 
     주제에 '쿠팡·네이버' 같은 브랜드명이 들어가면 nano-banana가 그걸 그림에 써넣으려다
     깨진 글자가 되므로, 시각 오브젝트로 추상화하고 고유명사(브랜드명)를 제거한다.
+    mode='person' 이면 사람이 등장하는 장면으로 묘사(인물 그림체 시안용).
     실패 시 원본 주제 반환.
     """
     topic = (topic or '').strip()
@@ -213,23 +299,9 @@ def _scene_visual_desc(topic: str) -> str:
     try:
         from services.claude_service import generate_text
         result = generate_text(
-            system_prompt=(
-                'Convert a Korean/English content topic into a SHORT English description of '
-                'concrete visual OBJECTS and a simple setting for a cute flat sticker illustration.\n'
-                'RULES:\n'
-                '- List relevant physical objects/props/food/tools for the topic.\n'
-                '- NEVER include brand names, company names, platform names, app names or any '
-                'proper nouns (e.g. Coupang, Naver, Amazon, Instagram) — use generic objects instead.\n'
-                '- NEVER request any text, letters, labels, numbers or writing.\n'
-                '- Output: 6-14 English words only. No quotes. No explanation.\n'
-                'EXAMPLES:\n'
-                '쿠팡·네이버 양쪽에서 파는 셀러 → shopping boxes, delivery cart, growth arrows, coins, balance scale\n'
-                '이유식 만들기 → baby food bowl, fresh vegetables, cooking pot, spoon, cutting board\n'
-                '여름 다이어트 → fresh salad bowl, water bottle, measuring tape, dumbbell, fruit\n'
-                '블로그 마케팅 → laptop, pencil, lightbulb, speech bubbles, upward arrow'
-            ),
+            system_prompt=_SCENE_DESC_SYSTEM.get(mode) or _SCENE_DESC_SYSTEM['object'],
             user_prompt=topic,
-            max_tokens=50,
+            max_tokens=60,
             model='claude-sonnet-4-6',
         )
         desc = (result or '').strip().strip('"\'').rstrip('.').strip()
@@ -239,12 +311,42 @@ def _scene_visual_desc(topic: str) -> str:
         return topic
 
 
-def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
-                   extra: str = '', bg_color: str = '') -> str:
-    """상황 장면 일러스트 생성 (nano-banana). 캐릭터는 선택.
+_SCENE_NO_TEXT = (
+    'CRITICAL: render absolutely NO text anywhere — no letters, words, numbers, labels, '
+    'brand names, logos, signage, captions or writing on any object, sign, screen, box or surface. '
+    'Every sign, label, screen and package must be completely blank.'
+)
 
-    · 캐릭터(mascot_urls) 있으면 → 레퍼런스로 장면에 배치(edit), 정체성 유지하며 리포즈.
-    · 캐릭터 없으면 → 주제 소품·음식·세팅만 그림(text-to-image). 캐릭터 브랜딩 없는 일반 업체용.
+
+def _scene_layout(bg_phrase: str, bg_mode: str, subject: str) -> str:
+    """상단 40%를 제목용으로 비워두게 하는 구도 지시문. subject: 'the mascot and scene' 등."""
+    if bg_mode == 'photo':
+        return (
+            f'Shoot it against a plain, evenly-lit {bg_phrase} toned wall or surface that falls '
+            f'softly out of focus. IMPORTANT: leave the TOP ~40% of the frame as clean, '
+            f'uncluttered background for a title. Place {subject} in the lower ~55% of the frame, '
+            f'keeping a comfortable clean margin below the title — do NOT push {subject} up into '
+            f'the top title area.'
+        )
+    return (
+        f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle '
+        f'shapes. IMPORTANT: leave the TOP ~40% of the image as clean empty space of that '
+        f'background color for a title. Place {subject} in the lower ~55% of the image, keeping a '
+        f'comfortable clean margin below the title — do NOT push {subject} up into the top title area.'
+    )
+
+
+def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
+                   extra: str = '', bg_color: str = '',
+                   style: str = SCENE_STYLE_DEFAULT) -> str:
+    """상황 장면 일러스트 생성 (nano-banana). 그림체는 SCENE_STYLES 시안에서 선택.
+
+    · style 의 subject='mascot' (기본 '캐릭터 아기자기'):
+        - 캐릭터(mascot_urls) 있으면 → 레퍼런스로 장면에 배치(edit), 정체성 유지하며 리포즈.
+        - 캐릭터 없으면 → 주제 소품·음식·세팅만 그림(t2i). 캐릭터 브랜딩 없는 일반 업체용.
+    · style 의 subject='person' (파스텔 인물·실사·웹툰·플랫):
+        - 사람이 등장하는 장면(t2i). mascot_urls 는 무시한다 — 브랜드 캐릭터를 인물/실사
+          그림체에 섞으면 결과가 무너지므로 그림체 선택이 우선.
     · 주제에 맞는 배경 세팅·소품을 함께 그리고, bg_color 로 배경 색 팔레트 지정(색 테마 연동).
     · 상단 1/3은 텍스트용으로 비워두게 유도 → 이후 PIL 하이브리드 텍스트 합성에 사용.
     mascot_urls: 공개 URL 또는 base64 data URL 리스트(없거나 비어도 됨).
@@ -254,6 +356,10 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
     api_key = get_config('fal_api_key')
     if not api_key:
         raise ValueError('FAL_KEY가 설정되지 않았습니다.')
+
+    st = SCENE_STYLES.get(style) or SCENE_STYLES[SCENE_STYLE_DEFAULT]
+    if st['subject'] != 'mascot':
+        mascot_urls = None          # 인물 그림체 → 마스코트 자동 제외
 
     # 마스코트 레퍼런스를 흰 배경으로 평탄화해 업로드.
     #   누끼로 몸통(흰색)이 투명해진 PNG를 그대로 넘기면 fal이 투명부를 검은색으로
@@ -305,18 +411,28 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
             f'and consistent with the reference. '
             f'Illustrate one cohesive cute editorial thumbnail scene about "{topic}", including a '
             f'simple background setting and small props/doodle icons that clearly relate to the topic. '
-            f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle shapes. '
-            f'IMPORTANT: leave the TOP ~40% of the image as clean empty space of that background color '
-            f'for a title. Place the mascot and scene in the lower ~55% of the image, keeping a '
-            f'comfortable clean margin below the title — do NOT push them up into the top title area. '
-            f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
-            f'square 1:1 composition. '
-            f'CRITICAL: render absolutely NO text anywhere — no letters, words, numbers, labels, '
-            f'brand names, logos, signage, captions or writing on any object, sign, screen, box or surface. '
-            f'Every sign, label, screen and package must be completely blank.'
+            f'{_scene_layout(bg_phrase, st["bg"], "the mascot and scene")} '
+            f'{st["look"]} {_SCENE_NO_TEXT}'
         )
         endpoint = 'fal-ai/nano-banana/edit'
         payload = {'prompt': prompt, 'image_urls': urls, 'num_images': 1}
+    elif st['subject'] == 'person':
+        # ── 인물 그림체: 사람이 등장하는 장면 (text-to-image) ────────
+        #   브랜드명 제거 + 사람이 행동하는 장면으로 추상화 (그림 속 가짜 라벨 방지).
+        topic = _scene_visual_desc(topic, mode='person') or topic
+        verb = 'Photograph' if st['bg'] == 'photo' else 'Illustrate'
+        prompt = (
+            f'{verb} one cohesive editorial thumbnail scene about "{topic}" — '
+            f'show one or two korean people naturally doing the activity, together with the '
+            f'relevant objects, props and a simple setting for the topic. '
+            f'Natural friendly expressions and correct anatomy: each person has exactly two hands '
+            f'with five fingers each, and no extra or missing limbs. '
+            f'Do NOT include any cartoon mascot, animal character or costumed figure. '
+            f'{_scene_layout(bg_phrase, st["bg"], "the people and scene")} '
+            f'{st["look"]} {_SCENE_NO_TEXT}'
+        )
+        endpoint = 'fal-ai/nano-banana'
+        payload = {'prompt': prompt, 'num_images': 1}
     else:
         # ── 캐릭터 없음: 주제 소품·장면만 (text-to-image) ────────────
         #   캐릭터 브랜딩 없는 일반 업체용 — 캐릭터/사람/동물 없이 소품·음식·세팅만.
@@ -328,15 +444,8 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
             f'arranged as an appealing centerpiece with a few small cute doodle icons around it. '
             f'IMPORTANT: do NOT include any character, person, animal, mascot, face or figure — '
             f'objects and scenery only. '
-            f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle shapes. '
-            f'Leave the TOP ~40% of the image as clean empty space of that background color for a title. '
-            f'Place the objects in the lower ~55% of the image, keeping a comfortable clean margin below '
-            f'the title — do NOT push them up into the top title area. '
-            f'Bright cheerful colors, thick clean black outlines, korean kids storybook sticker style, '
-            f'square 1:1 composition. '
-            f'CRITICAL: render absolutely NO text anywhere — no letters, words, numbers, labels, '
-            f'brand names, logos, signage, captions or writing on any object, sign, screen, box or surface. '
-            f'Every sign, label, screen and package must be completely blank.'
+            f'{_scene_layout(bg_phrase, st["bg"], "the objects")} '
+            f'{st["look"]} {_SCENE_NO_TEXT}'
         )
         endpoint = 'fal-ai/nano-banana'
         payload = {'prompt': prompt, 'num_images': 1}

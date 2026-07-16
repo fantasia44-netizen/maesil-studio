@@ -193,8 +193,12 @@ def transform_character(self, creation_id, user_id, character_data, style,
 @celery.task(bind=True, name='tasks.blog_thumbnail_task.scene',
              max_retries=0, soft_time_limit=180, time_limit=240)
 def scene(self, creation_id, user_id, headline, sub, badge, cta, theme, title_style,
-         topic, refs, supabase_url, supabase_key, anthropic_api_key):
-    """AI 씬 썸네일 — 마스코트 레퍼런스로 장면 생성 후 상단 텍스트 하이브리드 합성."""
+         topic, refs, supabase_url, supabase_key, anthropic_api_key,
+         style='cute_char'):
+    """AI 씬 썸네일 — 선택한 그림체로 장면 생성 후 상단 텍스트 하이브리드 합성.
+
+    style 기본값은 기존 동작('캐릭터 아기자기') — 인플라이트 태스크 호환용.
+    """
     _setup()
     import os
     from supabase import create_client
@@ -213,7 +217,8 @@ def scene(self, creation_id, user_id, headline, sub, badge, cta, theme, title_st
         }
         bg_color = _THEME_BG.get(theme, 'soft pastel')
 
-        scene_url = generate_scene(refs, topic, user_id or 'anon', bg_color=bg_color)
+        scene_url = generate_scene(refs, topic, user_id or 'anon',
+                                   bg_color=bg_color, style=style)
 
         r = requests.get(scene_url, timeout=60)
         r.raise_for_status()
@@ -229,10 +234,11 @@ def scene(self, creation_id, user_id, headline, sub, badge, cta, theme, title_st
             url = b64
 
         supabase.table('creations').update({
-            'status': 'done', 'output_data': {'url': url, 'style': 'scene'},
+            'status': 'done',
+            'output_data': {'url': url, 'style': 'scene', 'scene_style': style},
         }).eq('id', creation_id).execute()
-        logger.info('[blog_thumb_task] scene 완료 cid=%s theme=%s topic=%s char=%s',
-                   creation_id, theme, topic[:30], 'Y' if refs else 'N')
+        logger.info('[blog_thumb_task] scene 완료 cid=%s theme=%s style=%s topic=%s char=%s',
+                   creation_id, theme, style, topic[:30], 'Y' if refs else 'N')
     except Exception as e:
         logger.error('[blog_thumb_task] scene 오류 cid=%s: %s', creation_id, e, exc_info=True)
         _fail(supabase, creation_id, e, user_id, 'AI 씬 썸네일 실패 — 자동 환불')
