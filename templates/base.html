@@ -22,7 +22,11 @@
     /* ── 사이드바 ── */
     #sidebar {
       width: var(--sidebar-width);
-      min-height: 100vh;
+      /* height(=고정 높이)여야 .sidebar-nav 의 overflow-auto 가 동작한다.
+         min-height 로 두면 메뉴가 많을 때 flex 컨테이너가 내용만큼 늘어나
+         position:fixed 라 화면 밖 하단(내 설정·로그아웃)에 닿을 수 없다. */
+      height: 100vh;
+      height: 100dvh;          /* 모바일 주소창 접힘 대응 (미지원 시 위 100vh) */
       background: var(--brand-dark);
       position: fixed;
       top: 0; left: 0;
@@ -109,7 +113,10 @@
       min-height: 200px;
     }
 
-    @media (max-width: 768px) {
+    /* 767.98px — 부트스트랩 md 규약과 맞춘다. 768px 로 두면 이 규칙과
+       햄버거의 d-md-none(min-width:768px)이 동시에 걸려 정확히 768px 화면(아이패드
+       세로)에서 사이드바도 숨고 여는 버튼도 사라진다. */
+    @media (max-width: 767.98px) {
       #sidebar { transform: translateX(-100%); transition: transform .3s; }
       #sidebar.show { transform: translateX(0); }
       #main-content { margin-left: 0; }
