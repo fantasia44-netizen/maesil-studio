@@ -144,6 +144,10 @@
         </li>
       </ul>
       <div class="d-flex align-items-center gap-2">
+        <a id="expWpAutoNotice" href="#" target="_blank" rel="noopener"
+           class="btn btn-outline-success btn-sm d-none" style="font-size:.72rem">
+          <i class="bi bi-check-circle me-1"></i>워드프레스 초안 자동 저장됨 — 열어보기
+        </a>
         <div id="expWpPublish" class="d-none d-flex align-items-center gap-1">
           <select id="expWpStatus" class="form-select form-select-sm" style="font-size:.72rem;width:auto">
             <option value="draft" selected>초안으로</option>
@@ -188,6 +192,7 @@ let _expPhotos = [];   // [{dataUrl, name}] 업로드 순서 유지
 let _expNaver  = '';   // 네이버판 원문 (마커 포함)
 let _expGoogle = '';   // 구글판 원문 (마크다운)
 let _expTab    = 'naver';
+let _expWpAutoPublish = null;   // {ok, edit_link, ...} — 세트 생성 시 자동 발행 결과
 
 // ── 사진 업로드: 클라이언트 리사이즈(최대 1024px, JPEG) 후 목록에 추가 ──
 async function onExpPhotos(inp) {
@@ -281,6 +286,7 @@ async function generateExperience() {
       if (sd.status === 'done') {
         _expNaver  = sd.text || '';
         _expGoogle = sd.google_text || '';
+        _expWpAutoPublish = sd.wp_auto_publish || null;
         document.getElementById('expTabGoogleLi').classList.toggle('d-none', !_expGoogle);
         switchExpTab('naver');
         document.getElementById('expResultCard').classList.remove('d-none');
@@ -312,12 +318,21 @@ function switchExpTab(t) {
   _expTab = t;
   document.getElementById('expTabNaverBtn').classList.toggle('active', t === 'naver');
   document.getElementById('expTabGoogleBtn')?.classList.toggle('active', t === 'google');
-  // 워드프레스 발행 UI 는 구글판 탭 + 브랜드 연결 여부에 따라 노출
+  // 워드프레스 발행 UI 는 구글판 탭 + 브랜드 연결 여부에 따라 노출.
+  // 이미 자동 발행(초안)됐으면 안내만 보여주고 수동 버튼은 숨김(중복 포스트 방지).
   const brandOpt = document.getElementById('expBrandSelect').selectedOptions[0];
   const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
   const showWp = (t === 'google') && !!_expGoogle;
-  document.getElementById('expWpPublish')?.classList.toggle('d-none', !(showWp && wpConnected));
-  document.getElementById('expWpConnect')?.classList.toggle('d-none', !(showWp && !wpConnected));
+  const autoOk = !!(_expWpAutoPublish && _expWpAutoPublish.ok);
+  const autoNotice = document.getElementById('expWpAutoNotice');
+  if (showWp && autoOk) {
+    autoNotice.href = _expWpAutoPublish.edit_link || _expWpAutoPublish.link || '#';
+    autoNotice.classList.remove('d-none');
+  } else {
+    autoNotice.classList.add('d-none');
+  }
+  document.getElementById('expWpPublish')?.classList.toggle('d-none', !(showWp && wpConnected && !autoOk));
+  document.getElementById('expWpConnect')?.classList.toggle('d-none', !(showWp && !wpConnected && !autoOk));
   const text = t === 'google' ? _expGoogle : _expNaver;
   const hint = t === 'google'
     ? '워드프레스 에디터에 붙여넣으면 ## 소제목이 자동 변환됩니다. [사진 N] 자리에 사진 삽입, 알트텍스트 제안 활용.'

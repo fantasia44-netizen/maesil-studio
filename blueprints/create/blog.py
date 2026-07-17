@@ -483,7 +483,8 @@ def blog_generate():
                 note_override=ledger_note,
                 task_delay_fn=generate_blog_both.delay,
                 task_kwargs=dict(system_prompt=system, user_prompt=user,
-                                 max_tokens=max_tokens, disclaimer=disclaimer),
+                                 max_tokens=max_tokens, disclaimer=disclaimer,
+                                 brand_id=brand['id']),
             )
         except AsyncSubmitError as e:
             return jsonify(ok=False, message=str(e))
@@ -527,7 +528,8 @@ def blog_text_status(creation_id):
         return jsonify(ok=False, status='error', message='조회 실패')
     return render_status_response(
         row, current_user.id,
-        done_fields={'text': 'text', 'google_text': 'google_text'},
+        done_fields={'text': 'text', 'google_text': 'google_text',
+                    'wp_auto_publish': 'wp_auto_publish'},
     )
 
 

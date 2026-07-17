@@ -62,17 +62,21 @@ def _password_prefix(pw: str) -> str:
 # 공개 조회 API
 # ─────────────────────────────────────────────────────────────
 
-def get_connection(brand_id) -> dict | None:
-    """브랜드의 워드프레스 연결 row 반환 (없으면 None). 폴백 없음."""
-    sb = current_app.supabase
+def get_connection(brand_id, supabase=None) -> dict | None:
+    """브랜드의 워드프레스 연결 row 반환 (없으면 None). 폴백 없음.
+
+    supabase: Celery 워커 등 Flask 앱 컨텍스트가 없는 곳에서는 클라이언트를
+      직접 전달. 생략 시 current_app.supabase로 폴백.
+    """
+    sb = supabase if supabase is not None else current_app.supabase
     if not sb or not brand_id:
         return None
     return _get_by_brand(sb, brand_id)
 
 
-def get_client_for_user(brand_id) -> WordPressClient | None:
+def get_client_for_user(brand_id, supabase=None) -> WordPressClient | None:
     """브랜드의 자격증명으로 초기화된 클라이언트 반환 (없으면 None)."""
-    conn = get_connection(brand_id)
+    conn = get_connection(brand_id, supabase=supabase)
     if not conn:
         return None
     enc = conn.get('app_password_encrypted') or ''
@@ -137,9 +141,9 @@ def disconnect(brand_id) -> None:
     sb.table(_TABLE).delete().eq('brand_id', str(brand_id)).execute()
 
 
-def mark_used(brand_id) -> None:
+def mark_used(brand_id, supabase=None) -> None:
     """발행 시 last_used_at 업데이트 — 실패해도 무시."""
-    sb = current_app.supabase
+    sb = supabase if supabase is not None else current_app.supabase
     if not sb:
         return
     try:
@@ -149,9 +153,9 @@ def mark_used(brand_id) -> None:
         pass
 
 
-def mark_error(brand_id, message: str) -> None:
+def mark_error(brand_id, message: str, supabase=None) -> None:
     """오류 발생 시 last_error 기록 (UI 표시용)."""
-    sb = current_app.supabase
+    sb = supabase if supabase is not None else current_app.supabase
     if not sb:
         return
     try:

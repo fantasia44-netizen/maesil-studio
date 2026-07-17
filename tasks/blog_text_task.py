@@ -35,8 +35,13 @@ def _apply_disclaimer(text: str, disclaimer: str) -> str:
              max_retries=0, soft_time_limit=240, time_limit=300)
 def generate_blog_both(self, creation_id, user_id, system_prompt, user_prompt,
                        max_tokens, supabase_url, supabase_key, anthropic_api_key,
-                       disclaimer=''):
-    """블로그 본문 — 네이버판 + 구글(워드프레스)판을 함께 생성."""
+                       disclaimer='', brand_id=None):
+    """블로그 본문 — 네이버판 + 구글(워드프레스)판을 함께 생성.
+
+    brand_id 가 있고 그 브랜드에 워드프레스가 연결되어 있으면, 구글판 생성 직후
+    자동으로 초안(draft)으로 워드프레스에 올린다(항상 draft — 실패해도 텍스트
+    생성 자체는 성공 처리하고 output_data.wp_auto_publish에 결과만 기록).
+    """
     _setup()
     import os
     from supabase import create_client
@@ -51,12 +56,27 @@ def generate_blog_both(self, creation_id, user_id, system_prompt, user_prompt,
         naver_text = _apply_disclaimer(naver_text, disclaimer)
         google_text = _apply_disclaimer(google_text, disclaimer)
 
+        wp_auto_publish = None
+        if brand_id and google_text:
+            try:
+                from services.wordpress_publish import create_google_post
+                wp_auto_publish = create_google_post(
+                    supabase, brand_id, google_text, status='draft')
+            except Exception as e:
+                logger.warning('[blog_text_task] 자동 발행 실패(무시) cid=%s: %s', creation_id, e)
+                wp_auto_publish = {'ok': False, 'message': str(e)[:200]}
+
+        output_data = {'text': naver_text, 'google_text': google_text}
+        if wp_auto_publish is not None:
+            output_data['wp_auto_publish'] = wp_auto_publish
+
         supabase.table('creations').update({
             'status': 'done',
-            'output_data': {'text': naver_text, 'google_text': google_text},
+            'output_data': output_data,
         }).eq('id', creation_id).execute()
 
-        logger.info('[blog_text_task] 생성 완료 cid=%s', creation_id)
+        logger.info('[blog_text_task] 생성 완료 cid=%s wp_auto=%s', creation_id,
+                   (wp_auto_publish or {}).get('ok'))
 
     except Exception as e:
         logger.error('[blog_text_task] 오류 cid=%s: %s', creation_id, e, exc_info=True)

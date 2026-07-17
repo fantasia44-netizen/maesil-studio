@@ -267,6 +267,7 @@ def experience_generate():
         supabase_url=supabase_url,
         supabase_key=supabase_key,
         anthropic_api_key=anthropic_key,
+        brand_id=brand['id'],
     )
 
     logger.info(f'[experience] 제출 uid={str(current_user.id)[:8]} cid={cid[:8]} '
@@ -297,7 +298,8 @@ def experience_status(cid):
     if status == 'done':
         od = row.get('output_data') or {}
         return jsonify(ok=True, status='done',
-                       text=od.get('text', ''), google_text=od.get('google_text', ''))
+                       text=od.get('text', ''), google_text=od.get('google_text', ''),
+                       wp_auto_publish=od.get('wp_auto_publish'))
     elif status == 'failed':
         od = row.get('output_data') or {}
         return jsonify(ok=False, status='failed',
