@@ -52,11 +52,21 @@ _LENGTHS = {
 def experience():
     """경험담 블로그 작성 페이지."""
     cost = POINT_COSTS.get('experience_blog', 150)
+
+    from blueprints.create._base import get_accessible_brands, get_default_brand
     from services.wordpress_connection import is_connected as wp_is_connected
-    wp_connected = wp_is_connected(
-        current_user.id, operator_id=getattr(current_user, 'operator_id', None))
+    supabase = current_app.supabase
+    brands = get_accessible_brands(supabase) if supabase else []
+    if not brands:
+        from flask import flash, redirect, url_for
+        flash('먼저 브랜드 프로필을 등록해 주세요.', 'warning')
+        return redirect(url_for('main.onboarding'))
+    default_brand = get_default_brand(supabase)
+    brand_wp_connected = {b['id']: wp_is_connected(b['id']) for b in brands}
+
     return render_template('create/experience.html', cost=cost,
-                           wp_connected=wp_connected)
+                           brands=brands, default_brand=default_brand,
+                           brand_wp_connected=brand_wp_connected)
 
 
 @create_bp.route('/experience/generate', methods=['POST'])
@@ -80,6 +90,16 @@ def experience_generate():
     memo = (data.get('memo') or '').strip()
     if not memo:
         return jsonify(ok=False, message='경험 메모를 입력해 주세요. 대충 쓰셔도 됩니다.')
+
+    from blueprints.create._base import get_brand_by_id, get_default_brand
+    supabase = current_app.supabase
+    brand_id = (data.get('brand_id') or '').strip()
+    brand = get_brand_by_id(supabase, brand_id) if (supabase and brand_id) else None
+    if not brand:
+        brand = get_default_brand(supabase) if supabase else None
+    if not brand:
+        return jsonify(ok=False, message='브랜드 프로필이 없습니다.')
+
     photos = data.get('photos') if isinstance(data.get('photos'), list) else []
     photos = [p for p in photos if isinstance(p, str) and p.startswith('data:image/')][:_MAX_PHOTOS]
     # 사진은 선택 — 없으면 텍스트 경험만으로 정리 (온라인 업무 경험담 등)
@@ -212,6 +232,7 @@ def experience_generate():
             now_s = now_kst().isoformat()
             row = {
                 'id': cid, 'user_id': current_user.id,
+                'brand_id': brand['id'],
                 'creation_type': 'experience_blog',
                 'input_data': {'exp_type': exp_type, 'tone': tone, 'length': length,
                                'targets': 'both' if both else 'naver',

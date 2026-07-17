@@ -86,6 +86,20 @@
         </div>
       </div>
 
+      <!-- 브랜드 -->
+      <div class="mb-4">
+        <label class="form-label fw-semibold small">브랜드</label>
+        <select id="expBrandSelect" class="form-select form-select-sm" style="max-width:320px"
+                onchange="updateExpWpUi()">
+          {% for b in brands %}
+          <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}
+                  data-wp-connected="{{ '1' if brand_wp_connected.get(b.id) else '0' }}">
+            {{ b.name }}{% if b.is_default %} (기본){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
       <!-- 발행 대상 -->
       <div class="mb-4">
         <label class="form-label fw-semibold small">발행 대상</label>
@@ -130,7 +144,6 @@
         </li>
       </ul>
       <div class="d-flex align-items-center gap-2">
-        {% if wp_connected %}
         <div id="expWpPublish" class="d-none d-flex align-items-center gap-1">
           <select id="expWpStatus" class="form-select form-select-sm" style="font-size:.72rem;width:auto">
             <option value="draft" selected>초안으로</option>
@@ -141,12 +154,10 @@
             <i class="bi bi-wordpress me-1"></i>워드프레스 보내기
           </button>
         </div>
-        {% else %}
-        <a id="expWpConnect" href="{{ url_for('integrations.index') }}"
+        <a id="expWpConnect" href="{{ url_for('integrations.index') }}" target="_blank"
            class="btn btn-outline-secondary btn-sm d-none" style="font-size:.72rem">
-          <i class="bi bi-wordpress me-1"></i>워드프레스 연결하면 바로 발행
+          <i class="bi bi-wordpress me-1"></i>이 브랜드 워드프레스 연결하면 바로 발행
         </a>
-        {% endif %}
         <button class="btn btn-outline-secondary btn-sm" style="font-size:.72rem" onclick="copyExpText()">
           <i class="bi bi-clipboard me-1"></i>현재 탭 복사
         </button>
@@ -250,6 +261,7 @@ async function generateExperience() {
         length:   document.getElementById('expLength').value,
         targets:  document.querySelector('input[name="expTargets"]:checked')?.value || 'both',
         photos:   _expPhotos.map(p => p.dataUrl),
+        brand_id: document.getElementById('expBrandSelect').value,
       }),
     });
     const submit = await res.json();
@@ -290,15 +302,22 @@ async function generateExperience() {
   }
 }
 
+// ── 브랜드 선택에 따라 워드프레스 연결 상태 UI 갱신 ─────────────
+function updateExpWpUi() {
+  if (_expTab === 'google') switchExpTab('google');
+}
+
 // ── 결과 표시: 탭 전환 + [사진 N] 마커 자리에 실제 사진 미리보기 ──
 function switchExpTab(t) {
   _expTab = t;
   document.getElementById('expTabNaverBtn').classList.toggle('active', t === 'naver');
   document.getElementById('expTabGoogleBtn')?.classList.toggle('active', t === 'google');
-  // 워드프레스 발행 UI 는 구글판 탭에서만 노출
+  // 워드프레스 발행 UI 는 구글판 탭 + 브랜드 연결 여부에 따라 노출
+  const brandOpt = document.getElementById('expBrandSelect').selectedOptions[0];
+  const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
   const showWp = (t === 'google') && !!_expGoogle;
-  document.getElementById('expWpPublish')?.classList.toggle('d-none', !showWp);
-  document.getElementById('expWpConnect')?.classList.toggle('d-none', !showWp);
+  document.getElementById('expWpPublish')?.classList.toggle('d-none', !(showWp && wpConnected));
+  document.getElementById('expWpConnect')?.classList.toggle('d-none', !(showWp && !wpConnected));
   const text = t === 'google' ? _expGoogle : _expNaver;
   const hint = t === 'google'
     ? '워드프레스 에디터에 붙여넣으면 ## 소제목이 자동 변환됩니다. [사진 N] 자리에 사진 삽입, 알트텍스트 제안 활용.'
@@ -357,7 +376,10 @@ async function publishToWordpress() {
     const res = await fetch('{{ url_for("integrations.wordpress_publish") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-      body: JSON.stringify({ google_text: _expGoogle, status }),
+      body: JSON.stringify({
+        google_text: _expGoogle, status,
+        brand_id: document.getElementById('expBrandSelect').value,
+      }),
     });
     const j = await res.json();
     if (!j.ok) throw new Error(j.message || '발행 실패');

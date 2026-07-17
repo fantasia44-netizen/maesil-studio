@@ -300,9 +300,7 @@ def blog():
 
     # 브랜드별 워드프레스 연결 여부 ("네이버+구글 세트" 발행 버튼 노출 판단용)
     from services.wordpress_connection import is_connected as wp_is_connected
-    brand_wp_connected = {
-        b['id']: wp_is_connected(current_user.id, brand_id=b['id']) for b in brands
-    }
+    brand_wp_connected = {b['id']: wp_is_connected(b['id']) for b in brands}
 
     return render_template('create/blog.html',
                            brands=brands,

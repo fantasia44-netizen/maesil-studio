@@ -135,141 +135,12 @@
       </div>
     </div>
 
-    <!-- ── 워드프레스 연동 카드 (경험담 블로그 · 팀/개인 공통 1개) ── -->
+    <!-- ── 브랜드별 워드프레스 연동 카드 ── -->
     <div class="card mb-4">
       <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <h6 class="mb-0 fw-bold">
           <i class="bi bi-wordpress me-1" style="color:#21759b;"></i>
-          워드프레스 연동 <span class="text-muted fw-normal small">— 경험담 블로그용</span>
-        </h6>
-        {% if wp_connection %}
-          <span class="badge bg-success">연결됨</span>
-        {% else %}
-          <span class="badge bg-secondary">미연결</span>
-        {% endif %}
-      </div>
-
-      <div class="card-body p-4">
-        <div class="alert alert-light border small mb-3">
-          <i class="bi bi-info-circle me-1"></i>
-          여기는 <b>경험담 블로그</b> 전용 연결(계정당 1개)입니다. 브랜드마다 다른 사이트에
-          연결하려면 아래 <b>"브랜드별 워드프레스 연동"</b> 카드를 사용하세요 — 일반 블로그의
-          "네이버+구글 세트"는 그쪽 연결을 사용합니다.
-        </div>
-        {% if wp_connection %}
-          <!-- 현재 연결 상태 -->
-          {% if not can_manage %}
-          <div class="alert alert-light border-start border-4 border-warning py-2 mb-3 small">
-            <i class="bi bi-info-circle me-1 text-warning"></i>
-            팀 관리자가 등록한 연결입니다. 발행은 사용할 수 있지만, 연결 변경은 관리자만 가능합니다.
-          </div>
-          {% endif %}
-
-          <dl class="row mb-3 small">
-            <dt class="col-sm-4 text-muted fw-normal">사이트</dt>
-            <dd class="col-sm-8 fw-semibold">
-              <a href="{{ wp_connection.site_url }}" target="_blank" rel="noopener">{{ wp_connection.site_url }}</a>
-            </dd>
-
-            <dt class="col-sm-4 text-muted fw-normal">계정</dt>
-            <dd class="col-sm-8">{{ wp_connection.wp_display_name or wp_connection.wp_username }}</dd>
-
-            <dt class="col-sm-4 text-muted fw-normal">앱 비밀번호</dt>
-            <dd class="col-sm-8"><code>{{ wp_connection.password_prefix }}****</code></dd>
-
-            <dt class="col-sm-4 text-muted fw-normal">연결일</dt>
-            <dd class="col-sm-8 text-muted">{{ (wp_connection.connected_at or '')[:10] }}</dd>
-
-            {% if wp_connection.last_used_at %}
-            <dt class="col-sm-4 text-muted fw-normal">마지막 발행</dt>
-            <dd class="col-sm-8 text-muted">{{ wp_connection.last_used_at[:16]|replace('T', ' ') }}</dd>
-            {% endif %}
-
-            {% if wp_connection.last_error %}
-            <dt class="col-sm-4 text-danger fw-normal">최근 오류</dt>
-            <dd class="col-sm-8 text-danger small">{{ wp_connection.last_error }}</dd>
-            {% endif %}
-          </dl>
-
-          <div class="d-flex align-items-center gap-2">
-            <a href="{{ url_for('create.experience') }}" class="btn fw-semibold px-4"
-               style="background:#21759b;color:#fff">
-              <i class="bi bi-pencil-square me-1"></i>경험담 글 쓰고 발행하기
-            </a>
-            {% if can_manage %}
-            <form method="POST" action="{{ url_for('integrations.wordpress_disconnect') }}"
-                  class="ms-auto"
-                  onsubmit="return confirm('워드프레스 연결을 해제하시겠습니까?\n저장된 인증 정보가 삭제됩니다.');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-outline-danger px-4">연결 해제</button>
-            </form>
-            {% endif %}
-          </div>
-
-        {% else %}
-          <!-- 연결 폼 -->
-          {% if can_manage %}
-          <p class="small text-muted mb-3">
-            자체 호스팅(wordpress.org) 워드프레스에 연결하면, 생성한 <b>구글(워드프레스)판</b> 글을
-            초안 또는 발행 상태로 바로 올릴 수 있습니다.
-          </p>
-
-          <div class="alert alert-light border small mb-3">
-            <strong>애플리케이션 비밀번호 발급 방법</strong>
-            <ol class="mb-0 ps-3 mt-1">
-              <li>워드프레스 관리자 → <b>사용자 → 프로필</b> 하단 <b>[애플리케이션 비밀번호]</b></li>
-              <li>이름 입력(예: "매실 스튜디오") → <b>[새 애플리케이션 비밀번호 추가]</b></li>
-              <li>1회 노출되는 <code>xxxx xxxx xxxx xxxx xxxx xxxx</code> 를 복사해 아래에 붙여넣기</li>
-            </ol>
-            <div class="text-muted mt-1" style="font-size:.72rem">
-              ※ 로그인 비밀번호가 아니라 <b>애플리케이션 비밀번호</b>입니다. 편집자 이상 권한 계정이어야 발행됩니다.
-            </div>
-          </div>
-
-          <form method="POST" action="{{ url_for('integrations.wordpress_connect') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">사이트 주소</label>
-              <input type="url" name="site_url" class="form-control form-control-sm"
-                     placeholder="https://myblog.com" autocomplete="off" required>
-            </div>
-            <div class="row g-2 mb-3">
-              <div class="col-sm-5">
-                <label class="form-label fw-semibold small">워드프레스 아이디</label>
-                <input type="text" name="wp_username" class="form-control form-control-sm"
-                       placeholder="admin" autocomplete="off" spellcheck="false" required>
-              </div>
-              <div class="col-sm-7">
-                <label class="form-label fw-semibold small">애플리케이션 비밀번호</label>
-                <input type="text" name="app_password" class="form-control font-monospace form-control-sm"
-                       placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
-                       autocomplete="off" spellcheck="false" required>
-              </div>
-            </div>
-            <div class="form-text text-muted small mb-3">
-              앱 비밀번호는 Fernet 암호화로 저장되며, 화면에는 앞 4자리만 표시됩니다.
-            </div>
-            <button type="submit" class="btn fw-semibold px-4" style="background:#21759b;color:#fff">
-              <i class="bi bi-check-lg me-1"></i>연결 확인
-            </button>
-          </form>
-
-          {% else %}
-          <div class="alert alert-warning py-2 small">
-            <i class="bi bi-exclamation-triangle me-1"></i>
-            아직 워드프레스가 연결되지 않았습니다. 팀 관리자에게 연결 설정을 요청하세요.
-          </div>
-          {% endif %}
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- ── 브랜드별 워드프레스 연동 카드 (일반 블로그 전용) ── -->
-    <div class="card mb-4">
-      <div class="card-header py-3 d-flex align-items-center justify-content-between">
-        <h6 class="mb-0 fw-bold">
-          <i class="bi bi-wordpress me-1" style="color:#21759b;"></i>
-          브랜드별 워드프레스 연동 <span class="text-muted fw-normal small">— 일반 블로그용</span>
+          워드프레스 연동
         </h6>
         {% if brand_wp_connection %}
           <span class="badge bg-success">연결됨</span>
@@ -280,9 +151,9 @@
 
       <div class="card-body p-4">
         <p class="small text-muted mb-3">
-          브랜드마다 서로 다른 워드프레스 사이트에 연결할 수 있습니다. 일반 블로그에서
-          "네이버+구글(워드프레스) 세트"로 생성한 글은 여기서 선택한 브랜드의 연결로 발행됩니다.
-          <b>브랜드마다 반드시 자체 연결이 필요합니다</b>(공통 연결로 자동 대체되지 않습니다).
+          브랜드마다 서로 다른 워드프레스 사이트에 연결할 수 있습니다. 경험담 블로그·일반 블로그
+          모두 여기서 선택한 브랜드의 연결로 발행됩니다. <b>브랜드마다 반드시 자체 연결이
+          필요합니다</b>(공통 연결로 자동 대체되지 않습니다).
         </p>
 
         {% if not brands %}

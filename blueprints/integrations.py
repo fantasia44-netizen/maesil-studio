@@ -133,7 +133,6 @@ def _can_manage() -> bool:
 @login_required
 def index():
     conn = get_connection(current_user.id, operator_id=_op_id())
-    wp_conn = wp_get_connection(current_user.id, operator_id=_op_id())
 
     from blueprints.create._base import get_accessible_brands, get_default_brand
     sb = current_app.supabase
@@ -145,14 +144,13 @@ def index():
     if not selected_brand:
         selected_brand = get_default_brand(sb) if sb else None
     brand_wp_connection = (
-        wp_get_connection(current_user.id, brand_id=selected_brand['id'])
+        wp_get_connection(selected_brand['id'])
         if selected_brand else None
     )
 
     return render_template(
         'integrations/index.html',
         connection=conn,
-        wp_connection=wp_conn,
         can_manage=_can_manage(),
         brands=brands,
         selected_brand=selected_brand,
@@ -420,69 +418,8 @@ def import_apply():
 
 # ═════════════════════════════════════════════════════════════
 # 워드프레스 연동 (자체 호스팅 · REST API + 애플리케이션 비밀번호)
+# 브랜드 단위 연결만 존재(폴백 없음) — 경험담/일반 블로그 모두 공용.
 # ═════════════════════════════════════════════════════════════
-
-@integrations_bp.route('/wordpress/connect', methods=['POST'])
-@login_required
-def wordpress_connect():
-    """사이트 주소 + 아이디 + 앱 비밀번호 → /users/me 검증 → 저장."""
-    if not _can_manage():
-        flash('워드프레스 연결은 팀 관리자만 설정할 수 있습니다.', 'warning')
-        return redirect(url_for('integrations.index'))
-
-    site_url = (request.form.get('site_url') or '').strip()
-    username = (request.form.get('wp_username') or '').strip()
-    app_pw   = (request.form.get('app_password') or '').strip()
-    if not site_url or not username or not app_pw:
-        flash('사이트 주소, 아이디, 애플리케이션 비밀번호를 모두 입력해주세요.', 'warning')
-        return redirect(url_for('integrations.index'))
-
-    op_id = _op_id()
-    try:
-        conn = wp_verify_and_save(
-            current_user.id,
-            site_url=site_url, username=username, app_password=app_pw,
-            operator_id=op_id,
-        )
-        flash(
-            f'워드프레스 "{conn.get("wp_display_name") or username}" 계정과 연결되었습니다.',
-            'success',
-        )
-    except WordPressError as e:
-        logger.warning(f'[WP] connect 실패 user={current_user.id}: {e}')
-        try:
-            wp_mark_error(current_user.id, str(e), operator_id=op_id)
-        except Exception:
-            pass
-        flash(wp_friendly_error(e), 'danger')
-    except ValueError as e:
-        flash(f'입력값을 확인해주세요. ({e})', 'warning')
-    except Exception as e:
-        logger.error(f'[WP] connect 예외: {e}', exc_info=True)
-        flash('워드프레스 연결 중 오류가 발생했습니다.', 'danger')
-
-    return redirect(url_for('integrations.index'))
-
-
-@integrations_bp.route('/wordpress/disconnect', methods=['POST'])
-@login_required
-def wordpress_disconnect():
-    """워드프레스 연결 해제. 팀 모드: operator_admin 만 가능."""
-    if not _can_manage():
-        flash('연결 해제는 팀 관리자만 할 수 있습니다.', 'warning')
-        return redirect(url_for('integrations.index'))
-
-    op_id = _op_id()
-    try:
-        wp_disconnect_conn(current_user.id, operator_id=op_id)
-        flash('워드프레스 연결이 해제되었습니다.', 'success')
-    except Exception as e:
-        logger.error(f'[WP] disconnect 예외: {e}')
-        flash('해제 중 오류가 발생했습니다.', 'danger')
-    return redirect(url_for('integrations.index'))
-
-
-# ── 브랜드별 워드프레스 연결 (일반 블로그 전용, 폴백 없음) ──────
 
 @integrations_bp.route('/wordpress/brand/<brand_id>/connect', methods=['POST'])
 @login_required
@@ -510,7 +447,7 @@ def wordpress_brand_connect(brand_id):
         conn = wp_verify_and_save(
             current_user.id,
             site_url=site_url, username=username, app_password=app_pw,
-            operator_id=_op_id(), brand_id=brand_id,
+            brand_id=brand_id, operator_id=_op_id(),
         )
         flash(
             f'"{brand["name"]}" 브랜드에 워드프레스 "{conn.get("wp_display_name") or username}" '
@@ -520,7 +457,7 @@ def wordpress_brand_connect(brand_id):
     except WordPressError as e:
         logger.warning(f'[WP] brand connect 실패 brand={brand_id}: {e}')
         try:
-            wp_mark_error(current_user.id, str(e), brand_id=brand_id)
+            wp_mark_error(brand_id, str(e))
         except Exception:
             pass
         flash(wp_friendly_error(e), 'danger')
@@ -542,7 +479,7 @@ def wordpress_brand_disconnect(brand_id):
         return redirect(url_for('integrations.index', wp_brand_id=brand_id))
 
     try:
-        wp_disconnect_conn(current_user.id, brand_id=brand_id)
+        wp_disconnect_conn(brand_id)
         flash('브랜드 워드프레스 연결이 해제되었습니다.', 'success')
     except Exception as e:
         logger.error(f'[WP] brand disconnect 예외: {e}')
@@ -670,18 +607,16 @@ def _parse_google_post(text: str) -> dict:
 def wordpress_publish():
     """경험담/블로그 구글판 → 워드프레스 글로 발행 (기본 초안). AJAX JSON.
 
-    brand_id 가 오면 그 브랜드 전용 연결로 발행(폴백 없음) — 일반 블로그용.
-    brand_id 가 없으면 기존 팀/개인 공통 연결로 발행 — 경험담 블로그용(기존 동작).
+    brand_id 는 필수 — 브랜드 전용 연결로만 발행한다(폴백 없음).
     """
-    op_id = _op_id()
     data = request.get_json(force=True) or {}
-    brand_id = data.get('brand_id') or None
+    brand_id = (data.get('brand_id') or '').strip()
+    if not brand_id:
+        return jsonify(ok=False, message='브랜드를 선택해주세요.'), 400
 
-    client = wp_get_client_for_user(current_user.id, operator_id=op_id, brand_id=brand_id)
+    client = wp_get_client_for_user(brand_id)
     if not client:
-        msg = ('먼저 이 브랜드의 워드프레스를 연결해주세요.' if brand_id
-               else '먼저 워드프레스를 연결해주세요.')
-        return jsonify(ok=False, message=msg), 400
+        return jsonify(ok=False, message='먼저 이 브랜드의 워드프레스를 연결해주세요.'), 400
 
     raw = (data.get('google_text') or '').strip()
     if not raw:
@@ -711,10 +646,10 @@ def wordpress_publish():
             excerpt=parsed['excerpt'] or None,
             tag_ids=tag_ids or None,
         )
-        wp_mark_used(current_user.id, operator_id=op_id, brand_id=brand_id)
+        wp_mark_used(brand_id)
     except WordPressError as e:
-        logger.warning(f'[WP] publish 실패 user={current_user.id}: {e}')
-        wp_mark_error(current_user.id, str(e), operator_id=op_id, brand_id=brand_id)
+        logger.warning(f'[WP] publish 실패 brand={brand_id}: {e}')
+        wp_mark_error(brand_id, str(e))
         return jsonify(ok=False, message=wp_friendly_error(e))
     except Exception as e:
         logger.error(f'[WP] publish 예외: {e}', exc_info=True)
