@@ -338,7 +338,7 @@ def _scene_layout(bg_phrase: str, bg_mode: str, subject: str) -> str:
 
 def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
                    extra: str = '', bg_color: str = '',
-                   style: str = SCENE_STYLE_DEFAULT) -> str:
+                   style: str = SCENE_STYLE_DEFAULT, supabase=None) -> str:
     """상황 장면 일러스트 생성 (nano-banana). 그림체는 SCENE_STYLES 시안에서 선택.
 
     · style 의 subject='mascot' (기본 '캐릭터 아기자기'):
@@ -389,11 +389,11 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
             flat.alpha_composite(im)
             buf = _BIO(); flat.convert('RGB').save(buf, format='PNG')
             data_url = f"data:image/png;base64,{_b64.b64encode(buf.getvalue()).decode()}"
-            urls.append(upload_to_supabase(data_url, user_id, f'mascot_ref_{i}.png'))
+            urls.append(upload_to_supabase(data_url, user_id, f'mascot_ref_{i}.png', supabase=supabase))
         except Exception as e:
             logger.warning('[generate_scene] 마스코트 평탄화 실패 → 원본 사용: %s', e)
             if isinstance(m, str) and m.startswith('data:image/'):
-                urls.append(upload_to_supabase(m, user_id, f'mascot_ref_{i}.png'))
+                urls.append(upload_to_supabase(m, user_id, f'mascot_ref_{i}.png', supabase=supabase))
             elif m:
                 urls.append(m)
     topic = (topic or '').strip() or '육아 정보'

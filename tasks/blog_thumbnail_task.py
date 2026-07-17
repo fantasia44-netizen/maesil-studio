@@ -218,7 +218,7 @@ def scene(self, creation_id, user_id, headline, sub, badge, cta, theme, title_st
         bg_color = _THEME_BG.get(theme, 'soft pastel')
 
         scene_url = generate_scene(refs, topic, user_id or 'anon',
-                                   bg_color=bg_color, style=style)
+                                   bg_color=bg_color, style=style, supabase=supabase)
 
         r = requests.get(scene_url, timeout=60)
         r.raise_for_status()
