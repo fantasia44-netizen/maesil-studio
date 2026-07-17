@@ -135,12 +135,12 @@
       </div>
     </div>
 
-    <!-- ── 워드프레스 연동 카드 ── -->
+    <!-- ── 워드프레스 연동 카드 (경험담 블로그 · 팀/개인 공통 1개) ── -->
     <div class="card mb-4">
       <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <h6 class="mb-0 fw-bold">
           <i class="bi bi-wordpress me-1" style="color:#21759b;"></i>
-          워드프레스 연동
+          워드프레스 연동 <span class="text-muted fw-normal small">— 경험담 블로그용</span>
         </h6>
         {% if wp_connection %}
           <span class="badge bg-success">연결됨</span>
@@ -150,6 +150,12 @@
       </div>
 
       <div class="card-body p-4">
+        <div class="alert alert-light border small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          여기는 <b>경험담 블로그</b> 전용 연결(계정당 1개)입니다. 브랜드마다 다른 사이트에
+          연결하려면 아래 <b>"브랜드별 워드프레스 연동"</b> 카드를 사용하세요 — 일반 블로그의
+          "네이버+구글 세트"는 그쪽 연결을 사용합니다.
+        </div>
         {% if wp_connection %}
           <!-- 현재 연결 상태 -->
           {% if not can_manage %}
@@ -263,7 +269,7 @@
       <div class="card-header py-3 d-flex align-items-center justify-content-between">
         <h6 class="mb-0 fw-bold">
           <i class="bi bi-wordpress me-1" style="color:#21759b;"></i>
-          브랜드별 워드프레스 연동
+          브랜드별 워드프레스 연동 <span class="text-muted fw-normal small">— 일반 블로그용</span>
         </h6>
         {% if brand_wp_connection %}
           <span class="badge bg-success">연결됨</span>
