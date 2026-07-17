@@ -1820,6 +1820,7 @@ async function saveBlogDraft(stepReached) {
         length:          document.getElementById('lengthSelect').value,
         relation_mode:   document.getElementById('relationMode').value,
         relation_ref_id: document.getElementById('refSelect')?.value || null,
+        targets:         document.querySelector('input[name="blogTargets"]:checked')?.value || 'naver',
       },
       step_data: {
         angles:           window._angles || [],
@@ -1858,6 +1859,10 @@ async function loadBlogDraft(id) {
     if (inp.direction)     document.getElementById('directionInput').value = inp.direction;
     if (inp.length)        document.getElementById('lengthSelect').value   = inp.length;
     if (inp.relation_mode) document.getElementById('relationMode').value   = inp.relation_mode;
+    if (inp.targets) {
+      const radio = document.getElementById(inp.targets === 'both' ? 'blogTgBoth' : 'blogTgNaver');
+      if (radio) radio.checked = true;
+    }
     // JS 상태 복원
     selectedAngle    = sd.selected_angle    || null;
     blogText         = sd.blog_text || (d.output_data?.text) || '';
@@ -1942,11 +1947,14 @@ async function redoBlogImages(id) {
     const d = data.draft;
     const sd = d.step_data || {};
     blogText       = (d.output_data?.text) || sd.blog_text || '';
+    blogGoogleText = (d.output_data?.google_text) || sd.blog_google_text || '';
     blogCreationId = d.id;
     const inp = d.input_data || {};
     if (inp.brand_id)   document.getElementById('brandSelect').value   = inp.brand_id;
     if (inp.product_id) document.getElementById('productSelect').value = inp.product_id;
-    if (blogText) document.getElementById('blogTextArea').value = blogText;
+    // 이 글(재작업 대상)의 실제 상태로 탭/텍스트 동기화 — 다른 글의 구글판이 섞여 보이는 것 방지
+    document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
+    switchBlogTab('naver');
     // 소구포인트 복원 → 재작업에서도 AI 씬 자동채움(서브·뱃지·주제)이 작동하도록
     selectedAngle = sd.selected_angle || null;
     if ((sd.angles || []).length) window._angles = sd.angles;
