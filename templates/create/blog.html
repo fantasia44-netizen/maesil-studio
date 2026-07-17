@@ -98,7 +98,8 @@
             <label class="form-label fw-semibold small">브랜드</label>
             <select id="brandSelect" class="form-select form-select-sm">
               {% for b in brands %}
-              <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}>
+              <option value="{{ b.id }}" {{ 'selected' if b.id == default_brand.id }}
+                      data-wp-connected="{{ '1' if brand_wp_connected.get(b.id) else '0' }}">
                 {{ b.name }}{% if b.is_default %} (기본){% endif %}
               </option>
               {% endfor %}
@@ -156,6 +157,29 @@
               <option value="{{ k }}">{{ label }}</option>
               {% endfor %}
             </select>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold small">발행 대상</label>
+          <div class="btn-group w-100" role="group" style="font-size:.8rem">
+            <input type="radio" class="btn-check" name="blogTargets" id="blogTgNaver" value="naver" checked onchange="onBlogTargetsChange()">
+            <label class="btn btn-outline-secondary py-2" for="blogTgNaver">
+              <i class="bi bi-journal-text me-1"></i>네이버만
+            </label>
+            <input type="radio" class="btn-check" name="blogTargets" id="blogTgBoth" value="both" onchange="onBlogTargetsChange()">
+            <label class="btn btn-outline-secondary py-2" for="blogTgBoth">
+              <i class="bi bi-collection me-1"></i>네이버 + 구글(워드프레스) 세트 <span class="text-muted">포인트 2배</span>
+            </label>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.7rem">
+            세트를 고르면 같은 글을 <b>네이버판</b>과 <b>구글(워드프레스)판</b>(더 길게, SEO 제목·메타·표·FAQ 포함)으로
+            30~50% 이상 다르게 써서 한 번에 만듭니다 — 출력이 2배라 백그라운드로 처리되며 시간이 더 걸립니다.
+          </div>
+          <div id="blogWpHint" class="alert alert-warning py-2 mt-2 d-none" style="font-size:.72rem">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            이 브랜드는 아직 워드프레스가 연결되지 않았습니다. 생성은 되지만 발행하려면
+            <a href="{{ url_for('integrations.index') }}" target="_blank">먼저 연결</a>해주세요.
           </div>
         </div>
 
@@ -248,11 +272,41 @@
   </div>
   <!-- 글 결과 -->
   <div id="step3Content" class="card d-none">
-    <div class="card-header py-2 d-flex align-items-center justify-content-between">
+    <div class="card-header py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <ul class="nav nav-pills me-auto" style="font-size:.76rem" id="blogResultTabs">
+        <li class="nav-item">
+          <a class="nav-link active py-1 px-3" href="#" onclick="switchBlogTab('naver');return false" id="blogTabNaverBtn">
+            <i class="bi bi-journal-text me-1"></i>네이버판
+          </a>
+        </li>
+        <li class="nav-item d-none" id="blogTabGoogleLi">
+          <a class="nav-link py-1 px-3" href="#" onclick="switchBlogTab('google');return false" id="blogTabGoogleBtn">
+            <i class="bi bi-google me-1"></i>구글·워드프레스판
+          </a>
+        </li>
+      </ul>
+      <div class="d-flex align-items-center gap-2">
+        <div id="blogWpPublish" class="d-none d-flex align-items-center gap-1">
+          <select id="blogWpStatus" class="form-select form-select-sm" style="font-size:.72rem;width:auto">
+            <option value="draft" selected>초안으로</option>
+            <option value="publish">바로 발행</option>
+          </select>
+          <button id="blogWpBtn" class="btn btn-sm text-white" style="font-size:.72rem;background:#21759b"
+                  onclick="publishBlogToWordpress()">
+            <i class="bi bi-wordpress me-1"></i>워드프레스 보내기
+          </button>
+        </div>
+        <a id="blogWpConnect" href="{{ url_for('integrations.index') }}" target="_blank"
+           class="btn btn-outline-secondary btn-sm d-none" style="font-size:.72rem">
+          <i class="bi bi-wordpress me-1"></i>이 브랜드 워드프레스 연결하기
+        </a>
+      </div>
+    </div>
+    <div class="px-3 pt-2">
       <span class="small text-muted" id="step3Meta"></span>
     </div>
-    <div class="card-body p-0">
-      <textarea id="blogTextArea" class="form-control border-0 rounded-0"
+    <div class="card-body p-0 pt-2">
+      <textarea id="blogTextArea" class="form-control border-0 rounded-0" oninput="onBlogTextEdit()"
                 rows="30"
                 style="font-size:.87rem;line-height:1.9;resize:vertical;font-family:inherit;padding:1.5rem"></textarea>
     </div>
@@ -1744,7 +1798,9 @@ let currentStep  = 1;
 let selectedAngle = null;
 let selectedStyle = null;
 let generatedImages = [];     // [{role, url}]
-let blogText = '';
+let blogText = '';         // 네이버판 원문
+let blogGoogleText = '';   // 구글(워드프레스)판 원문 — "세트" 선택 시에만 채워짐
+let _blogTab = 'naver';    // 현재 보고 있는 결과 탭
 let productImageUrl  = '';    // 선택된 제품 이미지 URL
 let selectedImgCount = 5;     // 총 이미지 수 (기본 5)
 let blogCreationId   = null;  // 블로그 텍스트 creation ID (save-final에 사용)
@@ -1768,13 +1824,14 @@ async function saveBlogDraft(stepReached) {
       step_data: {
         angles:           window._angles || [],
         selected_angle:   selectedAngle,
-        blog_text:        document.getElementById('blogTextArea')?.value || blogText,
+        blog_text:        blogText,
+        blog_google_text: blogGoogleText,
         blog_creation_id: blogCreationId,
         style:            selectedStyle,
         img_count:        selectedImgCount,
         generated_images: generatedImages,
       },
-      output_data: blogText ? { text: blogText } : {},
+      output_data: blogText ? { text: blogText, google_text: blogGoogleText } : {},
     };
     const res  = await fetch('{{ url_for("create.blog_save_draft") }}', {
       method: 'POST',
@@ -1804,6 +1861,7 @@ async function loadBlogDraft(id) {
     // JS 상태 복원
     selectedAngle    = sd.selected_angle    || null;
     blogText         = sd.blog_text || (d.output_data?.text) || '';
+    blogGoogleText   = sd.blog_google_text || (d.output_data?.google_text) || '';
     blogCreationId   = sd.blog_creation_id  || null;
     selectedStyle    = sd.style             || null;
     selectedImgCount = sd.img_count         || 5;
@@ -1822,7 +1880,8 @@ async function loadBlogDraft(id) {
     }
     // 글 텍스트 복원
     if (blogText) {
-      document.getElementById('blogTextArea').value = blogText;
+      document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
+      switchBlogTab('naver');
       // 글이 있으면 step3 스피너 숨기고 내용 표시 (스피너 무한로딩 방지)
       document.getElementById('step3Loading').classList.add('d-none');
       document.getElementById('step3Content').classList.remove('d-none');
@@ -2108,6 +2167,7 @@ document.getElementById('brandSelect').addEventListener('change', async function
   _mascotLoaded = false;
   const _m = document.querySelector('input[name="thumbStyleMode"]:checked')?.value;
   if (_m === 'design' || _m === 'scene') { _mascotLoaded = true; _autoLoadMascot(); }
+  onBlogTargetsChange();   // 브랜드 전환 시 워드프레스 연결 안내/발행 버튼 갱신
 });
 
 // ── Step 1 → 소구포인트 생성 ─────────────────────────────────
@@ -2226,15 +2286,42 @@ async function generateBlogText() {
   fd.append('topic',   firstLine || productText.split('·')[0].trim() || '블로그');
   fd.append('keyword', productText.split('·')[0].trim());
 
+  const targets = document.querySelector('input[name="blogTargets"]:checked')?.value || 'naver';
+  fd.append('targets', targets);
+
   try {
     const res  = await fetch('{{ url_for("create.blog_generate") }}', { method: 'POST', body: fd });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
 
-    blogText = data.text;
-    blogCreationId = data.creation_id || null;
-    document.getElementById('blogTextArea').value = blogText;
-    document.getElementById('step3Meta').textContent = (data.cost_charged ? data.cost_charged + 'P 사용 · ' : '') + '내용을 직접 수정할 수 있습니다';
+    if (data.async_mode) {
+      // '네이버+구글 세트' — 백그라운드 생성, 완료될 때까지 폴링 (2초 간격, 최대 4분)
+      document.getElementById('step3Loading').querySelector('p.fw-semibold').textContent = '네이버판 + 구글판 함께 쓰는 중이에요 ✍️';
+      const statusUrl = `{{ url_for('create.blog_text_status', creation_id='__ID__') }}`.replace('__ID__', data.id);
+      let elapsed = 0, done = false, sd;
+      while (elapsed < 240) {
+        await new Promise(r => setTimeout(r, 2000));
+        elapsed += 2;
+        try {
+          sd = await fetch(statusUrl).then(r => r.json());
+        } catch { continue; }
+        if (sd.status === 'done') { done = true; break; }
+        if (sd.status === 'failed' || sd.status === 'error') throw new Error(sd.message || '생성 실패');
+      }
+      if (!done) throw new Error('생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+      blogText = sd.text || '';
+      blogGoogleText = sd.google_text || '';
+      blogCreationId = data.id;
+    } else {
+      // 네이버 단독(기존 동기 흐름, 무변경)
+      blogText = data.text;
+      blogGoogleText = '';
+      blogCreationId = data.creation_id || null;
+    }
+
+    document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
+    switchBlogTab('naver');
+    document.getElementById('step3Meta').textContent = (data.cost_charged || data.cost ? (data.cost_charged || data.cost) + 'P 사용 · ' : '') + '내용을 직접 수정할 수 있습니다';
     document.getElementById('step3Loading').classList.add('d-none');
     document.getElementById('step3Content').classList.remove('d-none');
     saveBlogDraft(3);   // 글 초안 완료 → 임시저장
@@ -2246,12 +2333,80 @@ async function generateBlogText() {
   }
 }
 
+// ── 결과 탭 전환 (네이버판 / 구글·워드프레스판) ────────────────
+function switchBlogTab(t) {
+  _blogTab = t;
+  document.getElementById('blogTabNaverBtn').classList.toggle('active', t === 'naver');
+  document.getElementById('blogTabGoogleBtn')?.classList.toggle('active', t === 'google');
+  document.getElementById('blogTextArea').value = (t === 'google') ? blogGoogleText : blogText;
+
+  // 워드프레스 발행 UI는 구글 탭에서만, 브랜드별 연결 여부에 따라 버튼/연결안내 분기
+  const showWp = (t === 'google') && !!blogGoogleText;
+  const brandOpt = document.getElementById('brandSelect').selectedOptions[0];
+  const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
+  document.getElementById('blogWpPublish').classList.toggle('d-none', !(showWp && wpConnected));
+  document.getElementById('blogWpConnect').classList.toggle('d-none', !(showWp && !wpConnected));
+}
+
+// ── 편집: textarea 수정 → 현재 탭의 원문 변수에 즉시 반영 ──────
+function onBlogTextEdit() {
+  const v = document.getElementById('blogTextArea').value;
+  if (_blogTab === 'google') blogGoogleText = v; else blogText = v;
+}
+
+// ── 발행 대상 토글 변경 시 워드프레스 연결 안내 갱신 ───────────
+function onBlogTargetsChange() {
+  const both = document.querySelector('input[name="blogTargets"]:checked')?.value === 'both';
+  const brandOpt = document.getElementById('brandSelect').selectedOptions[0];
+  const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
+  document.getElementById('blogWpHint').classList.toggle('d-none', !(both && !wpConnected));
+}
+
 function copyBlogText() {
   navigator.clipboard.writeText(document.getElementById('blogTextArea').value);
   const btn = document.querySelector('[onclick="copyBlogText()"]');
   const orig = btn.innerHTML;
   btn.innerHTML = '<i class="bi bi-check me-1"></i>복사됨';
   setTimeout(() => btn.innerHTML = orig, 2000);
+}
+
+// ── 워드프레스로 발행 (구글판 → REST API, 현재 선택된 브랜드 전용 연결 사용) ──
+async function publishBlogToWordpress() {
+  if (!blogGoogleText) { alert('먼저 구글(워드프레스)판을 생성해주세요.'); return; }
+  const btn = document.getElementById('blogWpBtn');
+  const statusSel = document.getElementById('blogWpStatus');
+  const status = statusSel ? statusSel.value : 'draft';
+  if (status === 'publish' &&
+      !confirm('워드프레스에 바로 발행하면 글이 공개됩니다.\n초안이 아니라 지금 공개하시겠습니까?')) {
+    return;
+  }
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>보내는 중...';
+  try {
+    const res = await fetch('{{ url_for("integrations.wordpress_publish") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        google_text: blogGoogleText,
+        status,
+        brand_id: document.getElementById('brandSelect').value,
+      }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.message || '발행 실패');
+    const where = j.edit_link || j.link;
+    if (where && confirm(j.message + '\n\n워드프레스에서 열어볼까요?')) {
+      window.open(where, '_blank', 'noopener');
+    } else {
+      alert(j.message);
+    }
+  } catch (e) {
+    alert('발행 실패: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 // ── 배경 교체 토글 ───────────────────────────────────────────

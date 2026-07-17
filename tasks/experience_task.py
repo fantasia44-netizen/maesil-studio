@@ -11,6 +11,7 @@ detail_page_task.generate_plan 패턴을 그대로 따르되, 실패 시 shorts 
 import logging
 
 from celery_app import celery
+from services.text_split import split_naver_google as _split_naver_google
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +21,6 @@ def _setup():
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _root not in sys.path:
         sys.path.insert(0, _root)
-
-
-def _split_naver_google(text: str, both: bool):
-    """생성 원문 → (naver_text, google_text). 구분자 없으면 전체를 네이버판으로 폴백."""
-    naver_text, google_text = text.replace('[[[NAVER]]]', '').strip(), ''
-    if both and '[[[GOOGLE]]]' in text:
-        head, _, tail = text.partition('[[[GOOGLE]]]')
-        naver_text = head.replace('[[[NAVER]]]', '').strip()
-        google_text = tail.strip()
-    elif both:
-        logger.warning('[exp_task] 구분자 파싱 실패 — 전체를 네이버판으로 반환')
-    return naver_text, google_text
 
 
 def _refund_experience_points(supabase, creation_id: str, user_id: str) -> None:

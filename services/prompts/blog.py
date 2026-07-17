@@ -131,14 +131,56 @@ def _relation_directive(mode: str,
 # 메인 빌더
 # ─────────────────────────────────────────────────────────────
 
+def _both_targets_output_rule(topic: str, keyword: str) -> str:
+    """'네이버+구글(워드프레스) 세트' 출력 형식 — [[[NAVER]]]/[[[GOOGLE]]] 구분자로 두 판 요청.
+
+    구글판 라벨(SEO 제목/메타 설명/슬러그/본문/FAQ/태그)은
+    blueprints/integrations.py::_parse_google_post() 가 그대로 파싱하는 포맷과 일치시킨다.
+    """
+    return f'''
+[출력 형식 — 반드시 준수. 아래 두 판을 모두 작성하고, 이 구분자를 정확히 그대로 사용]
+
+[[[NAVER]]]
+## 제목 후보 (3개)
+1. [제목1 — 패턴1]
+2. [제목2 — 패턴2]
+3. [제목3 — 패턴3]
+
+## 본문
+[서론 → 본문(H3) → 결론 순서. 분량 지시 엄수. 마크다운.]
+
+## 태그
+[태그1], [태그2], ... (10개, 검색량 있는 키워드 우선)
+
+## 메타 디스크립션
+[140~160자, 메인 키워드 포함, 클릭 유도 후킹 1줄 + 핵심 가치 1줄]
+
+[[[GOOGLE]]]
+워드프레스(구글 검색용) 판. 네이버판보다 확실히 길고 깊게 — 배경 설명·상세 팁을 보강한다.
+마크다운 사용. 순서:
+  SEO 제목: (60자 이내, 핵심 검색어 앞배치, "{keyword or topic}" 반영)
+  메타 설명: (150자 이내)
+  슬러그: (영문 소문자-하이픈)
+  본문: ## / ### 소제목으로 구조화. 비교·정리 가능한 정보는 마크다운 표 1개 이상으로 정리.
+  FAQ: 독자가 검색할 질문 3~5개를 ### 질문 + 답변으로.
+  태그: 쉼표로 구분한 키워드 8~10개.
+  중요: 주제는 같아도 도입·소제목 구성·문장을 네이버판과 30~50% 이상 다르게 쓴다.
+  네이버판 문장을 그대로 재사용하지 않는다(검색엔진 중복 콘텐츠 회피).'''
+
+
 def build_prompt(brand: dict, input_data: dict,
                  *,
                  product: dict | None = None,
                  category: str | None = None,
                  merged_avoid_words: list[str] | None = None,
                  recent_creations: list[dict] | None = None,
-                 related_creation: dict | None = None) -> tuple[str, str, int]:
-    """블로그 프롬프트 빌드 → (system, user, max_tokens)."""
+                 related_creation: dict | None = None,
+                 targets: str = 'naver') -> tuple[str, str, int]:
+    """블로그 프롬프트 빌드 → (system, user, max_tokens).
+
+    targets='both' 면 네이버판 + 구글(워드프레스)판을 [[[NAVER]]]/[[[GOOGLE]]] 구분자로
+    함께 요청하고 max_tokens 를 늘린다 (services/prompts/experience 패턴과 동일한 개념).
+    """
     topic        = (input_data.get('topic') or '').strip()
     keyword      = (input_data.get('keyword') or '').strip()
     details      = (input_data.get('details') or '').strip()
@@ -190,7 +232,12 @@ def build_prompt(brand: dict, input_data: dict,
         user_parts.append('')
         user_parts.append(relation_dir)
 
-    user_parts.append('''
+    both = (targets or 'naver').strip().lower() == 'both'
+    if both:
+        user_parts.append(_both_targets_output_rule(topic, keyword))
+        max_tokens = int(max_tokens * 2.2)   # 구글판(더 긴 분량) 출력 여유
+    else:
+        user_parts.append('''
 [출력 형식 — 반드시 준수]
 
 ## 제목 후보 (3개)

@@ -298,6 +298,12 @@ def blog():
             imgs.insert(0, p['image_url'])
         products_images_map[p['id']] = [u for u in imgs if u]
 
+    # 브랜드별 워드프레스 연결 여부 ("네이버+구글 세트" 발행 버튼 노출 판단용)
+    from services.wordpress_connection import is_connected as wp_is_connected
+    brand_wp_connected = {
+        b['id']: wp_is_connected(current_user.id, brand_id=b['id']) for b in brands
+    }
+
     return render_template('create/blog.html',
                            brands=brands,
                            default_brand=default_brand,
@@ -307,7 +313,8 @@ def blog():
                            blog_drafts=drafts,
                            length_costs=BLOG_LENGTH_COSTS,
                            angle_options=BLOG_ANGLE_OPTIONS,
-                           relation_modes=RELATION_MODE_OPTIONS)
+                           relation_modes=RELATION_MODE_OPTIONS,
+                           brand_wp_connected=brand_wp_connected)
 
 
 @create_bp.route('/blog/products', methods=['GET'])
@@ -390,13 +397,18 @@ def blog_generate():
     length = (request.form.get('length') or '1000').strip()
     relation_mode = (request.form.get('relation_mode') or 'new').strip()
     relation_ref_id = (request.form.get('relation_ref_id') or '').strip() or None
+    targets = (request.form.get('targets') or 'naver').strip().lower()
+    if targets not in ('naver', 'both'):
+        targets = 'naver'
 
-    # 비용 계산 (분량 + 변형 할인)
+    # 비용 계산 (분량 + 변형 할인, 네이버+구글 세트는 2배 — 출력량 2배에 대응)
     try:
         length_int = int(length)
     except ValueError:
         length_int = 1000
     cost = get_blog_cost(length_int, relation_mode)
+    if targets == 'both':
+        cost *= 2
 
     input_data = {
         'topic':         request.form.get('topic', '').strip(),
@@ -407,6 +419,7 @@ def blog_generate():
         'length':        str(length_int),
         'seo_keywords':  request.form.get('seo_keywords', '').strip(),
         'relation_mode': relation_mode,
+        'targets':       targets,
     }
     if relation_ref_id:
         input_data['relation_ref_id'] = relation_ref_id
@@ -437,11 +450,8 @@ def blog_generate():
         merged_avoid_words=merged_avoids,
         recent_creations=recent,
         related_creation=related,
+        targets=targets,
     )
-
-    # 후처리: 디스클레이머 부착
-    def _post(text: str) -> str:
-        return append_disclaimer(text, category)
 
     extra_fields = {
         'product_id':      product_id or None,
@@ -453,7 +463,42 @@ def blog_generate():
         'relation_ref_id': relation_ref_id,
     }
 
-    ledger_note = f'블로그 ({length_int:,}자' + (', 변형' if relation_mode == 'variant' else '') + ')'
+    ledger_note = ('블로그 (' + f'{length_int:,}자'
+                   + (', 변형' if relation_mode == 'variant' else '')
+                   + (', 네이버+구글 세트' if targets == 'both' else '') + ')')
+
+    if targets == 'both':
+        # 출력이 2배로 늘어나 메인 서버를 오래 블로킹하므로 백그라운드 처리
+        # (services/async_generation.py 공용 헬퍼 — experience_blog/thumbnail과 동일 패턴)
+        from services.async_generation import submit_async_generation, AsyncSubmitError
+        from services.regulatory import get_disclaimer
+        from tasks.blog_text_task import generate_blog_both
+
+        disclaimer = get_disclaimer(category)
+        extra_row = {k: v for k, v in {**extra_fields, 'brand_id': brand['id']}.items()
+                    if v is not None}
+        try:
+            creation_id = submit_async_generation(
+                owner=current_user, creation_type='blog', cost=cost,
+                input_data=input_data,
+                extra_row=extra_row,
+                note_override=ledger_note,
+                task_delay_fn=generate_blog_both.delay,
+                task_kwargs=dict(system_prompt=system, user_prompt=user,
+                                 max_tokens=max_tokens, disclaimer=disclaimer),
+            )
+        except AsyncSubmitError as e:
+            return jsonify(ok=False, message=str(e))
+        except Exception as e:
+            logger.error(f'[blog_generate] both 제출 실패: {e}', exc_info=True)
+            return jsonify(ok=False, message='블로그 생성을 시작할 수 없습니다.')
+
+        return jsonify(ok=True, id=creation_id, async_mode=True,
+                       cost=cost, category=category)
+
+    # ── 네이버 단독(기존 동작, 무변경) — 동기 처리 ──
+    def _post(text: str) -> str:
+        return append_disclaimer(text, category)
 
     result = run_text_generation(
         'blog', brand, input_data, system, user,
@@ -467,6 +512,25 @@ def blog_generate():
         result['cost_charged'] = cost
         result['category'] = category
     return jsonify(result)
+
+
+@create_bp.route('/blog/text/status/<creation_id>', methods=['GET'])
+@login_required
+def blog_text_status(creation_id):
+    """'네이버+구글 세트' 백그라운드 생성 완료 여부 폴링."""
+    from services.async_generation import render_status_response
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, status='error', message='DB 연결이 없습니다.')
+    try:
+        row = supabase.table('creations').select(
+            'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, status='error', message='조회 실패')
+    return render_status_response(
+        row, current_user.id,
+        done_fields={'text': 'text', 'google_text': 'google_text'},
+    )
 
 
 # ─────────────────────────────────────────────────────────────

@@ -134,11 +134,29 @@ def _can_manage() -> bool:
 def index():
     conn = get_connection(current_user.id, operator_id=_op_id())
     wp_conn = wp_get_connection(current_user.id, operator_id=_op_id())
+
+    from blueprints.create._base import get_accessible_brands, get_default_brand
+    sb = current_app.supabase
+    brands = get_accessible_brands(sb) if sb else []
+    selected_brand_id = request.args.get('wp_brand_id') or ''
+    selected_brand = None
+    if selected_brand_id:
+        selected_brand = next((b for b in brands if b['id'] == selected_brand_id), None)
+    if not selected_brand:
+        selected_brand = get_default_brand(sb) if sb else None
+    brand_wp_connection = (
+        wp_get_connection(current_user.id, brand_id=selected_brand['id'])
+        if selected_brand else None
+    )
+
     return render_template(
         'integrations/index.html',
         connection=conn,
         wp_connection=wp_conn,
         can_manage=_can_manage(),
+        brands=brands,
+        selected_brand=selected_brand,
+        brand_wp_connection=brand_wp_connection,
     )
 
 
@@ -464,6 +482,74 @@ def wordpress_disconnect():
     return redirect(url_for('integrations.index'))
 
 
+# ── 브랜드별 워드프레스 연결 (일반 블로그 전용, 폴백 없음) ──────
+
+@integrations_bp.route('/wordpress/brand/<brand_id>/connect', methods=['POST'])
+@login_required
+def wordpress_brand_connect(brand_id):
+    """브랜드 전용 워드프레스 연결. 팀 모드: operator_admin 만 가능."""
+    if not _can_manage():
+        flash('워드프레스 연결은 팀 관리자만 설정할 수 있습니다.', 'warning')
+        return redirect(url_for('integrations.index', wp_brand_id=brand_id))
+
+    from blueprints.create._base import get_brand_by_id
+    sb = current_app.supabase
+    brand = get_brand_by_id(sb, brand_id) if sb else None
+    if not brand:
+        flash('브랜드를 찾을 수 없습니다.', 'danger')
+        return redirect(url_for('integrations.index'))
+
+    site_url = (request.form.get('site_url') or '').strip()
+    username = (request.form.get('wp_username') or '').strip()
+    app_pw   = (request.form.get('app_password') or '').strip()
+    if not site_url or not username or not app_pw:
+        flash('사이트 주소, 아이디, 애플리케이션 비밀번호를 모두 입력해주세요.', 'warning')
+        return redirect(url_for('integrations.index', wp_brand_id=brand_id))
+
+    try:
+        conn = wp_verify_and_save(
+            current_user.id,
+            site_url=site_url, username=username, app_password=app_pw,
+            operator_id=_op_id(), brand_id=brand_id,
+        )
+        flash(
+            f'"{brand["name"]}" 브랜드에 워드프레스 "{conn.get("wp_display_name") or username}" '
+            f'계정이 연결되었습니다.',
+            'success',
+        )
+    except WordPressError as e:
+        logger.warning(f'[WP] brand connect 실패 brand={brand_id}: {e}')
+        try:
+            wp_mark_error(current_user.id, str(e), brand_id=brand_id)
+        except Exception:
+            pass
+        flash(wp_friendly_error(e), 'danger')
+    except ValueError as e:
+        flash(f'입력값을 확인해주세요. ({e})', 'warning')
+    except Exception as e:
+        logger.error(f'[WP] brand connect 예외: {e}', exc_info=True)
+        flash('워드프레스 연결 중 오류가 발생했습니다.', 'danger')
+
+    return redirect(url_for('integrations.index', wp_brand_id=brand_id))
+
+
+@integrations_bp.route('/wordpress/brand/<brand_id>/disconnect', methods=['POST'])
+@login_required
+def wordpress_brand_disconnect(brand_id):
+    """브랜드 전용 워드프레스 연결 해제. 팀 모드: operator_admin 만 가능."""
+    if not _can_manage():
+        flash('연결 해제는 팀 관리자만 할 수 있습니다.', 'warning')
+        return redirect(url_for('integrations.index', wp_brand_id=brand_id))
+
+    try:
+        wp_disconnect_conn(current_user.id, brand_id=brand_id)
+        flash('브랜드 워드프레스 연결이 해제되었습니다.', 'success')
+    except Exception as e:
+        logger.error(f'[WP] brand disconnect 예외: {e}')
+        flash('해제 중 오류가 발생했습니다.', 'danger')
+    return redirect(url_for('integrations.index', wp_brand_id=brand_id))
+
+
 # ── 구글판 텍스트 → 워드프레스 글 필드 파싱 ──────────────────
 
 _WP_LABELS = [
@@ -582,13 +668,21 @@ def _parse_google_post(text: str) -> dict:
 @integrations_bp.route('/wordpress/publish', methods=['POST'])
 @login_required
 def wordpress_publish():
-    """경험담 구글판 → 워드프레스 글로 발행 (기본 초안). AJAX JSON."""
-    op_id = _op_id()
-    client = wp_get_client_for_user(current_user.id, operator_id=op_id)
-    if not client:
-        return jsonify(ok=False, message='먼저 워드프레스를 연결해주세요.'), 400
+    """경험담/블로그 구글판 → 워드프레스 글로 발행 (기본 초안). AJAX JSON.
 
+    brand_id 가 오면 그 브랜드 전용 연결로 발행(폴백 없음) — 일반 블로그용.
+    brand_id 가 없으면 기존 팀/개인 공통 연결로 발행 — 경험담 블로그용(기존 동작).
+    """
+    op_id = _op_id()
     data = request.get_json(force=True) or {}
+    brand_id = data.get('brand_id') or None
+
+    client = wp_get_client_for_user(current_user.id, operator_id=op_id, brand_id=brand_id)
+    if not client:
+        msg = ('먼저 이 브랜드의 워드프레스를 연결해주세요.' if brand_id
+               else '먼저 워드프레스를 연결해주세요.')
+        return jsonify(ok=False, message=msg), 400
+
     raw = (data.get('google_text') or '').strip()
     if not raw:
         return jsonify(ok=False, message='발행할 구글(워드프레스)판 내용이 없습니다.')
@@ -617,10 +711,10 @@ def wordpress_publish():
             excerpt=parsed['excerpt'] or None,
             tag_ids=tag_ids or None,
         )
-        wp_mark_used(current_user.id, operator_id=op_id)
+        wp_mark_used(current_user.id, operator_id=op_id, brand_id=brand_id)
     except WordPressError as e:
         logger.warning(f'[WP] publish 실패 user={current_user.id}: {e}')
-        wp_mark_error(current_user.id, str(e), operator_id=op_id)
+        wp_mark_error(current_user.id, str(e), operator_id=op_id, brand_id=brand_id)
         return jsonify(ok=False, message=wp_friendly_error(e))
     except Exception as e:
         logger.error(f'[WP] publish 예외: {e}', exc_info=True)
