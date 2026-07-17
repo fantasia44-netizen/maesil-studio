@@ -286,10 +286,16 @@
         </li>
       </ul>
       <div class="d-flex align-items-center gap-2">
-        <a id="blogWpAutoNotice" href="#" target="_blank" rel="noopener"
-           class="btn btn-outline-success btn-sm d-none" style="font-size:.72rem">
-          <i class="bi bi-check-circle me-1"></i>워드프레스 초안 자동 저장됨 — 열어보기
-        </a>
+        <div id="blogWpAutoGroup" class="d-none d-flex align-items-center gap-1">
+          <a id="blogWpAutoNotice" href="#" target="_blank" rel="noopener"
+             class="btn btn-outline-success btn-sm" style="font-size:.72rem">
+            <i class="bi bi-check-circle me-1"></i>워드프레스 초안 자동 저장됨 — 열어보기
+          </a>
+          <button id="blogWpGoLiveBtn" class="btn btn-sm text-white d-none"
+                  style="font-size:.72rem;background:#198754" onclick="goLiveBlogPost()">
+            <i class="bi bi-rocket-takeoff me-1"></i>지금 발행하기
+          </button>
+        </div>
         <div id="blogWpPublish" class="d-none d-flex align-items-center gap-1">
           <select id="blogWpStatus" class="form-select form-select-sm" style="font-size:.72rem;width:auto">
             <option value="draft" selected>초안으로</option>
@@ -2361,21 +2367,51 @@ function switchBlogTab(t) {
   document.getElementById('blogTextArea').value = (t === 'google') ? blogGoogleText : blogText;
 
   // 워드프레스 발행 UI는 구글 탭에서만 노출.
-  // 이미 자동 발행(초안)됐으면 안내만 보여주고 수동 버튼은 숨김(중복 포스트 방지).
+  // 이미 자동 발행(초안)됐으면 안내+"지금 발행하기"만 보여주고 수동 버튼은 숨김(중복 포스트 방지).
   // 자동 발행이 안 됐거나 실패했으면 기존처럼 연결 여부에 따라 버튼/연결안내 분기.
   const showWp = (t === 'google') && !!blogGoogleText;
   const autoOk = !!(_blogWpAutoPublish && _blogWpAutoPublish.ok);
+  const isLive = autoOk && _blogWpAutoPublish.status === 'publish';
   const brandOpt = document.getElementById('brandSelect').selectedOptions[0];
   const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
-  const autoNotice = document.getElementById('blogWpAutoNotice');
+  const autoNotice  = document.getElementById('blogWpAutoNotice');
+  const goLiveBtn   = document.getElementById('blogWpGoLiveBtn');
+  document.getElementById('blogWpAutoGroup').classList.toggle('d-none', !(showWp && autoOk));
   if (showWp && autoOk) {
     autoNotice.href = _blogWpAutoPublish.edit_link || _blogWpAutoPublish.link || '#';
-    autoNotice.classList.remove('d-none');
-  } else {
-    autoNotice.classList.add('d-none');
+    autoNotice.textContent = '';
+    autoNotice.innerHTML = `<i class="bi bi-check-circle me-1"></i>워드프레스 ${isLive ? '발행됨' : '초안 자동 저장됨'} — 열어보기`;
+    goLiveBtn.classList.toggle('d-none', isLive);
   }
   document.getElementById('blogWpPublish').classList.toggle('d-none', !(showWp && wpConnected && !autoOk));
   document.getElementById('blogWpConnect').classList.toggle('d-none', !(showWp && !wpConnected && !autoOk));
+}
+
+// ── 자동 저장된 초안을 지금 바로 발행(공개)으로 전환 ────────────
+async function goLiveBlogPost() {
+  if (!_blogWpAutoPublish || !_blogWpAutoPublish.post_id) return;
+  if (!confirm('워드프레스에 바로 발행하면 글이 공개됩니다.\n지금 공개하시겠습니까?')) return;
+  const btn = document.getElementById('blogWpGoLiveBtn');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>발행 중...';
+  try {
+    const brandId = document.getElementById('brandSelect').value;
+    const url = `{{ url_for('integrations.wordpress_go_live', brand_id='__B__', post_id='__P__') }}`
+      .replace('__B__', brandId).replace('__P__', _blogWpAutoPublish.post_id);
+    const res = await fetch(url, { method: 'POST', headers: { 'X-CSRFToken': CSRF } });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.message || '발행 실패');
+    _blogWpAutoPublish = { ..._blogWpAutoPublish, ...j };
+    switchBlogTab('google');
+    saveBlogDraft(3);
+    alert(j.message);
+  } catch (e) {
+    alert('발행 실패: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 // ── 편집: textarea 수정 → 현재 탭의 원문 변수에 즉시 반영 ──────

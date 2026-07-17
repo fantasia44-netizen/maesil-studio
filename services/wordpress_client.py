@@ -138,6 +138,19 @@ class WordPressClient:
             body['tags'] = tag_ids
         return self._request('POST', '/posts', json_body=body)
 
+    def update_post(self, post_id, *, status: str | None = None,
+                    title: str | None = None, content: str | None = None) -> dict:
+        """POST /posts/<id> — 기존 글 부분 수정. 주로 초안 → 발행 전환에 사용
+        (create_post로 새로 만들지 않고 같은 글의 상태만 바꿔 중복 포스트 방지)."""
+        body: dict = {}
+        if status is not None:
+            body['status'] = status
+        if title is not None:
+            body['title'] = title
+        if content is not None:
+            body['content'] = content
+        return self._request('POST', f'/posts/{post_id}', json_body=body)
+
     def resolve_tag_ids(self, names: list) -> list:
         """태그 이름 목록 → 태그 ID 목록 (없으면 생성). best-effort — 실패는 건너뜀."""
         ids: list = []

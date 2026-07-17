@@ -37,7 +37,7 @@ from services.wordpress_connection import (
     mark_error as wp_mark_error,
     verify_and_save as wp_verify_and_save,
 )
-from services.wordpress_publish import create_google_post
+from services.wordpress_publish import create_google_post, publish_existing_post
 from services.tz_utils import now_kst
 
 logger = logging.getLogger(__name__)
@@ -504,4 +504,15 @@ def wordpress_publish():
         status=data.get('status') or 'draft',
         title_override=(data.get('title') or '').strip() or None,
     )
+    return jsonify(**result)
+
+
+@integrations_bp.route('/wordpress/brand/<brand_id>/post/<post_id>/go-live', methods=['POST'])
+@login_required
+def wordpress_go_live(brand_id, post_id):
+    """자동 저장된 초안을 실제로 발행(publish)으로 전환. AJAX JSON.
+
+    create_google_post로 새 글을 또 만들지 않고, 같은 post_id의 상태만 바꾼다.
+    """
+    result = publish_existing_post(current_app.supabase, brand_id, post_id)
     return jsonify(**result)

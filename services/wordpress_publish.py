@@ -177,9 +177,45 @@ def create_google_post(supabase, brand_id: str, google_text: str, *,
     logger.info(f'[WP] 발행 완료 brand={brand_id} post={post_id} status={status}')
     return {
         'ok': True,
+        'post_id': post_id,
         'status': post.get('status') or status,
         'link': post.get('link'),
         'edit_link': edit_link,
         'message': ('워드프레스에 초안으로 저장되었습니다.'
                    if status == 'draft' else '워드프레스에 발행되었습니다.'),
+    }
+
+
+def publish_existing_post(supabase, brand_id: str, post_id) -> dict:
+    """이미 만들어진 글(주로 자동 저장된 초안)의 상태를 발행(publish)으로 전환.
+
+    create_google_post로 새 글을 또 만드는 대신, 같은 글의 status만 바꿔
+    중복 포스트가 생기지 않게 한다.
+    """
+    client = get_client_for_user(brand_id, supabase=supabase)
+    if not client:
+        return {'ok': False, 'message': '먼저 이 브랜드의 워드프레스를 연결해주세요.'}
+    if not post_id:
+        return {'ok': False, 'message': '발행할 글을 찾을 수 없습니다.'}
+
+    try:
+        post = client.update_post(post_id, status='publish')
+        mark_used(brand_id, supabase=supabase)
+    except WordPressError as e:
+        logger.warning(f'[WP] go-live 실패 brand={brand_id} post={post_id}: {e}')
+        mark_error(brand_id, str(e), supabase=supabase)
+        return {'ok': False, 'message': friendly_error_message(e)}
+    except Exception as e:
+        logger.error(f'[WP] go-live 예외 brand={brand_id} post={post_id}: {e}', exc_info=True)
+        return {'ok': False, 'message': '발행 중 오류가 발생했습니다.'}
+
+    edit_link = f'{client.site}/wp-admin/post.php?post={post_id}&action=edit'
+    logger.info(f'[WP] go-live 완료 brand={brand_id} post={post_id}')
+    return {
+        'ok': True,
+        'post_id': post_id,
+        'status': post.get('status') or 'publish',
+        'link': post.get('link'),
+        'edit_link': edit_link,
+        'message': '워드프레스에 발행되었습니다.',
     }
