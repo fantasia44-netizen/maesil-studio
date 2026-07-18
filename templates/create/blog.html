@@ -1872,7 +1872,9 @@ async function loadBlogDraft(id) {
     const sd  = d.step_data   || {};
     draftId = d.id;
     // 폼 복원
-    if (inp.brand_id)      document.getElementById('brandSelect').value    = inp.brand_id;
+    // brand_id 는 creations.brand_id 컬럼에만 저장되고 input_data 엔 없다 → 컬럼값으로 폴백.
+    const realBrandId = inp.brand_id || d.brand_id || '';
+    if (realBrandId)       document.getElementById('brandSelect').value    = realBrandId;
     if (inp.product_id)    document.getElementById('productSelect').value  = inp.product_id;
     if (inp.direction)     document.getElementById('directionInput').value = inp.direction;
     if (inp.length)        document.getElementById('lengthSelect').value   = inp.length;
@@ -1890,7 +1892,7 @@ async function loadBlogDraft(id) {
     selectedStyle    = sd.style             || null;
     selectedImgCount = sd.img_count         || 5;
     generatedImages  = sd.generated_images  || [];
-    _contentBrandId  = inp.brand_id         || null;   // 이 초안이 속한 브랜드 기록
+    _contentBrandId  = realBrandId          || null;   // 이 초안이 속한 브랜드 기록
     // 소구포인트 카드 복원
     if ((sd.angles || []).length > 0) {
       renderAngleCards(sd.angles);
@@ -1971,15 +1973,23 @@ async function redoBlogImages(id) {
     blogCreationId = d.id;
     _blogWpAutoPublish = (d.output_data?.wp_auto_publish) || sd.wp_auto_publish || null;
     const inp = d.input_data || {};
-    if (inp.brand_id)   document.getElementById('brandSelect').value   = inp.brand_id;
+    // brand_id 는 creations.brand_id 컬럼에만 저장되고 input_data 엔 없다 → 컬럼값으로 폴백.
+    //   폴백이 없으면 brandSelect 가 기본 브랜드에 머물러, 썸네일=기본브랜드 / 본문 이미지=불러온
+    //   글의 브랜드로 어긋난다(브랜드 혼동). d.brand_id 가 이 글의 진짜 브랜드다.
+    const realBrandId = inp.brand_id || d.brand_id || '';
+    if (realBrandId)    document.getElementById('brandSelect').value   = realBrandId;
     if (inp.product_id) document.getElementById('productSelect').value = inp.product_id;
+    // 재작업 대상 브랜드에 맞춰 재작업 목록 드롭다운·썸네일 워터마크도 동기화
+    const _redoSel = document.getElementById('blogRedoBrandSelect');
+    if (_redoSel && realBrandId) _redoSel.value = realBrandId;
+    if (typeof _syncThumbBrandMark === 'function') _syncThumbBrandMark();
     // 이 글(재작업 대상)의 실제 상태로 탭/텍스트 동기화 — 다른 글의 구글판이 섞여 보이는 것 방지
     document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
     switchBlogTab('naver');
     // 소구포인트 복원 → 재작업에서도 AI 씬 자동채움(서브·뱃지·주제)이 작동하도록
     selectedAngle = sd.selected_angle || null;
     if ((sd.angles || []).length) window._angles = sd.angles;
-    _contentBrandId = inp.brand_id || null;   // 이 재작업 본문이 속한 브랜드 기록
+    _contentBrandId = realBrandId || null;   // 이 재작업 본문이 속한 브랜드 기록
     goStep(4);
   } catch(e) { alert('불러오기 실패: ' + e.message); }
 }
