@@ -107,14 +107,21 @@ def experience_generate():
     exp_type = data.get('exp_type') if data.get('exp_type') in _TYPE_GUIDES else 'place'
     tone     = data.get('tone') if data.get('tone') in _TONES else 'friendly'
     length   = data.get('length') if data.get('length') in _LENGTHS else 'medium'
-    both     = data.get('targets') != 'naver'   # 기본: 네이버+구글 세트
+    targets  = data.get('targets') if data.get('targets') in ('naver', 'google', 'both') else 'both'
+    both        = targets == 'both'
+    google_only = targets == 'google'
     place    = (data.get('place') or '').strip()[:60]
     visit_at = (data.get('visit_at') or '').strip()[:40]
 
-    # 포인트 확인·차감 준비 — 사진 없으면(텍스트 전용, vision 미사용) 할인,
-    # 네이버+구글 세트는 2배 (구글판이 더 길고 깊어 출력 토큰도 ~2배)
+    # 포인트 확인·차감 준비 — 사진 없으면(텍스트 전용, vision 미사용) 할인.
+    # 네이버+구글 세트는 2배(두 판 생성), 구글만은 1.3배(네이버판보다 깊은 단일 판).
     base_cost = POINT_COSTS.get('experience_blog', 150) if photos else 100
-    cost = base_cost * 2 if both else base_cost
+    if both:
+        cost = base_cost * 2
+    elif google_only:
+        cost = int(base_cost * 1.3)
+    else:
+        cost = base_cost
     from services.point_service import get_balance, use_points, InsufficientPoints
     balance = get_balance(current_user)
     if balance < cost:
@@ -163,6 +170,7 @@ def experience_generate():
         + ('- 네이버판은 마크다운 기호 없이 일반 텍스트만(에디터 복붙용), '
            '구글판은 마크다운 소제목(##)을 사용한다.'
            if both else
+           '- 마크다운 소제목(##)을 사용한다.' if google_only else
            '- 마크다운 기호(#, **, -) 대신 일반 텍스트와 줄바꿈만 사용한다(네이버 에디터 복붙용).')
     )
     _len_label, naver_len, google_len, len_tokens = _LENGTHS[length]
@@ -194,6 +202,8 @@ def experience_generate():
             '[[[NAVER]]]\n(네이버판 — ' + naver_format + ')\n'
             '[[[GOOGLE]]]\n(' + google_format + ')'
         )
+    elif google_only:
+        output_rule = '출력 형식:\n' + google_format
     else:
         output_rule = '출력 형식:\n' + naver_format
     user_prompt = (
@@ -214,6 +224,8 @@ def experience_generate():
     )
     if both:
         len_tokens = int(len_tokens * 2.2)   # 구글판(더 긴 분량) 출력 여유
+    elif google_only:
+        len_tokens = int(len_tokens * 1.5)   # 구글판 하나만이라도 네이버판보다 깊게
 
     # ── 포인트 선차감 → creations(generating) 기록 → 워커 제출 ──
     # (동기 생성은 메인 서버를 20~90초 블로킹하므로 Celery 워커로 이전.
@@ -235,7 +247,7 @@ def experience_generate():
                 'brand_id': brand['id'],
                 'creation_type': 'experience_blog',
                 'input_data': {'exp_type': exp_type, 'tone': tone, 'length': length,
-                               'targets': 'both' if both else 'naver',
+                               'targets': targets,
                                'place': place, 'visit_at': visit_at, 'memo': memo[:500],
                                'photo_count': len(images)},
                 'output_data': {}, 'points_used': cost, 'status': 'generating',
@@ -264,6 +276,7 @@ def experience_generate():
         images=[[b64, mt] for (b64, mt) in images],
         max_tokens=len_tokens,
         both=both,
+        google_only=google_only,
         supabase_url=supabase_url,
         supabase_key=supabase_key,
         anthropic_api_key=anthropic_key,
@@ -272,7 +285,7 @@ def experience_generate():
 
     logger.info(f'[experience] 제출 uid={str(current_user.id)[:8]} cid={cid[:8]} '
                 f'type={exp_type} photos={len(images)} '
-                f'targets={"both" if both else "naver"} cost={cost}P')
+                f'targets={targets} cost={cost}P')
     return jsonify(ok=True, id=cid, async_mode=True, cost=cost)
 
 

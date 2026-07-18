@@ -97,21 +97,31 @@ def _recent_blog_creations(supabase, user_id: str, brand_id: str | None,
 _TITLE_RE = re.compile(r'^\s*(?:[1-3]\.)\s*(.+?)\s*$', re.M)
 
 
+_GOOGLE_TITLE_RE = re.compile(r'SEO\s*제목\s*[:：]\s*(.+)', re.IGNORECASE)
+
+
 def _extract_title(output_data: dict) -> str:
-    """첫 제목 후보를 추출."""
+    """첫 제목 후보를 추출 — 네이버판 우선, 없으면('구글만' 생성) 구글판 SEO 제목으로 폴백."""
     text = (output_data or {}).get('text') or ''
-    if not text:
-        return ''
-    # ## 제목 후보 섹션 찾기
-    sec_idx = text.find('제목 후보')
-    if sec_idx >= 0:
-        after = text[sec_idx:sec_idx + 600]
-        m = _TITLE_RE.search(after)
+    if text:
+        # ## 제목 후보 섹션 찾기
+        sec_idx = text.find('제목 후보')
+        if sec_idx >= 0:
+            after = text[sec_idx:sec_idx + 600]
+            m = _TITLE_RE.search(after)
+            if m:
+                return m.group(1).strip().strip('*').strip()
+        # 폴백: 첫 줄
+        return text.strip().split('\n', 1)[0][:80]
+
+    google_text = (output_data or {}).get('google_text') or ''
+    if google_text:
+        m = _GOOGLE_TITLE_RE.search(google_text)
         if m:
-            return m.group(1).strip().strip('*').strip()
-    # 폴백: 첫 줄
-    first = text.strip().split('\n', 1)[0]
-    return first[:80]
+            return m.group(1).strip()[:80]
+        return google_text.strip().split('\n', 1)[0].lstrip('#').strip()[:80]
+
+    return ''
 
 
 def _detect_category(brand: dict, product: dict | None) -> str:
@@ -146,6 +156,32 @@ def _normalize_category(raw: str) -> str:
     return _CATEGORY_ALIASES.get(raw.strip().lower(), raw.strip().lower())
 
 
+def _excerpt_from_output(output_data: dict, limit: int = 800) -> str:
+    """참조/미리보기용 본문 발췌 — 네이버판 우선, 없으면('구글만' 생성) 구글판에서 추출."""
+    text = (output_data or {}).get('text') or ''
+    if text:
+        # 본문 발췌 (## 본문 ~ ## 다음 섹션 사이)
+        body_idx = text.find('## 본문')
+        if body_idx >= 0:
+            tail = text[body_idx + len('## 본문'):]
+            next_sec = tail.find('\n## ')
+            body = tail[:next_sec] if next_sec > 0 else tail
+            return body.strip()[:limit]
+        return text.strip()[:limit]
+
+    google_text = (output_data or {}).get('google_text') or ''
+    if google_text:
+        m = re.search(r'^\s*본문\s*[:：]', google_text, re.IGNORECASE | re.M)
+        if m:
+            tail = google_text[m.end():]
+            next_sec = re.search(r'\n\s*(FAQ|태그)\s*[:：]', tail, re.IGNORECASE)
+            body = tail[:next_sec.start()] if next_sec else tail
+            return body.strip()[:limit]
+        return google_text.strip()[:limit]
+
+    return ''
+
+
 def _related_creation_payload(supabase, ref_id: str) -> dict | None:
     """series/variant 모드용 — 참조 글 발췌."""
     if not ref_id:
@@ -157,17 +193,9 @@ def _related_creation_payload(supabase, ref_id: str) -> dict | None:
         if not r.data:
             return None
         row = r.data[0]
-        text = (row.get('output_data') or {}).get('text') or ''
-        title = _extract_title(row.get('output_data') or {})
-        # 본문 발췌 (## 본문 ~ ## 다음 섹션 사이에서 처음 800자)
-        body_idx = text.find('## 본문')
-        if body_idx >= 0:
-            tail = text[body_idx + len('## 본문'):]
-            next_sec = tail.find('\n## ')
-            body = tail[:next_sec] if next_sec > 0 else tail
-            excerpt = body.strip()[:800]
-        else:
-            excerpt = text.strip()[:800]
+        output_data = row.get('output_data') or {}
+        title = _extract_title(output_data)
+        excerpt = _excerpt_from_output(output_data)
         return {'id': row.get('id'), 'title': title, 'excerpt': excerpt}
     except Exception as e:
         logger.debug(f'[blog] related creation 조회 실패: {e}')
@@ -372,9 +400,9 @@ def blog_ref_preview():
         row = (res.data or [None])[0]
         if not row:
             return jsonify(ok=False, message='이전 글을 찾을 수 없습니다.')
-        title   = _extract_title(row.get('output_data') or {})
-        text    = (row.get('output_data') or {}).get('text', '')
-        excerpt = text[:400].strip() if text else ''
+        output_data = row.get('output_data') or {}
+        title   = _extract_title(output_data)
+        excerpt = _excerpt_from_output(output_data, limit=400)
         return jsonify(ok=True, title=title, excerpt=excerpt)
     except Exception as e:
         return jsonify(ok=False, message=str(e))
@@ -396,10 +424,11 @@ def blog_generate():
     relation_mode = (request.form.get('relation_mode') or 'new').strip()
     relation_ref_id = (request.form.get('relation_ref_id') or '').strip() or None
     targets = (request.form.get('targets') or 'naver').strip().lower()
-    if targets not in ('naver', 'both'):
+    if targets not in ('naver', 'google', 'both'):
         targets = 'naver'
 
-    # 비용 계산 (분량 + 변형 할인, 네이버+구글 세트는 2배 — 출력량 2배에 대응)
+    # 비용 계산 (분량 + 변형 할인).
+    # 네이버+구글 세트는 2배(두 판 생성), 구글만은 1.3배(네이버판보다 깊은 단일 판).
     try:
         length_int = int(length)
     except ValueError:
@@ -407,6 +436,8 @@ def blog_generate():
     cost = get_blog_cost(length_int, relation_mode)
     if targets == 'both':
         cost *= 2
+    elif targets == 'google':
+        cost = int(cost * 1.3)
 
     input_data = {
         'topic':         request.form.get('topic', '').strip(),
@@ -461,12 +492,13 @@ def blog_generate():
         'relation_ref_id': relation_ref_id,
     }
 
+    _targets_label = {'both': ', 네이버+구글 세트', 'google': ', 구글만'}.get(targets, '')
     ledger_note = ('블로그 (' + f'{length_int:,}자'
                    + (', 변형' if relation_mode == 'variant' else '')
-                   + (', 네이버+구글 세트' if targets == 'both' else '') + ')')
+                   + _targets_label + ')')
 
-    if targets == 'both':
-        # 출력이 2배로 늘어나 메인 서버를 오래 블로킹하므로 백그라운드 처리
+    if targets in ('both', 'google'):
+        # 구글판이 섞여 출력이 길어져 메인 서버를 오래 블로킹하므로 백그라운드 처리
         # (services/async_generation.py 공용 헬퍼 — experience_blog/thumbnail과 동일 패턴)
         from services.async_generation import submit_async_generation, AsyncSubmitError
         from services.regulatory import get_disclaimer
@@ -484,12 +516,12 @@ def blog_generate():
                 task_delay_fn=generate_blog_both.delay,
                 task_kwargs=dict(system_prompt=system, user_prompt=user,
                                  max_tokens=max_tokens, disclaimer=disclaimer,
-                                 brand_id=brand['id']),
+                                 brand_id=brand['id'], mode=targets),
             )
         except AsyncSubmitError as e:
             return jsonify(ok=False, message=str(e))
         except Exception as e:
-            logger.error(f'[blog_generate] both 제출 실패: {e}', exc_info=True)
+            logger.error(f'[blog_generate] {targets} 제출 실패: {e}', exc_info=True)
             return jsonify(ok=False, message='블로그 생성을 시작할 수 없습니다.')
 
         return jsonify(ok=True, id=creation_id, async_mode=True,

@@ -70,8 +70,11 @@ def _refund_experience_points(supabase, creation_id: str, user_id: str) -> None:
 def generate_experience(self, creation_id, user_id, system_prompt, user_prompt,
                         images, max_tokens, both,
                         supabase_url, supabase_key, anthropic_api_key,
-                        brand_id=None):
-    """사진+메모 → 경험담 글 생성 (네이버판 + 선택적 구글판).
+                        brand_id=None, google_only=False):
+    """사진+메모 → 경험담 글 생성 (네이버판만 / 구글판만 / 네이버+구글판).
+
+    google_only=True 면 프롬프트가 애초에 구글판 하나만 요청했으므로 구분자
+    분리 없이 전체 응답을 그대로 구글판으로 사용(네이버판은 빈 문자열).
 
     brand_id 가 있고 그 브랜드에 워드프레스가 연결되어 있으면, 구글판 생성 직후
     자동으로 초안(draft)으로 워드프레스에 올린다(항상 draft — 실패해도 텍스트
@@ -94,7 +97,10 @@ def generate_experience(self, creation_id, user_id, system_prompt, user_prompt,
             from services.claude_service import generate_text
             text = generate_text(system_prompt, user_prompt, max_tokens=max_tokens)
 
-        naver_text, google_text = _split_naver_google(text, both)
+        if google_only:
+            naver_text, google_text = '', text.strip()
+        else:
+            naver_text, google_text = _split_naver_google(text, both)
 
         wp_auto_publish = None
         if brand_id and google_text:

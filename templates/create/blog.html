@@ -167,14 +167,19 @@
             <label class="btn btn-outline-secondary py-2" for="blogTgNaver">
               <i class="bi bi-journal-text me-1"></i>네이버만
             </label>
+            <input type="radio" class="btn-check" name="blogTargets" id="blogTgGoogle" value="google" onchange="onBlogTargetsChange()">
+            <label class="btn btn-outline-secondary py-2" for="blogTgGoogle">
+              <i class="bi bi-google me-1"></i>구글(워드프레스)만 <span class="text-muted">포인트 1.3배</span>
+            </label>
             <input type="radio" class="btn-check" name="blogTargets" id="blogTgBoth" value="both" onchange="onBlogTargetsChange()">
             <label class="btn btn-outline-secondary py-2" for="blogTgBoth">
-              <i class="bi bi-collection me-1"></i>네이버 + 구글(워드프레스) 세트 <span class="text-muted">포인트 2배</span>
+              <i class="bi bi-collection me-1"></i>네이버 + 구글 세트 <span class="text-muted">포인트 2배</span>
             </label>
           </div>
           <div class="text-muted mt-1" style="font-size:.7rem">
-            세트를 고르면 같은 글을 <b>네이버판</b>과 <b>구글(워드프레스)판</b>(더 길게, SEO 제목·메타·표·FAQ 포함)으로
-            30~50% 이상 다르게 써서 한 번에 만듭니다 — 출력이 2배라 백그라운드로 처리되며 시간이 더 걸립니다.
+            "구글만"은 네이버판 없이 SEO 제목·메타·표·FAQ 포함된 워드프레스용 글 하나만 만듭니다.
+            "세트"는 <b>네이버판</b>과 <b>구글판</b>을 30~50% 이상 다르게 써서 한 번에 만듭니다.
+            둘 다 출력이 길어져 백그라운드로 처리되며 시간이 조금 더 걸립니다.
           </div>
           <div id="blogWpHint" class="alert alert-warning py-2 mt-2 d-none" style="font-size:.72rem">
             <i class="bi bi-exclamation-triangle me-1"></i>
@@ -274,7 +279,7 @@
   <div id="step3Content" class="card d-none">
     <div class="card-header py-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
       <ul class="nav nav-pills me-auto" style="font-size:.76rem" id="blogResultTabs">
-        <li class="nav-item">
+        <li class="nav-item" id="blogTabNaverLi">
           <a class="nav-link active py-1 px-3" href="#" onclick="switchBlogTab('naver');return false" id="blogTabNaverBtn">
             <i class="bi bi-journal-text me-1"></i>네이버판
           </a>
@@ -1848,7 +1853,7 @@ async function saveBlogDraft(stepReached) {
         img_count:        selectedImgCount,
         generated_images: generatedImages,
       },
-      output_data: blogText
+      output_data: (blogText || blogGoogleText)
         ? { text: blogText, google_text: blogGoogleText, wp_auto_publish: _blogWpAutoPublish }
         : {},
     };
@@ -1880,7 +1885,8 @@ async function loadBlogDraft(id) {
     if (inp.length)        document.getElementById('lengthSelect').value   = inp.length;
     if (inp.relation_mode) document.getElementById('relationMode').value   = inp.relation_mode;
     if (inp.targets) {
-      const radio = document.getElementById(inp.targets === 'both' ? 'blogTgBoth' : 'blogTgNaver');
+      const radioId = { naver: 'blogTgNaver', google: 'blogTgGoogle', both: 'blogTgBoth' }[inp.targets] || 'blogTgNaver';
+      const radio = document.getElementById(radioId);
       if (radio) radio.checked = true;
     }
     // JS 상태 복원
@@ -1906,18 +1912,20 @@ async function loadBlogDraft(id) {
       }
     }
     // 글 텍스트 복원
-    if (blogText) {
+    if (blogText || blogGoogleText) {
+      document.getElementById('blogTabNaverLi').classList.toggle('d-none', !blogText);
       document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
-      switchBlogTab('naver');
+      switchBlogTab(blogText ? 'naver' : 'google');
       // 글이 있으면 step3 스피너 숨기고 내용 표시 (스피너 무한로딩 방지)
       document.getElementById('step3Loading').classList.add('d-none');
       document.getElementById('step3Content').classList.remove('d-none');
     }
     // 이동할 스텝 결정
     // - 글 텍스트 없는데 step 3이면 step 2로 되돌림 (재생성 유도)
+    const hasAnyText = !!(blogText || blogGoogleText);
     const rawStep  = d.status === 'done' ? 4 : Math.min(d.step_reached || 1, 4);
-    const targetStep = (rawStep >= 3 && !blogText) ? 2 : rawStep;
-    if (rawStep >= 3 && !blogText) {
+    const targetStep = (rawStep >= 3 && !hasAnyText) ? 2 : rawStep;
+    if (rawStep >= 3 && !hasAnyText) {
       alert('이전 글 초안을 찾을 수 없습니다. 소구포인트에서 다시 생성해 주세요.');
     }
     goStep(targetStep);
@@ -1984,8 +1992,9 @@ async function redoBlogImages(id) {
     if (_redoSel && realBrandId) _redoSel.value = realBrandId;
     if (typeof _syncThumbBrandMark === 'function') _syncThumbBrandMark();
     // 이 글(재작업 대상)의 실제 상태로 탭/텍스트 동기화 — 다른 글의 구글판이 섞여 보이는 것 방지
+    document.getElementById('blogTabNaverLi').classList.toggle('d-none', !blogText);
     document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
-    switchBlogTab('naver');
+    switchBlogTab(blogText ? 'naver' : 'google');
     // 소구포인트 복원 → 재작업에서도 AI 씬 자동채움(서브·뱃지·주제)이 작동하도록
     selectedAngle = sd.selected_angle || null;
     if ((sd.angles || []).length) window._angles = sd.angles;
@@ -2202,7 +2211,7 @@ document.getElementById('brandSelect').addEventListener('change', async function
   const newBrand = this.value;
   // 재작업/이어서로 불러온(또는 이미 만든) 본문이 다른 브랜드 것이면 초기화 여부를 확인.
   //   확인해야 썸네일만 새 브랜드로 바뀌고 본문·이미지는 이전 브랜드로 나오는 혼동을 막는다.
-  const hasContent = !!(selectedAngle || blogText || (window._angles || []).length || (window._prompts || []).length);
+  const hasContent = !!(selectedAngle || blogText || blogGoogleText || (window._angles || []).length || (window._prompts || []).length);
   if (_contentBrandId && _contentBrandId !== newBrand && hasContent) {
     const ok = confirm(
       '브랜드를 바꾸면 이전 브랜드로 만든 본문·소구포인트·이미지가 모두 초기화됩니다.\n' +
@@ -2366,8 +2375,9 @@ async function generateBlogText() {
     if (!data.ok) throw new Error(data.message);
 
     if (data.async_mode) {
-      // '네이버+구글 세트' — 백그라운드 생성, 완료될 때까지 폴링 (2초 간격, 최대 4분)
-      document.getElementById('step3Loading').querySelector('p.fw-semibold').textContent = '네이버판 + 구글판 함께 쓰는 중이에요 ✍️';
+      // '구글만' 또는 '네이버+구글 세트' — 백그라운드 생성, 완료될 때까지 폴링 (2초 간격, 최대 4분)
+      document.getElementById('step3Loading').querySelector('p.fw-semibold').textContent =
+        targets === 'google' ? '구글판 쓰는 중이에요 ✍️' : '네이버판 + 구글판 함께 쓰는 중이에요 ✍️';
       const statusUrl = `{{ url_for('create.blog_text_status', creation_id='__ID__') }}`.replace('__ID__', data.id);
       let elapsed = 0, done = false, sd;
       while (elapsed < 240) {
@@ -2392,8 +2402,9 @@ async function generateBlogText() {
       _blogWpAutoPublish = null;
     }
 
+    document.getElementById('blogTabNaverLi').classList.toggle('d-none', !blogText);
     document.getElementById('blogTabGoogleLi').classList.toggle('d-none', !blogGoogleText);
-    switchBlogTab('naver');
+    switchBlogTab(blogText ? 'naver' : 'google');
     document.getElementById('step3Meta').textContent = (data.cost_charged || data.cost ? (data.cost_charged || data.cost) + 'P 사용 · ' : '') + '내용을 직접 수정할 수 있습니다';
     document.getElementById('step3Loading').classList.add('d-none');
     document.getElementById('step3Content').classList.remove('d-none');
@@ -2469,10 +2480,11 @@ function onBlogTextEdit() {
 
 // ── 발행 대상 토글 변경 시 워드프레스 연결 안내 갱신 ───────────
 function onBlogTargetsChange() {
-  const both = document.querySelector('input[name="blogTargets"]:checked')?.value === 'both';
+  const needsWp = ['google', 'both'].includes(
+    document.querySelector('input[name="blogTargets"]:checked')?.value);
   const brandOpt = document.getElementById('brandSelect').selectedOptions[0];
   const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
-  document.getElementById('blogWpHint').classList.toggle('d-none', !(both && !wpConnected));
+  document.getElementById('blogWpHint').classList.toggle('d-none', !(needsWp && !wpConnected));
 }
 
 function copyBlogText() {

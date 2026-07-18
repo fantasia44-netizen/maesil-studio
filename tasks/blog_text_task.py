@@ -1,7 +1,7 @@
-"""일반 블로그 "네이버+구글(워드프레스) 세트" 본문 생성 Celery 태스크.
+"""일반 블로그 "구글판 포함" 본문 생성 Celery 태스크 ('구글만' 또는 '네이버+구글 세트').
 
 네이버 단독 생성은 blueprints/create/blog.py에서 기존처럼 동기(run_text_generation)로
-처리하고, 이 태스크는 출력이 2배로 늘어나는 '세트' 옵션에서만 쓰인다
+처리하고, 이 태스크는 구글판이 섞여 출력이 길어지는 옵션에서만 쓰인다
 (tasks/experience_task.py와 동일한 이유 — 메인 서버 블로킹 방지).
 """
 import logging
@@ -35,8 +35,12 @@ def _apply_disclaimer(text: str, disclaimer: str) -> str:
              max_retries=0, soft_time_limit=240, time_limit=300)
 def generate_blog_both(self, creation_id, user_id, system_prompt, user_prompt,
                        max_tokens, supabase_url, supabase_key, anthropic_api_key,
-                       disclaimer='', brand_id=None):
-    """블로그 본문 — 네이버판 + 구글(워드프레스)판을 함께 생성.
+                       disclaimer='', brand_id=None, mode='both'):
+    """블로그 본문 — 구글판만, 또는 네이버판 + 구글판을 함께 생성.
+
+    mode='both': [[[NAVER]]]/[[[GOOGLE]]] 구분자로 응답을 분리.
+    mode='google': 프롬프트가 애초에 구글판 하나만 요청했으므로 분리 없이
+      전체 응답을 그대로 구글판으로 사용(네이버판은 빈 문자열).
 
     brand_id 가 있고 그 브랜드에 워드프레스가 연결되어 있으면, 구글판 생성 직후
     자동으로 초안(draft)으로 워드프레스에 올린다(항상 draft — 실패해도 텍스트
@@ -52,7 +56,10 @@ def generate_blog_both(self, creation_id, user_id, system_prompt, user_prompt,
         from services.claude_service import generate_text
         text = generate_text(system_prompt, user_prompt, max_tokens=max_tokens)
 
-        naver_text, google_text = split_naver_google(text, both=True)
+        if mode == 'google':
+            naver_text, google_text = '', text.strip()
+        else:
+            naver_text, google_text = split_naver_google(text, both=True)
         naver_text = _apply_disclaimer(naver_text, disclaimer)
         google_text = _apply_disclaimer(google_text, disclaimer)
 

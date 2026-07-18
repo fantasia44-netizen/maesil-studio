@@ -168,6 +168,24 @@ def _both_targets_output_rule(topic: str, keyword: str) -> str:
   네이버판 문장을 그대로 재사용하지 않는다(검색엔진 중복 콘텐츠 회피).'''
 
 
+def _google_only_output_rule(topic: str, keyword: str) -> str:
+    """'구글(워드프레스)만' 출력 형식 — 네이버판 없이 구글판 하나만 요청.
+
+    라벨 포맷은 _both_targets_output_rule의 [[[GOOGLE]]] 섹션과 동일
+    (blueprints/integrations.py 대신 services/wordpress_publish.py::parse_google_post
+    가 그대로 파싱).
+    """
+    return f'''
+[출력 형식 — 반드시 준수]
+워드프레스(구글 검색용) 판. 마크다운 사용. 순서:
+  SEO 제목: (60자 이내, 핵심 검색어 앞배치, "{keyword or topic}" 반영)
+  메타 설명: (150자 이내)
+  슬러그: (영문 소문자-하이픈)
+  본문: ## / ### 소제목으로 구조화. 비교·정리 가능한 정보는 마크다운 표 1개 이상으로 정리.
+  FAQ: 독자가 검색할 질문 3~5개를 ### 질문 + 답변으로.
+  태그: 쉼표로 구분한 키워드 8~10개.'''
+
+
 def build_prompt(brand: dict, input_data: dict,
                  *,
                  product: dict | None = None,
@@ -178,8 +196,9 @@ def build_prompt(brand: dict, input_data: dict,
                  targets: str = 'naver') -> tuple[str, str, int]:
     """블로그 프롬프트 빌드 → (system, user, max_tokens).
 
-    targets='both' 면 네이버판 + 구글(워드프레스)판을 [[[NAVER]]]/[[[GOOGLE]]] 구분자로
-    함께 요청하고 max_tokens 를 늘린다 (services/prompts/experience 패턴과 동일한 개념).
+    targets: 'naver'(기본, 네이버판만) | 'google'(구글판만) | 'both'(둘 다,
+    [[[NAVER]]]/[[[GOOGLE]]] 구분자로 함께 요청). 'google'/'both' 모두 구글판이
+    네이버판보다 길고 깊어 max_tokens 를 늘린다.
     """
     topic        = (input_data.get('topic') or '').strip()
     keyword      = (input_data.get('keyword') or '').strip()
@@ -232,10 +251,13 @@ def build_prompt(brand: dict, input_data: dict,
         user_parts.append('')
         user_parts.append(relation_dir)
 
-    both = (targets or 'naver').strip().lower() == 'both'
-    if both:
+    targets_mode = (targets or 'naver').strip().lower()
+    if targets_mode == 'both':
         user_parts.append(_both_targets_output_rule(topic, keyword))
         max_tokens = int(max_tokens * 2.2)   # 구글판(더 긴 분량) 출력 여유
+    elif targets_mode == 'google':
+        user_parts.append(_google_only_output_rule(topic, keyword))
+        max_tokens = int(max_tokens * 1.5)   # 구글판 하나만이라도 네이버판보다 깊게
     else:
         user_parts.append('''
 [출력 형식 — 반드시 준수]
