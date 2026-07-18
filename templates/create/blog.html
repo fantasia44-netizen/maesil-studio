@@ -1817,6 +1817,10 @@ let selectedImgCount = 5;     // 총 이미지 수 (기본 5)
 let blogCreationId   = null;  // 블로그 텍스트 creation ID (save-final에 사용)
 let slotManualImages = [];    // 슬롯별 수동 삽입 이미지 URL (null = AI 생성)
 let draftId          = null;  // 현재 임시저장 draft ID
+let _contentBrandId  = null;  // 현재 로드된 본문·소구포인트가 만들어진 브랜드 id.
+                              //   재작업/이어서로 A 글을 불러온 뒤 브랜드를 B로 바꾸면
+                              //   본문은 A 그대로라 이미지가 A로 나오는 '브랜드 혼동'을 막기 위해,
+                              //   이 값과 다른 브랜드로 바꾸면 본문·이미지를 초기화한다.
 
 // ── Draft 임시저장 / 불러오기 ──────────────────────────────
 async function saveBlogDraft(stepReached) {
@@ -1886,6 +1890,7 @@ async function loadBlogDraft(id) {
     selectedStyle    = sd.style             || null;
     selectedImgCount = sd.img_count         || 5;
     generatedImages  = sd.generated_images  || [];
+    _contentBrandId  = inp.brand_id         || null;   // 이 초안이 속한 브랜드 기록
     // 소구포인트 카드 복원
     if ((sd.angles || []).length > 0) {
       renderAngleCards(sd.angles);
@@ -1974,6 +1979,7 @@ async function redoBlogImages(id) {
     // 소구포인트 복원 → 재작업에서도 AI 씬 자동채움(서브·뱃지·주제)이 작동하도록
     selectedAngle = sd.selected_angle || null;
     if ((sd.angles || []).length) window._angles = sd.angles;
+    _contentBrandId = inp.brand_id || null;   // 이 재작업 본문이 속한 브랜드 기록
     goStep(4);
   } catch(e) { alert('불러오기 실패: ' + e.message); }
 }
@@ -2164,7 +2170,36 @@ document.getElementById('productSelect').addEventListener('change', updateProduc
 updateProductImage();  // 초기 실행
 
 // 브랜드 변경
+// 브랜드 전환 시 이전 브랜드로 만든 본문·소구포인트·이미지를 초기화하고 step1로 되돌린다.
+function _resetBlogContentForBrandChange() {
+  selectedAngle   = null;
+  window._angles  = [];
+  window._prompts = [];
+  blogText = ''; blogGoogleText = '';
+  blogCreationId = null; draftId = null;
+  _blogWpAutoPublish = null;
+  generatedImages = []; slotManualImages = [];
+  _contentBrandId = null;
+  const cards = document.getElementById('promptCards'); if (cards) cards.innerHTML = '';
+  const angleCards = document.getElementById('angleCards'); if (angleCards) angleCards.innerHTML = '';
+  const ta = document.getElementById('blogTextArea'); if (ta) ta.value = '';
+  document.getElementById('step3Content')?.classList.add('d-none');
+  document.getElementById('step3Loading')?.classList.remove('d-none');
+  goStep(1);
+}
+
 document.getElementById('brandSelect').addEventListener('change', async function() {
+  const newBrand = this.value;
+  // 재작업/이어서로 불러온(또는 이미 만든) 본문이 다른 브랜드 것이면 초기화 여부를 확인.
+  //   확인해야 썸네일만 새 브랜드로 바뀌고 본문·이미지는 이전 브랜드로 나오는 혼동을 막는다.
+  const hasContent = !!(selectedAngle || blogText || (window._angles || []).length || (window._prompts || []).length);
+  if (_contentBrandId && _contentBrandId !== newBrand && hasContent) {
+    const ok = confirm(
+      '브랜드를 바꾸면 이전 브랜드로 만든 본문·소구포인트·이미지가 모두 초기화됩니다.\n' +
+      '새 브랜드로 소구포인트부터 다시 만들게 됩니다. 계속할까요?');
+    if (!ok) { this.value = _contentBrandId; return; }   // 취소 → 브랜드 원복(변경 무효)
+    _resetBlogContentForBrandChange();
+  }
   try {
     const url = '{{ url_for("create.blog_products") }}?brand_id=' + encodeURIComponent(this.value);
     const data = await fetch(url).then(r => r.json());
@@ -2217,6 +2252,7 @@ document.getElementById('step1Form').addEventListener('submit', async (e) => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.message || '분석 실패');
     renderAngleCards(data.angles);
+    _contentBrandId = brandId;   // 이 소구포인트는 현재 브랜드 것
     goStep(2);
   } catch (err) {
     document.getElementById('step2Error').textContent = '소구포인트 분석 실패: ' + err.message;
@@ -2268,6 +2304,7 @@ function renderAngleCards(angles) {
 
 function selectAngle(idx, el) {
   selectedAngle = window._angles[idx];
+  _contentBrandId = document.getElementById('brandSelect').value;   // 이 본문은 현재 브랜드 것
   document.querySelectorAll('.angle-card').forEach((c, i) => {
     c.style.borderColor = i === idx ? '#e8355a' : '#eee';
     c.style.background  = i === idx ? '#fff8f9' : '';
