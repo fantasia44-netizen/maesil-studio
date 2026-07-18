@@ -78,12 +78,15 @@ STYLE_PRESETS = {
 }
 
 # ── AI 씬 그림체 시안 (generate_scene 전용) ──────────────
-#   subject 'mascot' → 등록 캐릭터를 주인공으로 리포즈(edit). 캐릭터 없으면 소품·장면만.
+#   subject 'mascot' → 업체가 등록한 캐릭터를 주인공으로 리포즈(edit). 캐릭터 없으면 소품·장면만.
 #   subject 'person' → 사람이 등장하는 장면(text-to-image). 마스코트는 자동 제외한다 —
-#                      곰 캐릭터를 실사·인물 그림체에 억지로 넣으면 결과가 무너지므로.
+#                      캐릭터를 실사·인물 그림체에 억지로 넣으면 결과가 무너지므로.
+#   subject 'object' → 사람·캐릭터 없이 주제 소품·오브젝트만(text-to-image).
 #   bg      'flat'   → 배경을 납작한 단색 팔레트로(색 테마 연동). 'photo' → 아웃포커스 실사 배경.
 SCENE_STYLE_DEFAULT = 'cute_char'
 SCENE_STYLES = {
+    # ── 캐릭터(등록 마스코트) 1종 ──────────────────────────
+    #   업체가 등록한 자기 캐릭터를 주인공으로 리포즈. 없으면 소품·장면만.
     'cute_char': {
         'label': '캐릭터 아기자기',
         'subject': 'mascot',
@@ -91,6 +94,7 @@ SCENE_STYLES = {
         'look': ('Bright cheerful colors, thick clean black outlines, '
                  'korean kids storybook sticker style, square 1:1 composition.'),
     },
+    # ── 사람 등장 2종 ──────────────────────────────────────
     'pastel_person': {
         'label': '파스텔 인물',
         'subject': 'person',
@@ -108,21 +112,22 @@ SCENE_STYLES = {
                  'shallow depth of field, warm authentic tones, candid unposed moment, '
                  'korean everyday setting, square 1:1 composition.'),
     },
-    'webtoon_person': {
-        'label': '한국 웹툰',
-        'subject': 'person',
-        'bg': 'flat',
-        'look': ('Korean webtoon style, clean confident line art, soft cel shading, '
-                 'expressive lively faces, vibrant but harmonious colors, '
-                 'square 1:1 composition.'),
-    },
-    'flat_person': {
-        'label': '미니멀 플랫',
-        'subject': 'person',
+    # ── 사람 없는(소품·오브젝트) 2종 ───────────────────────
+    'flat_object': {
+        'label': '정보성 시각',
+        'subject': 'object',
         'bg': 'flat',
         'look': ('Minimal flat vector illustration, simple geometric shapes, '
                  'limited clean color palette, no outlines, generous negative space, '
                  'modern editorial infographic aesthetic, square 1:1 composition.'),
+    },
+    'photo_object': {
+        'label': '소품 실사 사진',
+        'subject': 'object',
+        'bg': 'photo',
+        'look': ('Photorealistic still-life product photography, natural soft daylight, '
+                 'shallow depth of field, warm authentic tones, cleanly styled flat-lay / '
+                 'tabletop arrangement, korean everyday setting, square 1:1 composition.'),
     },
 }
 
@@ -182,10 +187,37 @@ def replace_background(image_url: str, bg_prompt: str) -> str:
     raise ValueError(f'Bria 배경 교체 응답 파싱 실패: {data}')
 
 
-def remove_background_ai(image_data: str, user_id: str = 'anon') -> str:
+def _resolve_supabase(supabase=None):
+    """업로드용 supabase 클라이언트 확보 — 호출자 전달 → Flask 앱 → 환경변수 순.
+
+    Celery 워커엔 Flask 앱 컨텍스트가 없어 current_app.supabase 접근이 RuntimeError
+    ('Working outside of application context')를 낸다. 워커에서 호출되는 함수는 반드시
+    클라이언트를 넘겨받거나(권장) 이 폴백을 써야 한다. 끝내 못 구하면 None.
+    """
+    if supabase is not None:
+        return supabase
+    try:
+        from flask import current_app
+        return current_app.supabase
+    except Exception:
+        pass
+    import os as _os
+    sb_url = _os.environ.get('SUPABASE_URL', '')
+    sb_key = _os.environ.get('SUPABASE_SERVICE_KEY', '')
+    if sb_url and sb_key:
+        try:
+            from supabase import create_client as _cc
+            return _cc(sb_url, sb_key)
+        except Exception as e:
+            logger.warning('[imagen] supabase 워커 폴백 생성 실패: %s', e)
+    return None
+
+
+def remove_background_ai(image_data: str, user_id: str = 'anon', supabase=None) -> str:
     """AI 정밀 누끼 — fal birefnet으로 배경 제거 후 투명 PNG URL 반환.
 
     image_data: 공개 URL 또는 base64 data URL(자동으로 Supabase 업로드 후 fal에 전달).
+    supabase: Celery 워커 등 Flask 컨텍스트 없는 환경에서 클라이언트 직접 전달.
     """
     from services.config_service import get_config
     api_key = get_config('fal_api_key')
@@ -194,7 +226,8 @@ def remove_background_ai(image_data: str, user_id: str = 'anon') -> str:
 
     image_url = image_data
     if image_data.startswith('data:image/'):
-        image_url = upload_to_supabase(image_data, user_id, 'cutout_src.png')
+        image_url = upload_to_supabase(image_data, user_id, 'cutout_src.png',
+                                       supabase=_resolve_supabase(supabase))
 
     resp = requests.post(
         'https://fal.run/fal-ai/birefnet',
@@ -212,10 +245,11 @@ def remove_background_ai(image_data: str, user_id: str = 'anon') -> str:
 
 
 def transform_character(image_data: str, style_prompt: str,
-                        user_id: str = 'anon') -> str:
+                        user_id: str = 'anon', supabase=None) -> str:
     """캐릭터 이미지 변형 — nano-banana(Gemini) 편집으로 정체성 유지하며 리스타일.
 
     style_prompt: 한글 지시문 가능(예: '웃는 표정으로, 파스텔 수채화풍').
+    supabase: Celery 워커 등 Flask 컨텍스트 없는 환경에서 클라이언트 직접 전달.
     반환: 변형된 이미지 URL(흰 배경 스티커풍 — 이후 무료 누끼로 투명 처리 가능).
     """
     from services.config_service import get_config
@@ -225,7 +259,8 @@ def transform_character(image_data: str, style_prompt: str,
 
     image_url = image_data
     if image_data.startswith('data:image/'):
-        image_url = upload_to_supabase(image_data, user_id, 'char_src.png')
+        image_url = upload_to_supabase(image_data, user_id, 'char_src.png',
+                                       supabase=_resolve_supabase(supabase))
 
     style = (style_prompt or '').strip() or '귀엽게 다듬기'
     # 원 캐릭터 정체성·포즈 유지 + 단색 흰 배경(이후 누끼) 유도
@@ -326,13 +361,17 @@ def _scene_layout(bg_phrase: str, bg_mode: str, subject: str) -> str:
             f'softly out of focus. IMPORTANT: leave the TOP ~40% of the frame as clean, '
             f'uncluttered background for a title. Place {subject} in the lower ~55% of the frame, '
             f'keeping a comfortable clean margin below the title — do NOT push {subject} up into '
-            f'the top title area.'
+            f'the top title area. Frame the shot a little wider and keep {subject} fully inside '
+            f'the frame with clear margins on every side — never crop or cut off {subject} at any '
+            f'edge of the image.'
         )
     return (
         f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle '
         f'shapes. IMPORTANT: leave the TOP ~40% of the image as clean empty space of that '
         f'background color for a title. Place {subject} in the lower ~55% of the image, keeping a '
-        f'comfortable clean margin below the title — do NOT push {subject} up into the top title area.'
+        f'comfortable clean margin below the title — do NOT push {subject} up into the top title area. '
+        f'Frame a little wider and keep {subject} fully inside the frame with clear margins on every '
+        f'side — never crop or cut off {subject} at any edge of the image.'
     )
 
 
@@ -341,12 +380,14 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
                    style: str = SCENE_STYLE_DEFAULT, supabase=None) -> str:
     """상황 장면 일러스트 생성 (nano-banana). 그림체는 SCENE_STYLES 시안에서 선택.
 
-    · style 의 subject='mascot' (기본 '캐릭터 아기자기'):
+    · style 의 subject='mascot' (캐릭터 아기자기):
         - 캐릭터(mascot_urls) 있으면 → 레퍼런스로 장면에 배치(edit), 정체성 유지하며 리포즈.
-        - 캐릭터 없으면 → 주제 소품·음식·세팅만 그림(t2i). 캐릭터 브랜딩 없는 일반 업체용.
-    · style 의 subject='person' (파스텔 인물·실사·웹툰·플랫):
+        - 캐릭터 없으면 → 주제 소품·음식·세팅만 그림(t2i). 캐릭터 미등록 업체용.
+    · style 의 subject='person' (파스텔 인물·실사 라이프스타일):
         - 사람이 등장하는 장면(t2i). mascot_urls 는 무시한다 — 브랜드 캐릭터를 인물/실사
           그림체에 섞으면 결과가 무너지므로 그림체 선택이 우선.
+    · style 의 subject='object' (정보성 시각·소품 실사 사진):
+        - 사람·캐릭터 없이 주제 소품·음식·세팅만 그림(t2i). bg='photo'면 실사 정물.
     · 주제에 맞는 배경 세팅·소품을 함께 그리고, bg_color 로 배경 색 팔레트 지정(색 테마 연동).
     · 상단 1/3은 텍스트용으로 비워두게 유도 → 이후 PIL 하이브리드 텍스트 합성에 사용.
     mascot_urls: 공개 URL 또는 base64 data URL 리스트(없거나 비어도 됨).
@@ -360,6 +401,9 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
     st = SCENE_STYLES.get(style) or SCENE_STYLES[SCENE_STYLE_DEFAULT]
     if st['subject'] != 'mascot':
         mascot_urls = None          # 인물 그림체 → 마스코트 자동 제외
+
+    if mascot_urls:
+        supabase = _resolve_supabase(supabase)
 
     # 마스코트 레퍼런스를 흰 배경으로 평탄화해 업로드.
     #   누끼로 몸통(흰색)이 투명해진 PNG를 그대로 넘기면 fal이 투명부를 검은색으로
@@ -425,6 +469,10 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
             f'{verb} one cohesive editorial thumbnail scene about "{topic}" — '
             f'show one or two korean people naturally doing the activity, together with the '
             f'relevant objects, props and a simple setting for the topic. '
+            f'Frame the people at roughly waist-up or from a slight distance so each person\'s '
+            f'ENTIRE head and face are fully visible, with clear empty space above their heads — '
+            f'never crop, cut off or clip the top of anyone\'s head, forehead or face at the frame '
+            f'edge or against the title area. '
             f'Natural friendly expressions and correct anatomy: each person has exactly two hands '
             f'with five fingers each, and no extra or missing limbs. '
             f'Do NOT include any cartoon mascot, animal character or costumed figure. '
@@ -434,19 +482,30 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
         endpoint = 'fal-ai/nano-banana'
         payload = {'prompt': prompt, 'num_images': 1}
     else:
-        # ── 캐릭터 없음: 주제 소품·장면만 (text-to-image) ────────────
-        #   캐릭터 브랜딩 없는 일반 업체용 — 캐릭터/사람/동물 없이 소품·음식·세팅만.
+        # ── 사람 없음: 주제 소품·오브젝트만 (text-to-image) ──────────
+        #   사람·캐릭터·동물 없이 소품·음식·세팅만. bg='photo'면 실사 정물, 아니면 플랫 일러스트.
         #   브랜드명 제거 + 시각 오브젝트로 추상화 (그림 속 가짜 라벨 방지).
         topic = _scene_visual_desc(topic) or topic
-        prompt = (
-            f'Illustrate one cute flat editorial thumbnail scene about "{topic}" — '
-            f'show the relevant objects, food, tools and a simple setting for the topic, '
-            f'arranged as an appealing centerpiece with a few small cute doodle icons around it. '
-            f'IMPORTANT: do NOT include any character, person, animal, mascot, face or figure — '
-            f'objects and scenery only. '
-            f'{_scene_layout(bg_phrase, st["bg"], "the objects")} '
-            f'{st["look"]} {_SCENE_NO_TEXT}'
-        )
+        if st['bg'] == 'photo':
+            prompt = (
+                f'Photograph one clean still-life thumbnail scene about "{topic}" — '
+                f'the relevant real objects, food, tools and a simple setting for the topic, '
+                f'arranged as an appealing styled centerpiece. '
+                f'IMPORTANT: do NOT include any character, person, animal, mascot, face or figure — '
+                f'objects and scenery only. '
+                f'{_scene_layout(bg_phrase, st["bg"], "the objects")} '
+                f'{st["look"]} {_SCENE_NO_TEXT}'
+            )
+        else:
+            prompt = (
+                f'Illustrate one clean flat editorial thumbnail scene about "{topic}" — '
+                f'show the relevant objects, food, tools and a simple setting for the topic, '
+                f'arranged as an appealing centerpiece with a few small cute doodle icons around it. '
+                f'IMPORTANT: do NOT include any character, person, animal, mascot, face or figure — '
+                f'objects and scenery only. '
+                f'{_scene_layout(bg_phrase, st["bg"], "the objects")} '
+                f'{st["look"]} {_SCENE_NO_TEXT}'
+            )
         endpoint = 'fal-ai/nano-banana'
         payload = {'prompt': prompt, 'num_images': 1}
 

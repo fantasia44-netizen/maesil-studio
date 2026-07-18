@@ -137,7 +137,8 @@ def cutout(self, creation_id, user_id, character_data, supabase_url, supabase_ke
         from services.imagen_service import remove_background_ai, upload_to_supabase
         from services.thumbnail_studio import fill_alpha_holes
 
-        result_url = remove_background_ai(character_data, user_id or 'anon')
+        result_url = remove_background_ai(character_data, user_id or 'anon',
+                                          supabase=supabase)
         r = requests.get(result_url, timeout=30)
         r.raise_for_status()
         im = fill_alpha_holes(Image.open(BytesIO(r.content)))
@@ -171,7 +172,8 @@ def transform_character(self, creation_id, user_id, character_data, style,
         from services.imagen_service import transform_character as transform_character_ai, upload_to_supabase
         from services.thumbnail_studio import auto_cutout
 
-        result_url = transform_character_ai(character_data, style, user_id or 'anon')
+        result_url = transform_character_ai(character_data, style, user_id or 'anon',
+                                            supabase=supabase)
         r = requests.get(result_url, timeout=30)
         r.raise_for_status()
         cut = auto_cutout(Image.open(BytesIO(r.content)))
