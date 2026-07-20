@@ -69,8 +69,27 @@ class WordPressClient:
             return f'{self.site}/?rest_route=/wp/v2{path}'
         return f'{self.site}/wp-json/wp/v2{path}'
 
+    def _maybe_upgrade_site(self, r) -> bool:
+        """응답이 리다이렉트를 거쳤고 최종 호스트가 바뀌었으면(주로 http→https)
+        self.site 를 그 호스트로 승격하고 True 반환.
+
+        POST 가 http→https 301 리다이렉트로 GET 이 되어 컬렉션(list)을 받는 문제를
+        근본 차단한다. (requests 는 301/302 에서 POST 를 GET 으로 바꾸며 본문도 버림)
+        """
+        if not getattr(r, 'history', None):
+            return False
+        from urllib.parse import urlsplit
+        p = urlsplit(r.url)
+        new_site = f'{p.scheme}://{p.netloc}' if (p.scheme and p.netloc) else ''
+        if new_site and new_site != self.site:
+            logger.info('[WP] 리다이렉트 감지 → site 승격 %s → %s', self.site, new_site)
+            self.site = new_site
+            return True
+        return False
+
     def _raw_request(self, method: str, path: str, *,
-                     params: dict | None = None, json_body: dict | None = None):
+                     params: dict | None = None, json_body: dict | None = None,
+                     _redirected: bool = False):
         url = self._url(path)
         try:
             r = requests.request(
@@ -85,6 +104,12 @@ class WordPressClient:
             raise WordPressError('timeout', 0, 'API 응답 시간 초과')
         except requests.RequestException as e:
             raise WordPressError('network', 0, str(e)[:200])
+
+        # 리다이렉트(http→https 등)가 POST를 GET으로 바꿔 컬렉션(list)을 반환하는 문제 차단:
+        # 최종 호스트로 site 승격 후 메서드 유지해 1회 재요청.
+        if (not _redirected) and method.upper() != 'GET' and self._maybe_upgrade_site(r):
+            return self._raw_request(method, path, params=params, json_body=json_body,
+                                     _redirected=True)
 
         if r.status_code >= 400:
             code, detail = 'http_error', ''
@@ -188,7 +213,7 @@ class WordPressClient:
         return media
 
     def _do_upload_media(self, filename: str, content: bytes,
-                         mime: str = 'image/jpeg') -> dict:
+                         mime: str = 'image/jpeg', _redirected: bool = False) -> dict:
         """POST /media — 이미지 바이너리를 미디어 라이브러리에 업로드.
 
         _request 는 JSON 전용이라, 바이너리 업로드는 별도로 처리한다.
@@ -210,6 +235,9 @@ class WordPressClient:
             raise WordPressError('timeout', 0, '미디어 업로드 시간 초과')
         except requests.RequestException as e:
             raise WordPressError('network', 0, str(e)[:200])
+
+        if (not _redirected) and self._maybe_upgrade_site(r):
+            return self._do_upload_media(filename, content, mime, _redirected=True)
 
         if r.status_code >= 400:
             code, detail = 'http_error', ''
