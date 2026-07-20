@@ -127,8 +127,12 @@ class WordPressClient:
         slug: str | None = None,
         excerpt: str | None = None,
         tag_ids: list | None = None,
+        featured_media: int | None = None,
     ) -> dict:
-        """POST /posts — 글 생성. 기본은 초안(draft)."""
+        """POST /posts — 글 생성. 기본은 초안(draft).
+
+        featured_media: 대표 이미지 미디어 ID (upload_media 결과의 'id').
+        """
         body: dict = {'title': title, 'content': content, 'status': status}
         if slug:
             body['slug'] = slug
@@ -136,10 +140,13 @@ class WordPressClient:
             body['excerpt'] = excerpt
         if tag_ids:
             body['tags'] = tag_ids
+        if featured_media:
+            body['featured_media'] = featured_media
         return self._request('POST', '/posts', json_body=body)
 
     def update_post(self, post_id, *, status: str | None = None,
-                    title: str | None = None, content: str | None = None) -> dict:
+                    title: str | None = None, content: str | None = None,
+                    featured_media: int | None = None) -> dict:
         """POST /posts/<id> — 기존 글 부분 수정. 주로 초안 → 발행 전환에 사용
         (create_post로 새로 만들지 않고 같은 글의 상태만 바꿔 중복 포스트 방지)."""
         body: dict = {}
@@ -149,7 +156,48 @@ class WordPressClient:
             body['title'] = title
         if content is not None:
             body['content'] = content
+        if featured_media:
+            body['featured_media'] = featured_media
         return self._request('POST', f'/posts/{post_id}', json_body=body)
+
+    def upload_media(self, filename: str, content: bytes,
+                     mime: str = 'image/jpeg') -> dict:
+        """POST /media — 이미지 바이너리를 미디어 라이브러리에 업로드.
+
+        _request 는 JSON 전용이라, 바이너리 업로드는 별도로 처리한다.
+        반환: {'id': int, 'source_url': str, ...} (WP 미디어 객체).
+        """
+        url = self._url('/media')
+        headers = {
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Content-Type': mime or 'application/octet-stream',
+            'Accept': 'application/json',
+        }
+        try:
+            r = requests.post(
+                url, data=content, headers=headers,
+                auth=(self.username, self.app_password),
+                timeout=max(self.timeout, 60),   # 업로드는 넉넉히
+            )
+        except requests.Timeout:
+            raise WordPressError('timeout', 0, '미디어 업로드 시간 초과')
+        except requests.RequestException as e:
+            raise WordPressError('network', 0, str(e)[:200])
+
+        if r.status_code >= 400:
+            code, detail = 'http_error', ''
+            try:
+                body = r.json()
+                code   = body.get('code')    or 'http_error'
+                detail = body.get('message') or ''
+            except ValueError:
+                detail = (r.text or '')[:200]
+            raise WordPressError(code, r.status_code, detail)
+
+        try:
+            return r.json()
+        except ValueError:
+            raise WordPressError('invalid_response', r.status_code, 'non-JSON response')
 
     def resolve_tag_ids(self, names: list) -> list:
         """태그 이름 목록 → 태그 ID 목록 (없으면 생성). best-effort — 실패는 건너뜀."""

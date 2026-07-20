@@ -37,7 +37,9 @@ from services.wordpress_connection import (
     mark_error as wp_mark_error,
     verify_and_save as wp_verify_and_save,
 )
-from services.wordpress_publish import create_google_post, publish_existing_post
+from services.wordpress_publish import (
+    create_google_post, create_full_post, publish_existing_post,
+)
 from services.tz_utils import now_kst
 
 logger = logging.getLogger(__name__)
@@ -501,6 +503,41 @@ def wordpress_publish():
     result = create_google_post(
         current_app.supabase, brand_id,
         data.get('google_text') or '',
+        status=data.get('status') or 'draft',
+        title_override=(data.get('title') or '').strip() or None,
+    )
+    return jsonify(**result)
+
+
+@integrations_bp.route('/wordpress/publish-full', methods=['POST'])
+@login_required
+def wordpress_publish_full():
+    """완성본(글 + 본문 이미지 + 썸네일) 통째로 워드프레스 발행. AJAX JSON.
+
+    본문 이미지는 각 URL을 다운로드해 WP 미디어에 업로드 후 본문에 삽입하고,
+    썸네일은 대표 이미지(featured)로 설정한다. brand_id 필수.
+    Request JSON:
+      brand_id       str            (필수)
+      google_text    str            구글(워드프레스)판 원문 (편집본)
+      body_images    list[str]      본문에 넣을 이미지 URL 목록 (썸네일 제외, 순서 유지)
+      thumbnail_url  str            대표 이미지용 썸네일 URL (선택)
+      status         str            draft | publish | pending (기본 draft)
+      title          str            제목 오버라이드 (선택)
+    """
+    data = request.get_json(force=True) or {}
+    brand_id = (data.get('brand_id') or '').strip()
+    if not brand_id:
+        return jsonify(ok=False, message='브랜드를 선택해주세요.'), 400
+
+    body_images = data.get('body_images')
+    body_images = [u for u in body_images if isinstance(u, str) and u] \
+        if isinstance(body_images, list) else []
+
+    result = create_full_post(
+        current_app.supabase, brand_id,
+        data.get('google_text') or '',
+        body_image_urls=body_images,
+        thumbnail_url=(data.get('thumbnail_url') or '').strip() or None,
         status=data.get('status') or 'draft',
         title_override=(data.get('title') or '').strip() or None,
     )

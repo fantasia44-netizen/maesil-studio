@@ -989,6 +989,42 @@
     <div class="card-body p-4" id="finalContent" style="font-size:.9rem;line-height:1.9;color:#1a2332">
     </div>
   </div>
+
+  <!-- ── 워드프레스로 발행 (완성본: 글 + 본문 이미지 + 썸네일 대표이미지) ── -->
+  <div id="blogFinalWp" class="card mt-3 d-none">
+    <div class="card-header py-2 d-flex align-items-center gap-2">
+      <i class="bi bi-wordpress" style="color:#21759b;font-size:1.1rem"></i>
+      <h6 class="mb-0 fw-bold">워드프레스로 발행
+        <span class="text-muted fw-normal small">— 글 + 본문 이미지 + 썸네일(대표 이미지) 통째로</span>
+      </h6>
+    </div>
+    <div class="card-body p-3">
+      <div class="text-muted mb-2" style="font-size:.75rem">
+        <i class="bi bi-info-circle me-1"></i>아래는 <b>구글(워드프레스)판 본문</b>이에요. 여기서 바로 수정한 뒤 보내면 그대로 발행됩니다.
+        본문 이미지와 썸네일은 <b>자동으로 워드프레스에 업로드</b>돼서 글에 박혀요.
+      </div>
+      <textarea id="blogFinalWpText" class="form-control" spellcheck="false" oninput="onBlogFinalWpEdit()"
+                style="font-size:.82rem;line-height:1.7;min-height:280px;resize:vertical"></textarea>
+      <div class="d-flex align-items-center gap-2 mt-2">
+        <button class="btn btn-outline-secondary btn-sm" onclick="saveBlogFinalWpEdit()">
+          <i class="bi bi-save me-1"></i>저장
+        </button>
+        <select id="blogFinalWpStatus" class="form-select form-select-sm" style="width:auto;font-size:.8rem">
+          <option value="draft" selected>초안으로</option>
+          <option value="publish">바로 발행</option>
+        </select>
+        <button id="blogFinalWpBtn" class="btn btn-sm text-white ms-auto" style="background:#21759b"
+                onclick="publishBlogFullToWordpress()">
+          <i class="bi bi-wordpress me-1"></i>워드프레스로 보내기
+        </button>
+      </div>
+      <div id="blogFinalWpResult" class="small mt-2 d-none"></div>
+    </div>
+  </div>
+  <a id="blogFinalWpConnect" href="{{ url_for('integrations.index') }}" target="_blank" rel="noopener"
+     class="btn btn-outline-secondary btn-sm mt-3 d-none">
+    <i class="bi bi-wordpress me-1"></i>이 브랜드 워드프레스 연결하면 완성본을 바로 발행
+  </a>
 </div>
 
 <!-- ── Blog 이미지 수정 새로생성 모달 ───────────────────── -->
@@ -3020,6 +3056,87 @@ async function renderFinalContent() {
         })
       });
     } catch {}
+  }
+
+  // 완성본 워드프레스 발행 패널 초기화 (구글판 + 브랜드 연결 시에만 노출)
+  initBlogFinalWp();
+}
+
+// ── 완성본 → 워드프레스 발행 (글 + 본문 이미지 + 썸네일 대표이미지) ──
+function initBlogFinalWp() {
+  const panel   = document.getElementById('blogFinalWp');
+  const connect = document.getElementById('blogFinalWpConnect');
+  if (!panel) return;
+  const hasGoogle = !!blogGoogleText;
+  const brandOpt  = document.getElementById('brandSelect').selectedOptions[0];
+  const wpConnected = brandOpt && brandOpt.dataset.wpConnected === '1';
+  panel.classList.toggle('d-none', !(hasGoogle && wpConnected));
+  connect?.classList.toggle('d-none', !(hasGoogle && !wpConnected));
+  if (hasGoogle && wpConnected) {
+    document.getElementById('blogFinalWpText').value = blogGoogleText;
+    document.getElementById('blogFinalWpResult')?.classList.add('d-none');
+  }
+}
+function onBlogFinalWpEdit() {
+  blogGoogleText = document.getElementById('blogFinalWpText').value;
+}
+function saveBlogFinalWpEdit() {
+  blogGoogleText = document.getElementById('blogFinalWpText').value;
+  const res = document.getElementById('blogFinalWpResult');
+  if (res) {
+    res.className = 'small mt-2 text-success';
+    res.textContent = '✔ 저장됐어요. 이제 "워드프레스로 보내기"를 누르면 이 내용으로 발행됩니다.';
+    res.classList.remove('d-none');
+  }
+  try { if (typeof saveBlogDraft === 'function') saveBlogDraft(5); } catch {}
+}
+async function publishBlogFullToWordpress() {
+  const text = document.getElementById('blogFinalWpText').value.trim();
+  if (!text) { alert('발행할 내용이 없습니다.'); return; }
+  const brandId = document.getElementById('brandSelect').value;
+  const status  = document.getElementById('blogFinalWpStatus').value;
+  if (status === 'publish' &&
+      !confirm('워드프레스에 바로 발행하면 글이 공개됩니다.\n초안이 아니라 지금 공개할까요?')) return;
+
+  // 본문 이미지(썸네일 제외) + 썸네일 대표이미지 수집
+  const bodyImages = (generatedImages || [])
+    .filter(g => g && g.url && !g.isThumbnail).map(g => g.url);
+  const thumb = (generatedImages || []).find(g => g && g.isThumbnail && g.url);
+  const thumbnailUrl = (thumb && thumb.url)
+    || (typeof _thumbPreviewUrl !== 'undefined' ? (_thumbPreviewUrl || '') : '');
+
+  const btn = document.getElementById('blogFinalWpBtn');
+  const res = document.getElementById('blogFinalWpResult');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>이미지 올리고 발행 중... (10~30초)';
+  try {
+    const r = await fetch('{{ url_for("integrations.wordpress_publish_full") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        brand_id: brandId, google_text: text,
+        body_images: bodyImages, thumbnail_url: thumbnailUrl, status,
+      }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.message || '발행 실패');
+    if (res) {
+      const where = j.edit_link || j.link || '#';
+      res.className = 'small mt-2 text-success';
+      res.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i>${j.message} ` +
+                      `<a href="${where}" target="_blank" rel="noopener">워드프레스에서 열기 →</a>`;
+      res.classList.remove('d-none');
+    }
+  } catch (e) {
+    if (res) {
+      res.className = 'small mt-2 text-danger';
+      res.textContent = '발행 실패: ' + e.message;
+      res.classList.remove('d-none');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
   }
 }
 
