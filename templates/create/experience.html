@@ -132,6 +132,523 @@
     </div>
   </div>
 
+  <!-- ── AI 썸네일 (선택) ── -->
+  <div class="card mb-4" id="expThumbCardSection">
+    <div class="card-header py-3 d-flex align-items-center gap-2" style="background:#fafafe">
+      <div class="form-check form-switch mb-0 me-auto">
+        <input class="form-check-input" type="checkbox" id="expEnableThumb" role="switch"
+               onchange="toggleExpThumbCard(this.checked)">
+        <label class="form-check-label fw-semibold small" for="expEnableThumb">
+          <i class="bi bi-card-image me-1" style="color:#6366f1"></i>
+          AI 썸네일 만들기 <span class="text-muted fw-normal">(선택 — 네이버/워드프레스 대표 이미지로 사용)</span>
+        </label>
+      </div>
+      <span id="expThumbCostBadge" class="badge" style="background:#ede9fe;color:#5b21b6;font-size:.7rem;opacity:.4">+100P</span>
+    </div>
+
+    <div id="expThumbCardBody" class="d-none">
+      <div class="row g-0" style="min-height:460px">
+
+        <!-- ── 왼쪽 패널: 탭 에디터 ── -->
+        <div class="col-lg-7 border-end p-3">
+
+          <!-- 썸네일 방식 모드 토글 -->
+          <div class="btn-group w-100 mb-3" role="group" style="font-size:.76rem">
+            <input type="radio" class="btn-check" name="expThumbStyleMode" id="expThumbModeClassic"
+                   value="classic" checked onchange="setExpThumbMode('classic')">
+            <label class="btn btn-outline-secondary py-1" for="expThumbModeClassic">
+              <i class="bi bi-image me-1"></i>클래식
+            </label>
+            <input type="radio" class="btn-check" name="expThumbStyleMode" id="expThumbModeScene"
+                   value="scene" onchange="setExpThumbMode('scene')">
+            <label class="btn btn-outline-secondary py-1" for="expThumbModeScene">
+              <i class="bi bi-stars me-1"></i>AI 씬<span class="badge bg-primary ms-1" style="font-size:.58rem">NEW</span>
+            </label>
+          </div>
+
+          <!-- ── 브랜드 캐릭터 (AI 씬 전용 — 있으면 주인공으로 등장) ── -->
+          <div id="expThumbCharShared" class="d-none mb-3">
+            <label class="form-label small fw-semibold mb-1">브랜드 캐릭터 <span class="text-muted fw-normal">(선택)</span></label>
+            <input id="expThumbDzChar" type="file" accept="image/png,image/webp,image/jpeg"
+                   class="form-control form-control-sm" onchange="onExpThumbCharUpload(this)">
+            <div id="expThumbCharTools" class="d-none mt-2 p-2 rounded"
+                 style="background:#f8f9fb;border:1px solid #eef0f4">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <img id="expThumbCharPrev" alt="캐릭터"
+                     style="width:48px;height:48px;object-fit:contain;border:1px solid #e5e7eb;border-radius:8px;
+                            background:repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50%/12px 12px">
+                <div class="flex-grow-1">
+                  <div class="small fw-semibold">브랜드 캐릭터 준비됨</div>
+                  <div id="expThumbCharSubtitle" class="text-muted" style="font-size:.68rem">흰 배경은 업로드 시 자동 제거(무료)</div>
+                </div>
+              </div>
+              <button type="button" id="expThumbMascotSaveBtn" class="btn btn-outline-success btn-sm w-100"
+                      onclick="saveExpMascot()" style="font-size:.72rem">
+                <i class="bi bi-star me-1"></i>이 캐릭터를 브랜드 기본으로 등록
+              </button>
+              <div id="expThumbCharMsg" class="d-none small mt-1"></div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.7rem">
+              JPG·PNG·WEBP 가능, 흰/단색 배경 자동 제거. 미업로드 시 <b>등록된 브랜드 캐릭터</b>가 자동 사용됩니다.
+            </div>
+          </div>
+
+          <!-- ── AI 씬 패널 (기본 숨김) ── -->
+          <div id="expThumbScenePanel" class="d-none">
+            <div class="alert alert-primary py-2 px-2 mb-2" style="font-size:.72rem">
+              <i class="bi bi-stars me-1"></i><b>상황 장면 일러스트</b>가 그려지고 상단에 선명한 한글 텍스트가 얹힙니다.
+              아래에서 <b>그림체 시안</b>을 고르세요. (장당 <b>200P</b>)
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">그림체 시안</label>
+              <select id="expThumbScStyle" class="form-select form-select-sm" onchange="onExpSceneStyleChange()">
+                <option value="cute_char">캐릭터 아기자기 — 등록 캐릭터가 주인공</option>
+                <option value="pastel_person">파스텔 인물 — 사람 등장, 부드러운 파스텔</option>
+                <option value="photo_person">실사 라이프스타일 — 사람 등장, 사진 느낌</option>
+                <option value="flat_object">정보성 시각 — 사람 없이 소품·아이콘, 플랫</option>
+                <option value="photo_object">소품 실사 사진 — 사람 없이 소품, 사진 느낌</option>
+              </select>
+              <div id="expThumbScStyleHint" class="text-muted mt-1" style="font-size:.68rem"></div>
+            </div>
+            <button type="button" id="expThumbScAutofillBtn" class="btn btn-outline-primary btn-sm w-100 mb-2"
+                    onclick="autofillExpScene(true)" style="font-size:.74rem">
+              <i class="bi bi-magic me-1"></i>경험 메모에서 자동 채우기
+            </button>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">헤드라인</label>
+              <input id="expThumbScHeadline" class="form-control form-control-sm" maxlength="40"
+                     placeholder="예: 김해 ○○카페 실제 방문 후기">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">서브 문구 <span class="text-muted fw-normal">(선택)</span></label>
+              <input id="expThumbScSub" class="form-control form-control-sm" maxlength="40"
+                     placeholder="예: 아기의자 · 웨이팅 · 주차 총정리">
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">상단 뱃지 <span class="text-muted fw-normal">(선택)</span></label>
+                <input id="expThumbScBadge" class="form-control form-control-sm" maxlength="20"
+                       placeholder="예: 실제 방문 후기">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">색 테마 <span class="text-muted fw-normal">(배경색·글자색)</span></label>
+                <select id="expThumbScTheme" class="form-select form-select-sm">
+                  <option value="baby_blue">베이비 블루</option>
+                  <option value="food_cream">푸드 크림</option>
+                  <option value="fresh_green">프레시 그린</option>
+                  <option value="warm_pink">웜 핑크</option>
+                </select>
+              </div>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label small fw-semibold mb-1">제목 스타일</label>
+                <select id="expThumbScTitleStyle" class="form-select form-select-sm">
+                  <option value="banner">컬러 배너 · 흰 글자 (선명)</option>
+                  <option value="plate">흰 배너 · 진한 글자</option>
+                </select>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">하단 CTA 바 <span class="text-muted fw-normal">(선택)</span></label>
+              <input id="expThumbScCta" class="form-control form-control-sm" maxlength="24"
+                     placeholder="예: 지금 바로 확인하세요">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">장면 주제 <span class="text-muted fw-normal">(선택 — 비우면 헤드라인 사용)</span></label>
+              <input id="expThumbScTopic" class="form-control form-control-sm" maxlength="80"
+                     placeholder="예: 아기와 함께 카페에서 브런치 먹는 장면">
+              <div class="text-muted mt-1" style="font-size:.68rem">
+                이 주제로 장면이 연출됩니다. 구체적일수록 장면이 정확해집니다.
+              </div>
+            </div>
+          </div>
+
+          <!-- 탭 네비 -->
+          <ul class="nav nav-tabs nav-fill mb-3" style="font-size:.8rem" id="expThumbTabNav">
+            <li class="nav-item">
+              <a class="nav-link active py-1 px-2" id="expThumbTabBgBtn"
+                 onclick="switchExpThumbTab('bg');return false" href="#">
+                <i class="bi bi-image me-1"></i>배경
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link py-1 px-2" id="expThumbTabTextBtn"
+                 onclick="switchExpThumbTab('text');return false" href="#">
+                <i class="bi bi-type me-1"></i>텍스트
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link py-1 px-2" id="expThumbTabStyleBtn"
+                 onclick="switchExpThumbTab('style');return false" href="#">
+                <i class="bi bi-palette me-1"></i>스타일
+              </a>
+            </li>
+          </ul>
+
+          <!-- ── 배경 탭 ── -->
+          <div id="expThumbTabBg">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">배경 유형</label>
+              <div class="d-flex flex-column gap-2">
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer" id="expThumbBgFluxLabel">
+                  <input type="radio" name="expThumbBgType" value="flux" id="expThumbBgFlux"
+                         class="mt-1 flex-shrink-0" checked onchange="updateExpThumbCostBadge()">
+                  <div class="flex-fill">
+                    <div class="fw-semibold small">배경 이미지 생성
+                      <span class="badge ms-1" style="background:#ede9fe;color:#5b21b6;font-size:.62rem">100P</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">주제에 맞는 사진 배경 자동 생성</div>
+                    <input id="expThumbBgTopic" class="form-control form-control-sm mt-1"
+                           placeholder="배경 주제 키워드 (예: 카페 브런치, 아기 장거리 여행)"
+                           oninput="updateExpThumbPreview()">
+                  </div>
+                </label>
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer">
+                  <input type="radio" name="expThumbBgType" value="gradient" id="expThumbBgGradient"
+                         class="mt-1 flex-shrink-0" onchange="updateExpThumbCostBadge()">
+                  <div>
+                    <div class="fw-semibold small">다크 그라데이션
+                      <span class="badge bg-success ms-1" style="font-size:.62rem">무료</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">즉시 생성, 강조색 기반 배경</div>
+                  </div>
+                </label>
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer">
+                  <input type="radio" name="expThumbBgType" value="upload" id="expThumbBgUpload"
+                         class="mt-1 flex-shrink-0" onchange="updateExpThumbCostBadge()">
+                  <div class="flex-fill">
+                    <div class="fw-semibold small">직접 업로드
+                      <span class="badge bg-success ms-1" style="font-size:.62rem">무료</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">내 사진을 배경으로 사용</div>
+                    <input type="file" id="expThumbBgFile" class="form-control form-control-sm mt-1"
+                           accept="image/*" onchange="previewExpBgUpload(this)">
+                  </div>
+                </label>
+                <label class="d-flex align-items-start gap-2 p-2 rounded border"
+                       style="cursor:pointer" id="expThumbBgRecentLabel">
+                  <input type="radio" name="expThumbBgType" value="recent" id="expThumbBgRecent"
+                         class="mt-1 flex-shrink-0" onchange="onSelectExpRecentBgMode()">
+                  <div class="flex-fill">
+                    <div class="fw-semibold small">이전 생성 배경 가져오기
+                      <span class="badge bg-success ms-1" style="font-size:.62rem">무료</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.72rem">최근 만든 썸네일 배경을 재사용</div>
+                    <div id="expThumbRecentBgList" class="mt-2 d-none">
+                      <div class="text-muted small text-center py-2" id="expThumbRecentBgLoading">
+                        <span class="spinner-border spinner-border-sm me-1"></span>불러오는 중...
+                      </div>
+                      <div id="expThumbRecentBgGrid" class="d-none"
+                           style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"></div>
+                      <div id="expThumbRecentBgEmpty" class="d-none text-muted small text-center py-2">
+                        최근 생성한 배경이 없습니다.
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── 텍스트 탭 ── -->
+          <div id="expThumbTabText" class="d-none">
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">
+                줄 1 · 흰색 <span class="text-muted fw-normal">(최대 16자)</span>
+              </label>
+              <input id="expThumbLine1" class="form-control form-control-sm" maxlength="16"
+                     placeholder="예: 김해 카페 후기" oninput="updateExpThumbPreview()">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                줄 2 · 강조색
+                <span id="expThumbLine2LenHint" class="text-muted fw-normal" style="font-size:.72rem"></span>
+              </label>
+              <input id="expThumbLine2" class="form-control form-control-sm" maxlength="16"
+                     placeholder="예: 실제 방문 (짧을수록 1줄)"
+                     oninput="updateExpThumbLine2Hint(); updateExpThumbPreview()">
+              <div class="text-muted mt-1" style="font-size:.71rem">
+                💡 <strong>7자 이하</strong>면 1줄, 8자 이상이면 2줄로 나뉠 수 있습니다
+              </div>
+            </div>
+
+            <!-- 위치 슬라이더 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                세로 위치
+                <span id="expThumbYLabel" class="text-muted fw-normal">55%</span>
+              </label>
+              <input type="range" class="form-range" id="expThumbYPos"
+                     min="15" max="82" value="55"
+                     oninput="document.getElementById('expThumbYLabel').textContent=this.value+'%'; updateExpThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>위쪽</span><span>아래쪽</span>
+              </div>
+            </div>
+
+            <!-- 폰트 크기 슬라이더 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                글자 크기
+                <span id="expThumbSizeLabel" class="text-muted fw-normal">115%</span>
+              </label>
+              <input type="range" class="form-range" id="expThumbFontSize"
+                     min="65" max="140" value="115"
+                     oninput="document.getElementById('expThumbSizeLabel').textContent=this.value+'%'; updateExpThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>작게</span><span>크게</span>
+              </div>
+            </div>
+
+            <!-- 자간 슬라이더 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                자간
+                <span id="expThumbLetterSpacingLabel" class="text-muted fw-normal">0</span>
+              </label>
+              <input type="range" class="form-range" id="expThumbLetterSpacing"
+                     min="-8" max="20" value="0"
+                     oninput="document.getElementById('expThumbLetterSpacingLabel').textContent=this.value; updateExpThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>좁게 (폭 줄임)</span><span>넓게</span>
+              </div>
+            </div>
+
+            <!-- 정렬 -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1">텍스트 정렬</label>
+              <div class="btn-group btn-group-sm w-100" id="expThumbAlignBtns">
+                {% for a, ic in [('left','text-left'),('center','text-center'),('right','text-right')] %}
+                <button type="button" class="btn btn-outline-secondary exp-thumb-align-btn
+                        {% if a=='center' %}active{% endif %}"
+                        data-align="{{ a }}"
+                        onclick="setExpThumbAlign('{{ a }}', this)">
+                  <i class="bi bi-{{ ic }}"></i>
+                </button>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- 인용부호 -->
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="expThumbUseQuotes"
+                     onchange="updateExpThumbPreview()">
+              <label class="form-check-label small" for="expThumbUseQuotes">
+                인용부호 <code style="font-size:.75em">"텍스트"</code>
+                <span class="text-muted">— 상위 블로거 공통 패턴</span>
+              </label>
+            </div>
+
+            <!-- 제목 후보 자동 채우기 -->
+            <div id="expThumbTitlePicker" class="mt-3 d-none">
+              <div class="small fw-semibold text-muted mb-1">
+                <i class="bi bi-magic me-1"></i>생성된 제목 후보에서 자동 채우기
+              </div>
+              <div id="expThumbTitleList" class="d-flex flex-column gap-1"></div>
+            </div>
+          </div>
+
+          <!-- ── 스타일 탭 ── -->
+          <div id="expThumbTabStyle" class="d-none">
+            <!-- 글자색 1 (줄 1 메인 텍스트) -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">글자색 1 <span class="text-muted fw-normal">(줄 1 · 메인)</span></label>
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                {% for hc, hn in [('#FFFFFF','화이트'),('#F8FAFC','밝은회'),('#FFD700','골드'),('#4ADE80','그린'),('#60A5FA','블루'),('#F472B6','핑크'),('#FF4444','레드'),('#111111','블랙')] %}
+                <div class="exp-thumb-text1-dot" title="{{ hn }}"
+                     onclick="setExpThumbTextColor1('{{ hc }}', this)"
+                     style="width:28px;height:28px;background:{{ hc }};border-radius:50%;
+                            cursor:pointer;border:2px solid {{ 'rgba(0,0,0,.25)' if hc in ('#FFFFFF','#F8FAFC') else 'transparent' }};
+                            transition:all .15s;box-shadow:0 1px 5px rgba(0,0,0,.2)">
+                </div>
+                {% endfor %}
+                <input type="color" id="expThumbTextColor1Custom" value="#FFFFFF"
+                       oninput="setExpThumbTextColor1(this.value, null)"
+                       class="form-control form-control-color flex-shrink-0"
+                       style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
+                       title="직접 선택">
+              </div>
+            </div>
+
+            <!-- 글자색 2 (줄 2 강조 텍스트) -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">글자색 2 <span class="text-muted fw-normal">(줄 2 · 강조)</span></label>
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                {% for hc, hn in [('#FFD700','골드'),('#FF6B35','오렌지'),
+                                   ('#4ADE80','그린'),('#60A5FA','블루'),
+                                   ('#F472B6','핑크'),('#E879F9','퍼플'),
+                                   ('#FF4444','레드'),('#FFFFFF','화이트')] %}
+                <div class="exp-thumb-accent-dot" title="{{ hn }}"
+                     onclick="setExpThumbAccent('{{ hc }}', this)"
+                     style="width:28px;height:28px;background:{{ hc }};border-radius:50%;
+                            cursor:pointer;border:2px solid {{ 'rgba(0,0,0,.25)' if hc=='#FFFFFF' else 'transparent' }};
+                            transition:all .15s;box-shadow:0 1px 5px rgba(0,0,0,.2)">
+                </div>
+                {% endfor %}
+                <input type="color" id="expThumbAccentCustom" value="#FFD700"
+                       oninput="setExpThumbAccent(this.value, null)"
+                       class="form-control form-control-color flex-shrink-0"
+                       style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
+                       title="직접 선택">
+              </div>
+            </div>
+
+            <!-- 글자 배경색 (2중 강조) -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-2">글자 배경색 <span class="text-muted fw-normal">(2중 강조 · 없음 선택 시 비활성)</span></label>
+              <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <div class="exp-thumb-textbg-dot exp-thumb-textbg-none active" title="없음"
+                     onclick="setExpThumbTextBg('', this)"
+                     style="width:28px;height:28px;background:transparent;border-radius:50%;
+                            cursor:pointer;border:2px solid #aaa;transition:all .15s;
+                            display:flex;align-items:center;justify-content:center;">
+                  <span style="font-size:11px;color:#aaa;line-height:1">✕</span>
+                </div>
+                {% for hc, hn in [('#000000','블랙'),('#1a1a2e','네이비'),('#FFD700','골드'),('#FF6B35','오렌지'),('#4ADE80','그린'),('#60A5FA','블루'),('#F472B6','핑크'),('#FFFFFF','화이트')] %}
+                <div class="exp-thumb-textbg-dot" title="{{ hn }}"
+                     onclick="setExpThumbTextBg('{{ hc }}', this)"
+                     style="width:28px;height:28px;background:{{ hc }};border-radius:50%;
+                            cursor:pointer;border:2px solid {{ 'rgba(0,0,0,.25)' if hc=='#FFFFFF' else 'transparent' }};
+                            transition:all .15s;box-shadow:0 1px 5px rgba(0,0,0,.2)">
+                </div>
+                {% endfor %}
+                <input type="color" id="expThumbTextBgCustom" value="#000000"
+                       oninput="setExpThumbTextBg(this.value, null)"
+                       class="form-control form-control-color flex-shrink-0"
+                       style="width:32px;height:28px;padding:1px;border-radius:50%;cursor:pointer"
+                       title="직접 선택">
+              </div>
+              <!-- 배경 불투명도 (글자 배경이 선택된 경우에만 활성) -->
+              <div id="expThumbTextBgOpacityWrap" class="d-none">
+                <label class="form-label small mb-1 d-flex justify-content-between" style="color:#555">
+                  배경 불투명도 <span id="expThumbTextBgOpacityLabel" class="fw-normal">60%</span>
+                </label>
+                <input type="range" class="form-range" id="expThumbTextBgOpacity"
+                       min="10" max="100" value="60"
+                       oninput="document.getElementById('expThumbTextBgOpacityLabel').textContent=this.value+'%'; updateExpThumbPreview()">
+              </div>
+            </div>
+
+            <!-- 오버레이 강도 -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1 d-flex justify-content-between">
+                오버레이 강도 <span id="expThumbOverlayLabel" class="text-muted fw-normal">78%</span>
+              </label>
+              <input type="range" class="form-range" id="expThumbOverlay"
+                     min="20" max="95" value="78"
+                     oninput="document.getElementById('expThumbOverlayLabel').textContent=this.value+'%'; updateExpThumbPreview()">
+              <div class="d-flex justify-content-between text-muted" style="font-size:.68rem;margin-top:-4px">
+                <span>밝음 (배경 잘 보임)</span><span>어둠 (텍스트 선명)</span>
+              </div>
+            </div>
+
+            <!-- 워터마크 -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">워터마크</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">@</span>
+                <input id="expThumbWatermark" class="form-control" maxlength="20"
+                       placeholder="브랜드명" oninput="updateExpThumbPreview()">
+              </div>
+              <div class="text-muted mt-1" style="font-size:.72rem">비워두면 워터마크 없음</div>
+            </div>
+          </div>
+
+          <!-- ── 생성 버튼 ── -->
+          <div class="border-top pt-3 mt-3">
+            <button id="expThumbGenBtn" class="btn w-100 fw-semibold py-2"
+                    style="background:#6366f1;color:#fff;border-radius:10px;font-size:.9rem"
+                    onclick="generateExpThumbPreview()">
+              <i class="bi bi-magic me-2"></i>
+              <span id="expThumbGenBtnText">썸네일 미리보기 생성</span>
+            </button>
+            <div id="expThumbGenError" class="text-danger small mt-1 d-none"></div>
+          </div>
+
+        </div><!-- end 왼쪽 패널 -->
+
+        <!-- ── 오른쪽 패널: 미리보기 ── -->
+        <div class="col-lg-5 p-3 d-flex flex-column align-items-center">
+          <div class="small fw-semibold text-muted mb-2 align-self-start">미리보기</div>
+
+          <div style="width:320px;height:320px;flex-shrink:0;position:relative">
+
+            <!-- CSS mock 미리보기 (생성 전) -->
+            <div id="expThumbPreview" style="
+              width:320px;height:320px;border-radius:14px;overflow:hidden;
+              background:linear-gradient(135deg,#09102a 0%,#1c2e55 45%,#09102a 100%);
+              position:absolute;inset:0;
+              box-shadow:0 6px 28px rgba(0,0,0,.45);
+              font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif">
+              <div id="expThumbPrevBgImg" style="position:absolute;inset:0;background-size:cover;background-position:center"></div>
+              <div id="expThumbPrevTexture" style="position:absolute;inset:0;opacity:.06;
+                   background:repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 0,transparent 16px)"></div>
+              <div id="expThumbPrevOverlay" style="position:absolute;inset:0;
+                   background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.15) 38%,rgba(0,0,0,.65) 100%)"></div>
+              <div id="expThumbPrevTextBlock" style="
+                position:absolute;left:0;right:0;top:55%;transform:translateY(-50%);
+                text-align:center;padding:0 24px;z-index:2;
+                word-break:keep-all;overflow-wrap:normal;word-wrap:normal">
+                <div id="expThumbPrevLine1"
+                     style="color:#fff;font-size:34px;font-weight:800;line-height:1.25;
+                            text-shadow:2px 3px 10px rgba(0,0,0,.95);
+                            letter-spacing:-.5px">메인 텍스트</div>
+                <div id="expThumbPrevLine2"
+                     style="color:#FFD700;font-size:30px;font-weight:800;line-height:1.25;
+                            text-shadow:2px 3px 10px rgba(0,0,0,.95);
+                            letter-spacing:-.5px;margin-top:5px">서브 텍스트</div>
+              </div>
+              <div id="expThumbPrevMark" style="
+                position:absolute;bottom:14px;left:0;right:0;
+                text-align:center;color:rgba(255,255,255,.5);
+                font-size:12px;font-weight:500;z-index:2;letter-spacing:.4px"></div>
+            </div>
+
+            <!-- 실제 생성된 이미지 (생성 후 표시) -->
+            <div id="expThumbRealPreview" class="d-none" style="
+              width:320px;height:320px;border-radius:14px;overflow:hidden;
+              position:absolute;inset:0;box-shadow:0 6px 28px rgba(0,0,0,.45)">
+              <img id="expThumbRealImg" src="" alt="썸네일 미리보기"
+                   style="width:100%;height:100%;object-fit:cover;display:block">
+              <button onclick="generateExpThumbPreview()"
+                      style="position:absolute;top:10px;right:10px;
+                             background:rgba(0,0,0,.55);color:#fff;border:none;
+                             border-radius:8px;font-size:.75rem;padding:5px 10px;
+                             cursor:pointer;backdrop-filter:blur(4px)">
+                <i class="bi bi-arrow-clockwise me-1"></i>재생성
+              </button>
+            </div>
+
+            <!-- 생성 중 스피너 -->
+            <div id="expThumbGenLoading" class="d-none" style="
+              position:absolute;inset:0;border-radius:14px;
+              background:rgba(9,16,42,.85);display:flex;flex-direction:column;
+              align-items:center;justify-content:center;z-index:10">
+              <div class="spinner-border mb-2" style="color:#6366f1;width:2.2rem;height:2.2rem"></div>
+              <div class="text-white small" id="expThumbGenLoadingText">이미지 생성 중...</div>
+            </div>
+
+          </div><!-- end 래퍼 -->
+
+          <div id="expThumbPreviewCaption" class="text-muted mt-2 text-center" style="font-size:.7rem">
+            CSS 미리보기 — 버튼 클릭 시 실제 이미지 생성
+          </div>
+
+          <button id="expThumbDownloadBtn" class="btn btn-sm mt-2 d-none fw-semibold"
+                  style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac;border-radius:8px;font-size:.82rem"
+                  onclick="_dlProxy(_expThumbPreviewUrl, '경험담썸네일.png')">
+            <i class="bi bi-download me-1"></i>썸네일 다운로드
+          </button>
+        </div><!-- end 오른쪽 패널 -->
+
+      </div>
+    </div><!-- end expThumbCardBody -->
+  </div>
+
   <!-- 결과 -->
   <div id="expResultCard" class="card mb-4 d-none">
     <div class="card-header py-2 d-flex align-items-center">
@@ -197,7 +714,9 @@
 
 </div>
 
+<script src="{{ url_for('static', filename='js/task-poll.js') }}"></script>
 <script>
+const CSRF = '{{ csrf_token() }}';
 let _expPhotos = [];   // [{dataUrl, name}] 업로드 순서 유지
 let _expNaver  = '';   // 네이버판 원문 (마커 포함)
 let _expGoogle = '';   // 구글판 원문 (마크다운)
@@ -303,6 +822,7 @@ async function generateExperience() {
         switchExpTab(_expNaver ? 'naver' : 'google');
         document.getElementById('expResultCard').classList.remove('d-none');
         document.getElementById('expResultCard').scrollIntoView({ behavior: 'smooth' });
+        _populateExpThumbTitles();
         done = true;
         break;
       } else if (sd.status === 'failed' || sd.status === 'error') {
@@ -323,6 +843,15 @@ async function generateExperience() {
 // ── 브랜드 선택에 따라 워드프레스 연결 상태 UI 갱신 ─────────────
 function updateExpWpUi() {
   if (_expTab === 'google') switchExpTab('google');
+  _syncExpThumbBrandMark();
+  // 브랜드 전환: 자동로드된(이전 브랜드) 마스코트 초기화 후 새 브랜드 것으로 재로드.
+  //   사용자가 직접 올린 캐릭터(_expThumbCharAuto=false)는 유지.
+  if (_expThumbCharAuto) _setExpThumbChar(null);
+  _expMascotLoaded = false;
+  if (document.querySelector('input[name="expThumbStyleMode"]:checked')?.value === 'scene') {
+    _expMascotLoaded = true;
+    _autoLoadExpMascot();
+  }
 }
 
 // ── 결과 표시: 탭 전환 + [사진 N] 마커 자리에 실제 사진 미리보기 ──
@@ -450,6 +979,638 @@ async function goLiveExpPost() {
     btn.disabled = false;
     btn.innerHTML = original;
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// 경험담 AI 썸네일 에디터
+// ══════════════════════════════════════════════════════════════
+let expThumbEnabled      = false;
+let expThumbAccentColor  = '#FFD700';
+let expThumbTextColor1   = '#FFFFFF';
+let expThumbTextBgColor  = '';
+let expThumbAlign        = 'center';
+let expThumbUploadedBgUrl = null;   // 직접 업로드한 배경 URL(base64)
+
+function toggleExpThumbCard(on) {
+  expThumbEnabled = on;
+  document.getElementById('expThumbCardBody').classList.toggle('d-none', !on);
+  if (on) {
+    _populateExpThumbTitles();
+    _syncExpThumbBrandMark();
+    switchExpThumbTab('bg');
+  }
+  updateExpThumbCostBadge();
+}
+
+function switchExpThumbTab(tab) {
+  ['bg','text','style'].forEach(t => {
+    const panel = document.getElementById(`expThumbTab${t.charAt(0).toUpperCase()+t.slice(1)}`);
+    const btn   = document.getElementById(`expThumbTab${t.charAt(0).toUpperCase()+t.slice(1)}Btn`);
+    if (panel) panel.classList.toggle('d-none', t !== tab);
+    if (btn)   btn.classList.toggle('active', t === tab);
+  });
+  if (tab === 'text') _populateExpThumbTitles();
+}
+
+function updateExpThumbCostBadge() {
+  const badge = document.getElementById('expThumbCostBadge');
+  if (!badge) return;
+  if (!expThumbEnabled) { badge.style.opacity = '.4'; badge.textContent = '+100P'; return; }
+  const bgType = document.querySelector('input[name="expThumbBgType"]:checked')?.value || 'flux';
+  const curBgTopic = document.getElementById('expThumbBgTopic')?.value.trim() || '';
+  const reuseable  = bgType === 'flux' && _expThumbBgUrl && curBgTopic === _expThumbLastBgTopic;
+  const fluxCost   = (bgType === 'flux' && !reuseable);
+  badge.textContent = fluxCost ? '+100P' : '+0P';
+  badge.style.opacity = '1';
+}
+
+let _expThumbRecentBgLoaded = false;
+let _expThumbSelectedRecentBg = null;
+
+async function onSelectExpRecentBgMode() {
+  updateExpThumbCostBadge();
+  const wrap = document.getElementById('expThumbRecentBgList');
+  if (wrap) wrap.classList.remove('d-none');
+  if (_expThumbRecentBgLoaded) return;
+  _expThumbRecentBgLoaded = true;
+  try {
+    const res  = await fetch('{{ url_for("create.blog_thumbnail_recent_backgrounds") }}');
+    const data = await res.json();
+    const grid    = document.getElementById('expThumbRecentBgGrid');
+    const loading = document.getElementById('expThumbRecentBgLoading');
+    const empty   = document.getElementById('expThumbRecentBgEmpty');
+    loading?.classList.add('d-none');
+    if (!data.ok || !(data.backgrounds || []).length) {
+      empty?.classList.remove('d-none'); return;
+    }
+    grid.innerHTML = data.backgrounds.map((b, i) => `
+      <div class="position-relative exp-recent-bg-item" data-bg-url="${b.bg_url}"
+           style="cursor:pointer;aspect-ratio:1/1;border:2px solid #dee2e6;border-radius:6px;
+                  overflow:hidden;background:#f8f9fa"
+           onclick="selectExpRecentBg('${b.bg_url}', '${(b.bg_topic||'').replace(/'/g,'')}', this)"
+           title="${b.bg_topic || ''} · ${b.date}">
+        <img src="${b.bg_url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
+      </div>
+    `).join('');
+    grid.classList.remove('d-none');
+  } catch (e) {
+    document.getElementById('expThumbRecentBgLoading')?.classList.add('d-none');
+    document.getElementById('expThumbRecentBgEmpty')?.classList.remove('d-none');
+  }
+}
+
+function selectExpRecentBg(url, topic, el) {
+  _expThumbSelectedRecentBg = url;
+  document.querySelectorAll('.exp-recent-bg-item').forEach(it => {
+    it.style.borderColor = '#dee2e6';
+    it.style.boxShadow   = '';
+  });
+  if (el) {
+    el.style.borderColor = '#0d9488';
+    el.style.boxShadow   = '0 0 0 3px rgba(13,148,136,.25)';
+  }
+  _expThumbBgUrl       = url;
+  _expThumbLastBgTopic = topic || '';
+  const bgInput = document.getElementById('expThumbBgTopic');
+  if (bgInput && topic) bgInput.value = topic;
+  const fluxRadio = document.getElementById('expThumbBgFlux');
+  if (fluxRadio) fluxRadio.checked = true;
+  updateExpThumbCostBadge();
+  updateExpThumbPreview();
+}
+
+function setExpThumbTextColor1(color, el) {
+  expThumbTextColor1 = color;
+  document.querySelectorAll('.exp-thumb-text1-dot').forEach(d => {
+    d.style.borderColor = 'transparent';
+    d.style.transform   = '';
+    d.style.boxShadow   = '0 1px 5px rgba(0,0,0,.2)';
+  });
+  if (el) {
+    el.style.borderColor = '#333';
+    el.style.transform   = 'scale(1.22)';
+    el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
+  }
+  const c = document.getElementById('expThumbTextColor1Custom');
+  if (c) c.value = color;
+  updateExpThumbPreview();
+}
+
+function setExpThumbTextBg(color, el) {
+  expThumbTextBgColor = color;
+  document.querySelectorAll('.exp-thumb-textbg-dot').forEach(d => {
+    d.style.borderColor = d.classList.contains('exp-thumb-textbg-none') ? '#aaa' : 'transparent';
+    d.style.transform   = '';
+    d.style.boxShadow   = d.classList.contains('exp-thumb-textbg-none') ? '' : '0 1px 5px rgba(0,0,0,.2)';
+    d.classList.remove('active');
+  });
+  if (el) {
+    el.style.borderColor = '#333';
+    el.style.transform   = 'scale(1.22)';
+    el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
+    el.classList.add('active');
+  }
+  const c = document.getElementById('expThumbTextBgCustom');
+  if (c && color) c.value = color;
+  const opWrap = document.getElementById('expThumbTextBgOpacityWrap');
+  if (opWrap) opWrap.classList.toggle('d-none', !color);
+  updateExpThumbPreview();
+}
+
+function updateExpThumbLine2Hint() {
+  const el  = document.getElementById('expThumbLine2');
+  const hint = document.getElementById('expThumbLine2LenHint');
+  if (!el || !hint) return;
+  const len = el.value.length;
+  if (len === 0) { hint.textContent = ''; return; }
+  if (len <= 7)  hint.innerHTML = `<span style="color:#22c55e">${len}자 · 1줄 ✓</span>`;
+  else           hint.innerHTML = `<span style="color:#f59e0b">${len}자 · 2줄 가능</span>`;
+}
+
+function setExpThumbAccent(color, el) {
+  expThumbAccentColor = color;
+  document.querySelectorAll('.exp-thumb-accent-dot').forEach(d => {
+    d.style.borderColor = 'transparent';
+    d.style.transform   = '';
+    d.style.boxShadow   = '0 1px 5px rgba(0,0,0,.2)';
+  });
+  if (el) {
+    el.style.borderColor = '#333';
+    el.style.transform   = 'scale(1.22)';
+    el.style.boxShadow   = '0 0 0 2px rgba(0,0,0,.3)';
+  }
+  const c2 = document.getElementById('expThumbAccentCustom');
+  if (c2) c2.value = color;
+  updateExpThumbPreview();
+}
+
+function setExpThumbAlign(align, el) {
+  expThumbAlign = align;
+  document.querySelectorAll('.exp-thumb-align-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  updateExpThumbPreview();
+}
+
+async function previewExpBgUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const resized = await _resizeImage(file, 1600, 0.85);
+  if (!resized) { alert('이미지를 읽을 수 없습니다. 다른 파일로 시도해 주세요.'); return; }
+  expThumbUploadedBgUrl = resized;
+  const bgDiv = document.getElementById('expThumbPrevBgImg');
+  if (bgDiv) {
+    bgDiv.style.backgroundImage = `url('${expThumbUploadedBgUrl}')`;
+    bgDiv.style.backgroundSize  = 'cover';
+  }
+  document.getElementById('expThumbPrevTexture').style.opacity = '0';
+}
+
+function updateExpThumbPreview() {
+  if (_expThumbPreviewUrl) {
+    const caption = document.getElementById('expThumbPreviewCaption');
+    const curBgTopic = document.getElementById('expThumbBgTopic')?.value.trim() || '';
+    const sameBg     = _expThumbBgUrl && curBgTopic === _expThumbLastBgTopic;
+    if (caption) {
+      caption.innerHTML = sameBg
+        ? '<i class="bi bi-lightning-charge-fill me-1" style="color:#6366f1"></i>실시간 미리보기 — 다운로드용 확정본은 <strong>텍스트만 재합성 (무료)</strong>'
+        : '<i class="bi bi-lightning-charge-fill me-1" style="color:#6366f1"></i>실시간 미리보기 — 배경을 바꾸려면 <strong>재생성</strong>';
+    }
+    const btnText = document.getElementById('expThumbGenBtnText');
+    if (btnText) btnText.textContent = sameBg ? '텍스트만 재합성 (무료)' : '썸네일 다시 생성';
+    document.getElementById('expThumbDownloadBtn')?.classList.add('d-none');
+  }
+  const l1Raw    = document.getElementById('expThumbLine1')?.value.trim() || '메인 텍스트';
+  const l2Raw    = document.getElementById('expThumbLine2')?.value.trim() || '서브 텍스트';
+  const useQuote = document.getElementById('expThumbUseQuotes')?.checked ?? false;
+  const yPct     = parseInt(document.getElementById('expThumbYPos')?.value  || 55);
+  const fontSize = parseInt(document.getElementById('expThumbFontSize')?.value || 115);
+  const overlay  = parseInt(document.getElementById('expThumbOverlay')?.value || 78);
+  const watermark= document.getElementById('expThumbWatermark')?.value.trim() || '';
+
+  const l1 = useQuote ? ('"' + l1Raw) : l1Raw;
+  const l2 = useQuote ? (l2Raw + '"') : l2Raw;
+
+  const el1 = document.getElementById('expThumbPrevLine1');
+  const el2 = document.getElementById('expThumbPrevLine2');
+  const letterSpacing = parseInt(document.getElementById('expThumbLetterSpacing')?.value || 0);
+  if (el1) {
+    el1.textContent       = l1;
+    const sz = Math.round(34 * fontSize / 100);
+    el1.style.fontSize    = sz + 'px';
+    el1.style.textAlign   = expThumbAlign;
+    el1.style.color       = expThumbTextColor1;
+    el1.style.letterSpacing = letterSpacing + 'px';
+  }
+  if (el2) {
+    el2.textContent       = l2;
+    const sz = Math.round(30 * fontSize / 100);
+    el2.style.fontSize    = sz + 'px';
+    el2.style.color       = expThumbAccentColor;
+    el2.style.textAlign   = expThumbAlign;
+    el2.style.letterSpacing = letterSpacing + 'px';
+  }
+  const textBgOpacity = parseInt(document.getElementById('expThumbTextBgOpacity')?.value || 60);
+  const textBlock = document.getElementById('expThumbPrevTextBlock');
+  if (textBlock) {
+    if (expThumbTextBgColor) {
+      const [r,g,b] = _hexToRgb(expThumbTextBgColor);
+      textBlock.style.background = `rgba(${r},${g},${b},${(textBgOpacity/100).toFixed(2)})`;
+      textBlock.style.padding    = '10px 16px';
+      textBlock.style.borderRadius = '6px';
+    } else {
+      textBlock.style.background   = '';
+      textBlock.style.padding      = '';
+      textBlock.style.borderRadius = '';
+    }
+    textBlock.style.top      = yPct + '%';
+    textBlock.style.textAlign = expThumbAlign;
+    textBlock.style.paddingLeft  = '20px';
+    textBlock.style.paddingRight = '20px';
+  }
+
+  const botA = (overlay / 100 * 0.88).toFixed(2);
+  const midA = (overlay / 100 * 0.25).toFixed(2);
+  const ovDiv = document.getElementById('expThumbPrevOverlay');
+  if (ovDiv) {
+    ovDiv.style.background =
+      `linear-gradient(to bottom,rgba(0,0,0,.04) 0%,rgba(0,0,0,${midA}) 38%,rgba(0,0,0,${botA}) 100%)`;
+  }
+
+  const bgType = document.querySelector('input[name="expThumbBgType"]:checked')?.value || 'flux';
+  const bgDiv  = document.getElementById('expThumbPrevBgImg');
+  const texDiv = document.getElementById('expThumbPrevTexture');
+  if (bgType === 'gradient' && bgDiv) {
+    const [r,g,b] = _hexToRgb(expThumbAccentColor);
+    bgDiv.style.backgroundImage =
+      `linear-gradient(135deg,rgb(8,12,25) 0%,rgba(${r},${g},${b},.18) 50%,rgb(8,12,25) 100%)`;
+    bgDiv.style.backgroundSize = '';
+    if (texDiv) texDiv.style.opacity = '.06';
+  } else if (bgType !== 'upload' && bgDiv) {
+    bgDiv.style.backgroundImage = '';
+    if (texDiv) texDiv.style.opacity = '.06';
+  }
+
+  const markEl = document.getElementById('expThumbPrevMark');
+  if (markEl) {
+    const name = watermark || _getDefaultExpBrandName();
+    markEl.textContent  = name ? `@${name.replace(/^@/,'')}` : '';
+    markEl.style.textAlign = expThumbAlign === 'right' ? 'right' : (expThumbAlign === 'left' ? 'left' : 'center');
+    markEl.style.paddingLeft  = '14px';
+    markEl.style.paddingRight = '14px';
+  }
+
+  if (_expThumbPreviewUrl) {
+    const _bgLive = document.getElementById('expThumbPrevBgImg');
+    if (_expThumbGeneratedBgUrl && _bgLive) {
+      _bgLive.style.backgroundImage = `url("${_expThumbGeneratedBgUrl}")`;
+      const _tex = document.getElementById('expThumbPrevTexture');
+      if (_tex) _tex.style.opacity = '0';
+    }
+    document.getElementById('expThumbRealPreview')?.classList.add('d-none');
+    const _mock = document.getElementById('expThumbPreview');
+    if (_mock) _mock.style.opacity = '1';
+  }
+}
+
+function _hexToRgb(hex) {
+  const h = hex.replace('#','');
+  if (h.length !== 6) return [200,180,50];
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+
+function _getDefaultExpBrandName() {
+  const sel = document.getElementById('expBrandSelect');
+  return sel?.options[sel.selectedIndex]?.textContent.replace(/\(기본\)/,'').trim() || '';
+}
+
+// ── 생성된 제목 후보(네이버판 "1. 제목" 형태) 자동 채우기 ─────
+function _populateExpThumbTitles() {
+  const text   = _expNaver || _expGoogle || '';
+  const picker = document.getElementById('expThumbTitlePicker');
+  const list   = document.getElementById('expThumbTitleList');
+  if (!text || !picker || !list) return;
+  const head    = text.slice(0, 400);
+  const matches = [...head.matchAll(/^\d+\.\s*\[?([^\[\]\n]+?)\]?\s*(?:—[^\n]*)?\s*$/gm)];
+  if (!matches.length) { picker.classList.add('d-none'); return; }
+  list.innerHTML = matches.slice(0, 3).map(m => {
+    const title = m[1].replace(/\*+/g, '').trim();
+    const esc   = title.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `<button type="button" class="btn btn-sm text-start py-1"
+                    style="border:1px solid #e2e8f0;font-size:.75rem;line-height:1.35;
+                           color:#444;background:#fafafa;border-radius:7px"
+                    onclick="_applyExpThumbTitle('${esc}')">
+              <i class="bi bi-arrow-right-short me-1 text-muted"></i>${title.slice(0,44)}${title.length>44?'…':''}
+            </button>`;
+  }).join('');
+  picker.classList.remove('d-none');
+}
+
+function _applyExpThumbTitle(title) {
+  const [l1, l2] = _splitExpThumbTitle(title);
+  const i1 = document.getElementById('expThumbLine1');
+  const i2 = document.getElementById('expThumbLine2');
+  if (i1) i1.value = l1;
+  if (i2) i2.value = l2;
+  updateExpThumbPreview();
+}
+
+function _splitExpThumbTitle(title) {
+  title = title.replace(/[\[\]「」『』（）()【】<>]/g, '').trim();
+  for (const sep of [' - ', ' — ', ': ', '? ', '! ', ' · ']) {
+    const idx = title.indexOf(sep);
+    if (idx > 2 && idx < title.length - 2) {
+      const hasP = sep.match(/[?!]/);
+      const l1 = title.slice(0, idx + (hasP ? 1 : 0)).trim().slice(0, 15);
+      const l2 = title.slice(idx + sep.length).trim().slice(0, 15);
+      if (l1 && l2) return [l1, l2];
+    }
+  }
+  const words = title.split(' ');
+  if (words.length >= 2) {
+    const half = Math.ceil(words.length / 2);
+    return [words.slice(0,half).join(' ').slice(0,15), words.slice(half).join(' ').slice(0,15)];
+  }
+  const mid = Math.ceil(title.length / 2);
+  return [title.slice(0, mid).slice(0,15), title.slice(mid).slice(0,15)];
+}
+
+// ── 썸네일 방식 모드 토글 (클래식 / AI 씬) ──────────────────────
+let _expThumbCharData  = null;   // 업로드한 브랜드 캐릭터 (base64 data URL)
+let _expMascotLoaded   = false;  // 등록된 브랜드 마스코트 자동 로드 여부(브랜드별)
+let _expThumbCharAuto  = false;  // 현재 캐릭터가 '등록 마스코트 자동로드'인지(수동 업로드=false)
+let _expThumbSceneMode = false;  // 현재 AI 씬 모드인지
+
+const EXP_SCENE_STYLE_HINT = {
+  cute_char:     '등록한 캐릭터가 있으면 주인공으로, 없으면 주제 소품·장면만 그립니다.',
+  pastel_person: '사람이 등장하는 부드러운 파스텔 일러스트. 등록 캐릭터는 쓰지 않습니다.',
+  photo_person:  '사람이 등장하는 실사 사진 느낌. 등록 캐릭터는 쓰지 않습니다.',
+  flat_object:   '사람 없이 주제 소품·아이콘만 그리는 플랫 정보성 일러스트.',
+  photo_object:  '사람 없이 주제 소품을 실사 사진 느낌으로 배치합니다.',
+};
+function onExpSceneStyleChange() {
+  const v = document.getElementById('expThumbScStyle')?.value || 'cute_char';
+  const usesChar = _expThumbSceneMode && v === 'cute_char';
+  document.getElementById('expThumbCharShared')?.classList.toggle('d-none', !usesChar);
+  const hint = document.getElementById('expThumbScStyleHint');
+  if (hint) hint.textContent = EXP_SCENE_STYLE_HINT[v] || '';
+  if (usesChar && !_expMascotLoaded) { _expMascotLoaded = true; _autoLoadExpMascot(); }
+}
+function setExpThumbMode(mode) {
+  const scene = mode === 'scene';
+  _expThumbSceneMode = scene;
+  document.getElementById('expThumbScenePanel')?.classList.toggle('d-none', !scene);
+  ['expThumbTabNav', 'expThumbTabBg', 'expThumbTabText', 'expThumbTabStyle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('d-none', scene);
+  });
+  if (!scene) switchExpThumbTab('bg');
+  const bt = document.getElementById('expThumbGenBtnText');
+  if (bt) bt.textContent = scene ? 'AI 씬 생성 (200P)' : '썸네일 미리보기 생성';
+  const _sub = document.getElementById('expThumbCharSubtitle');
+  if (_sub) _sub.textContent = 'AI 씬은 캐릭터를 장면에 맞게 자동으로 그립니다';
+  onExpSceneStyleChange();
+  if (scene) autofillExpScene(false);
+}
+
+// ── AI 씬: 경험 메모/장소로 필드 자동 채우기 ────────────────────
+function _expTypeLabel() {
+  const map = { travel: '여행기', food: '맛집·카페', review: '제품 후기', place: '장소·체험' };
+  return map[document.querySelector('input[name="expType"]:checked')?.value] || '';
+}
+function _firstExpTitle() {
+  const text = _expNaver || _expGoogle || '';
+  const m = [...text.slice(0, 400).matchAll(/^\d+\.\s*\[?([^\[\]\n]+?)\]?\s*(?:—[^\n]*)?\s*$/gm)];
+  return m.length ? m[0][1].replace(/\*+/g, '').trim() : '';
+}
+function autofillExpScene(force) {
+  const setV = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val && (force || !el.value.trim())) el.value = val;
+  };
+  const place = document.getElementById('expPlaceName')?.value.trim() || '';
+  const memo  = document.getElementById('expMemo')?.value.trim() || '';
+  const title = _firstExpTitle() || place || memo.slice(0, 40);
+  setV('expThumbScHeadline', title.slice(0, 40));
+  setV('expThumbScBadge', _expTypeLabel().slice(0, 20));
+  setV('expThumbScSub', (document.getElementById('expVisitAt')?.value.trim() || '').slice(0, 40));
+  let topic = place || title || '';
+  if (memo) topic = topic ? `${topic} — ${memo.slice(0, 40)}` : memo.slice(0, 80);
+  setV('expThumbScTopic', topic.slice(0, 80));
+}
+async function _autoLoadExpMascot() {
+  try {
+    const bid = document.getElementById('expBrandSelect')?.value || '';
+    const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_get") }}?brand_id=' + encodeURIComponent(bid));
+    const j = await res.json();
+    if (j.ok && j.mascots && j.mascots.length && !_expThumbCharData) {
+      const im = await fetch(j.mascots[0]);
+      const blob = await im.blob();
+      const rd = new FileReader();
+      rd.onload = e => { _setExpThumbChar(e.target.result); _expThumbCharAuto = true; };
+      rd.readAsDataURL(blob);
+    }
+  } catch (e) { /* 무시 — 등록 마스코트 없음 */ }
+}
+async function saveExpMascot() {
+  if (!_expThumbCharData) return;
+  const btn = document.getElementById('expThumbMascotSaveBtn');
+  const old = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 등록 중...';
+  try {
+    const res = await fetch('{{ url_for("create.blog_thumbnail_mascot_save") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        character_data: _expThumbCharData,
+        brand_id: document.getElementById('expBrandSelect')?.value || '',
+      }),
+    });
+    const j = await res.json();
+    _expThumbCharMsg(j.ok ? '브랜드 기본 캐릭터로 등록됐습니다.' : (j.message || '등록 실패'),
+                     j.ok ? 'ok' : 'err');
+  } catch (e) { _expThumbCharMsg('요청 실패: ' + e, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = old; }
+}
+function _setExpThumbChar(dataUrl) {
+  _expThumbCharData = dataUrl || null;
+  const tools = document.getElementById('expThumbCharTools');
+  const prev  = document.getElementById('expThumbCharPrev');
+  if (dataUrl) {
+    if (prev) prev.src = dataUrl;
+    tools?.classList.remove('d-none');
+  } else {
+    tools?.classList.add('d-none');
+  }
+}
+function onExpThumbCharUpload(inp) {
+  const f = inp.files && inp.files[0];
+  _expThumbCharAuto = false;
+  if (!f) { _setExpThumbChar(null); return; }
+  const r = new FileReader();
+  r.onload = e => _setExpThumbChar(e.target.result);
+  r.readAsDataURL(f);
+}
+function _expThumbCharMsg(text, kind) {
+  const el = document.getElementById('expThumbCharMsg');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'small mt-1 ' +
+    (kind === 'err' ? 'text-danger' : kind === 'ok' ? 'text-success' : 'text-muted');
+  el.classList.remove('d-none');
+}
+
+// ── 썸네일 실제 이미지 생성 ──────────────────────────────────
+let _expThumbPreviewUrl     = null;
+let _expThumbGeneratedBgUrl = '';
+let _expThumbBgUrl          = null;
+let _expThumbLastBgTopic    = '';
+
+async function generateExpThumbPreview() {
+  const _mode = document.querySelector('input[name="expThumbStyleMode"]:checked')?.value || 'classic';
+  const l1 = (_mode === 'scene'
+      ? document.getElementById('expThumbScHeadline')?.value.trim()
+      : document.getElementById('expThumbLine1')?.value.trim()) || '';
+  if (!l1) {
+    const errEl = document.getElementById('expThumbGenError');
+    if (errEl) { errEl.textContent = '메인 텍스트(헤드라인)를 먼저 입력하세요.'; errEl.classList.remove('d-none'); }
+    return;
+  }
+  document.getElementById('expThumbGenError')?.classList.add('d-none');
+
+  const btn      = document.getElementById('expThumbGenBtn');
+  const loading  = document.getElementById('expThumbGenLoading');
+  const loadTxt  = document.getElementById('expThumbGenLoadingText');
+  const real     = document.getElementById('expThumbRealPreview');
+  const mock     = document.getElementById('expThumbPreview');
+  const caption  = document.getElementById('expThumbPreviewCaption');
+  const btnText  = document.getElementById('expThumbGenBtnText');
+
+  if (btn)     { btn.disabled = true; }
+  if (btnText) btnText.textContent = '생성 중...';
+  if (loading) loading.classList.remove('d-none');
+  if (real)    real.classList.add('d-none');
+  if (mock)    mock.style.opacity = '.3';
+
+  const bgType    = document.querySelector('input[name="expThumbBgType"]:checked')?.value || 'flux';
+  const useFlux   = bgType === 'flux';
+  const watermark = document.getElementById('expThumbWatermark')?.value.trim() || _getDefaultExpBrandName();
+  const bgTopic   = document.getElementById('expThumbBgTopic')?.value.trim() || '';
+
+  if (loadTxt) {
+    loadTxt.textContent = useFlux
+      ? '배경 사진 생성 중... (약 10~20초)'
+      : '썸네일 합성 중...';
+  }
+
+  try {
+    let res;
+    if (_mode === 'scene') {
+      if (loadTxt) loadTxt.textContent = 'AI가 장면을 그리는 중... (약 15~30초)';
+      res = await fetch('{{ url_for("create.blog_thumbnail_scene") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          line1:          l1,
+          sub:            document.getElementById('expThumbScSub')?.value.trim() || '',
+          badge:          document.getElementById('expThumbScBadge')?.value.trim() || '',
+          cta:            document.getElementById('expThumbScCta')?.value.trim() || '',
+          theme:          document.getElementById('expThumbScTheme')?.value || 'baby_blue',
+          title_style:    document.getElementById('expThumbScTitleStyle')?.value || 'banner',
+          topic:          document.getElementById('expThumbScTopic')?.value.trim() || '',
+          scene_style:    document.getElementById('expThumbScStyle')?.value || 'cute_char',
+          brand_id:       document.getElementById('expBrandSelect')?.value || '',
+          character_data: _expThumbCharData || '',
+        }),
+      });
+    } else {
+      res = await fetch('{{ url_for("create.blog_thumbnail") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          line1:            l1,
+          line2:            document.getElementById('expThumbLine2')?.value.trim() || '',
+          brand_id:         document.getElementById('expBrandSelect')?.value || '',
+          brand_name:       watermark,
+          accent_color:     expThumbAccentColor,
+          use_flux:         useFlux,
+          use_quotes:       document.getElementById('expThumbUseQuotes')?.checked ?? false,
+          bg_topic:         bgTopic,
+          text_y_pct:       parseInt(document.getElementById('expThumbYPos')?.value   || 55),
+          font_size_pct:    parseInt(document.getElementById('expThumbFontSize')?.value || 115),
+          overlay_darkness: parseInt(document.getElementById('expThumbOverlay')?.value  || 78),
+          text_align:       expThumbAlign,
+          line1_color:      expThumbTextColor1,
+          letter_spacing:   parseInt(document.getElementById('expThumbLetterSpacing')?.value || 0),
+          text_bg_color:    expThumbTextBgColor,
+          text_bg_opacity:  parseInt(document.getElementById('expThumbTextBgOpacity')?.value || 60),
+          bg_upload_data:   (bgType === 'upload' && expThumbUploadedBgUrl) ? expThumbUploadedBgUrl : '',
+          blog_text:        (_expNaver || _expGoogle || '').slice(0, 800),
+          image_prompts:    '',
+          existing_bg_url:  (bgType === 'recent' && _expThumbSelectedRecentBg)
+                              ? _expThumbSelectedRecentBg
+                              : (useFlux && _expThumbBgUrl && bgTopic === _expThumbLastBgTopic) ? _expThumbBgUrl : '',
+        }),
+      });
+    }
+    const submit = await res.json();
+    if (!submit.ok) throw new Error(submit.message || '생성 실패');
+
+    let data;
+    if (submit.async_mode) {
+      const statusUrl = _mode === 'scene'
+        ? '{{ url_for("create.blog_thumbnail_scene_status", creation_id="") }}'
+        : '{{ url_for("create.blog_thumbnail_status", creation_id="") }}';
+      data = await pollTaskStatus(statusUrl + submit.id);
+    } else {
+      data = submit;
+    }
+
+    _expThumbPreviewUrl = data.url;
+    if (data.bg_url) {
+      _expThumbBgUrl       = data.bg_url;
+      _expThumbLastBgTopic = bgTopic;
+    }
+    _expThumbGeneratedBgUrl = data.bg_url || '';
+
+    const imgEl = document.getElementById('expThumbRealImg');
+    if (imgEl) imgEl.src = data.url;
+    if (real)  real.classList.remove('d-none');
+    if (mock)  mock.style.opacity = '0';
+
+    if (btnText) btnText.textContent = '재생성';
+    if (caption) caption.innerHTML =
+      `<i class="bi bi-check-circle-fill me-1" style="color:#22c55e"></i>실제 생성된 이미지` +
+      (submit.cost ? ` · ${submit.cost}P 사용` : '');
+    document.getElementById('expThumbDownloadBtn')?.classList.remove('d-none');
+
+  } catch (e) {
+    const errEl = document.getElementById('expThumbGenError');
+    if (errEl) { errEl.textContent = '생성 실패: ' + e.message; errEl.classList.remove('d-none'); }
+    if (mock)  mock.style.opacity = '1';
+    if (btnText) btnText.textContent = '다시 시도';
+  } finally {
+    if (btn)     btn.disabled = false;
+    if (loading) loading.classList.add('d-none');
+  }
+}
+
+function _syncExpThumbBrandMark() {
+  const wm = document.getElementById('expThumbWatermark');
+  if (wm && !wm.value) {
+    wm.placeholder = _getDefaultExpBrandName() || '브랜드명';
+  }
+  updateExpThumbPreview();
+}
+
+function _dlProxy(url, filename) {
+  const a = document.createElement('a');
+  a.href = '/download-proxy?url=' + encodeURIComponent(url) +
+           '&filename=' + encodeURIComponent(filename || 'download');
+  a.download = filename || 'download';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 </script>
 {% endblock %}
