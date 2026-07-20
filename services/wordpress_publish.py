@@ -392,6 +392,11 @@ def create_full_post(supabase, brand_id: str, google_text: str, *,
         logger.error('[WP] 완성본 발행 예외 brand=%s: %s', brand_id, e, exc_info=True)
         return {'ok': False, 'message': '발행 중 오류가 발생했습니다.'}
 
+    if not isinstance(post, dict):
+        logger.error('[WP] 완성본 발행 — 예상치 못한 응답(dict 아님): %s', str(post)[:200])
+        return {'ok': False,
+                'message': '워드프레스가 예상치 못한 응답을 반환했습니다. '
+                           '외부 연동에서 워드프레스를 해제 후 다시 연결해주세요.'}
     post_id = post.get('id')
     edit_link = f'{client.site}/wp-admin/post.php?post={post_id}&action=edit' if post_id else None
     logger.info('[WP] 완성본 발행 완료 brand=%s post=%s imgs=%d featured=%s',

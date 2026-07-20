@@ -69,8 +69,8 @@ class WordPressClient:
             return f'{self.site}/?rest_route=/wp/v2{path}'
         return f'{self.site}/wp-json/wp/v2{path}'
 
-    def _request(self, method: str, path: str, *,
-                 params: dict | None = None, json_body: dict | None = None):
+    def _raw_request(self, method: str, path: str, *,
+                     params: dict | None = None, json_body: dict | None = None):
         url = self._url(path)
         try:
             r = requests.request(
@@ -101,6 +101,22 @@ class WordPressClient:
             return r.json()
         except ValueError:
             raise WordPressError('invalid_response', r.status_code, 'non-JSON response')
+
+    def _request(self, method: str, path: str, *,
+                 params: dict | None = None, json_body: dict | None = None):
+        """_raw_request + 자가치유.
+
+        쓰기(POST/PUT/PATCH/DELETE) 응답이 list 로 오면 rest_route 방식이 잘못
+        잡힌 것(퍼머링크 켜진 사이트인데 ?rest_route= 로 POST 가 컬렉션으로
+        오라우팅)이므로, 경로 방식을 뒤집어 1회 재시도한다.
+        GET 의 list(목록 응답)는 정상이므로 건드리지 않는다.
+        """
+        result = self._raw_request(method, path, params=params, json_body=json_body)
+        if method.upper() != 'GET' and isinstance(result, list):
+            logger.info('[WP] %s %s 응답이 list — rest_route 모드 전환 재시도', method, path)
+            self.use_rest_route = not self.use_rest_route
+            result = self._raw_request(method, path, params=params, json_body=json_body)
+        return result
 
     # ── 엔드포인트 ────────────────────────────────────────────
     def verify(self) -> dict:
@@ -162,6 +178,17 @@ class WordPressClient:
 
     def upload_media(self, filename: str, content: bytes,
                      mime: str = 'image/jpeg') -> dict:
+        """POST /media — 이미지 바이너리 업로드. list 응답(rest_route 오라우팅)이면
+        경로 방식을 뒤집어 1회 재시도한다."""
+        media = self._do_upload_media(filename, content, mime)
+        if isinstance(media, list):
+            logger.info('[WP] /media 응답이 list — rest_route 모드 전환 재시도')
+            self.use_rest_route = not self.use_rest_route
+            media = self._do_upload_media(filename, content, mime)
+        return media
+
+    def _do_upload_media(self, filename: str, content: bytes,
+                         mime: str = 'image/jpeg') -> dict:
         """POST /media — 이미지 바이너리를 미디어 라이브러리에 업로드.
 
         _request 는 JSON 전용이라, 바이너리 업로드는 별도로 처리한다.
