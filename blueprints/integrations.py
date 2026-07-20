@@ -559,3 +559,89 @@ def wordpress_go_live(brand_id, post_id):
     """
     result = publish_existing_post(current_app.supabase, brand_id, post_id)
     return jsonify(**result)
+
+
+@integrations_bp.route('/wordpress/test', methods=['GET'])
+@login_required
+def wordpress_test():
+    """WP 연동 진단 — 테스트 이미지 업로드 + 테스트 글 생성을 각 단계별로 시도하고
+    결과(dict/list, 리다이렉트로 인한 site 승격 여부 등)를 상세히 반환한다.
+
+    사용: /integrations/wordpress/test?brand_id=<브랜드ID>
+    (블로그 전체 흐름 없이 발행 파이프라인만 빠르게 반복 테스트하기 위한 진단용)
+    """
+    from services.wordpress_connection import get_connection, get_client_for_user
+    brand_id = (request.args.get('brand_id') or '').strip()
+    if not brand_id:
+        return jsonify(ok=False, message='brand_id 쿼리가 필요합니다. 예: ?brand_id=xxxx')
+
+    out = {'brand_id': brand_id, 'steps': {}}
+
+    def _short(v, n=300):
+        return v if isinstance(v, (dict, list, int, bool, type(None))) else str(v)[:n]
+
+    try:
+        conn = get_connection(brand_id, supabase=current_app.supabase)
+        if not conn:
+            return jsonify(ok=False, message='이 브랜드에 워드프레스 연결이 없습니다.', **out)
+        out['connection'] = {
+            'site_url':       conn.get('site_url'),
+            'use_rest_route': conn.get('use_rest_route'),
+            'wp_username':    conn.get('wp_username'),
+        }
+        client = get_client_for_user(brand_id, supabase=current_app.supabase)
+        out['client_site_initial'] = client.site
+        out['client_rest_route_initial'] = client.use_rest_route
+
+        # 1) verify
+        try:
+            me = client.verify()
+            out['steps']['1_verify'] = {
+                'ok': isinstance(me, dict), 'type': type(me).__name__,
+                'user': me.get('name') if isinstance(me, dict) else _short(me)}
+        except Exception as e:
+            out['steps']['1_verify'] = {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+
+        # 2) 테스트 이미지 업로드
+        media_id, media_url = None, None
+        try:
+            from PIL import Image
+            from io import BytesIO
+            buf = BytesIO()
+            Image.new('RGB', (600, 400), (61, 122, 68)).save(buf, format='PNG')
+            media = client.upload_media('maesil_test.png', buf.getvalue(), 'image/png')
+            ok = isinstance(media, dict)
+            out['steps']['2_upload_media'] = {
+                'ok': ok, 'type': type(media).__name__,
+                'id': media.get('id') if ok else None,
+                'source_url': media.get('source_url') if ok else None,
+                'raw_if_not_dict': None if ok else _short(media)}
+            if ok:
+                media_id, media_url = media.get('id'), media.get('source_url')
+        except Exception as e:
+            out['steps']['2_upload_media'] = {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+        out['client_site_after_upload'] = client.site
+        out['client_rest_route_after_upload'] = client.use_rest_route
+
+        # 3) 테스트 글 생성 (이미지 삽입 + 대표이미지)
+        try:
+            content = '<p>매실K 워드프레스 발행 테스트입니다.</p>'
+            if media_url:
+                content += f'<figure><img src="{media_url}" alt="test"/></figure>'
+            post = client.create_post(title='[테스트] 매실K WP 발행',
+                                      content=content, status='draft',
+                                      featured_media=media_id)
+            ok = isinstance(post, dict)
+            out['steps']['3_create_post'] = {
+                'ok': ok, 'type': type(post).__name__,
+                'id': post.get('id') if ok else None,
+                'link': post.get('link') if ok else None,
+                'raw_if_not_dict': None if ok else _short(post)}
+        except Exception as e:
+            out['steps']['3_create_post'] = {'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'}
+        out['client_site_final'] = client.site
+
+        return jsonify(ok=True, **out)
+    except Exception as e:
+        logger.error('[WP-TEST] 예외: %s', e, exc_info=True)
+        return jsonify(ok=False, message=f'{type(e).__name__}: {str(e)[:250]}', **out)
