@@ -533,14 +533,20 @@ def wordpress_publish_full():
     body_images = [u for u in body_images if isinstance(u, str) and u] \
         if isinstance(body_images, list) else []
 
-    result = create_full_post(
-        current_app.supabase, brand_id,
-        data.get('google_text') or '',
-        body_image_urls=body_images,
-        thumbnail_url=(data.get('thumbnail_url') or '').strip() or None,
-        status=data.get('status') or 'draft',
-        title_override=(data.get('title') or '').strip() or None,
-    )
+    # 어떤 예외든 원인을 그대로 노출 (일반 500 '서버 오류'로 뭉개지지 않게 — 진단용)
+    try:
+        result = create_full_post(
+            current_app.supabase, brand_id,
+            data.get('google_text') or '',
+            body_image_urls=body_images,
+            thumbnail_url=(data.get('thumbnail_url') or '').strip() or None,
+            status=data.get('status') or 'draft',
+            title_override=(data.get('title') or '').strip() or None,
+        )
+    except Exception as e:
+        logger.error('[WP] publish-full 예외 brand=%s: %s', brand_id, e, exc_info=True)
+        return jsonify(ok=False,
+                       message=f'발행 실패: {e.__class__.__name__}: {str(e)[:250]}')
     return jsonify(**result)
 
 
