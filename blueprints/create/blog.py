@@ -16,7 +16,7 @@ from models import (
     BLOG_LENGTH_COSTS, BLOG_ANGLE_OPTIONS, RELATION_MODE_OPTIONS,
     PRODUCT_CATEGORY_OPTIONS, get_blog_cost,
 )
-from services.regulatory import combine_avoid_words, append_disclaimer
+from services.regulatory import combine_avoid_words
 from services.tz_utils import now_kst
 
 logger = logging.getLogger(__name__)
@@ -513,10 +513,9 @@ def blog_generate():
         # 구글판이 섞여 출력이 길어져 메인 서버를 오래 블로킹하므로 백그라운드 처리
         # (services/async_generation.py 공용 헬퍼 — experience_blog/thumbnail과 동일 패턴)
         from services.async_generation import submit_async_generation, AsyncSubmitError
-        from services.regulatory import get_disclaimer
         from tasks.blog_text_task import generate_blog_both
 
-        disclaimer = get_disclaimer(category)
+        disclaimer = ''   # AI 생성/규정 안내문 본문 미부착 (사용자 요청)
         extra_row = {k: v for k, v in {**extra_fields, 'brand_id': brand['id']}.items()
                     if v is not None}
         try:
@@ -539,9 +538,9 @@ def blog_generate():
         return jsonify(ok=True, id=creation_id, async_mode=True,
                        cost=cost, category=category)
 
-    # ── 네이버 단독(기존 동작, 무변경) — 동기 처리 ──
+    # ── 네이버 단독(기존 동작) — 동기 처리 ──
     def _post(text: str) -> str:
-        return append_disclaimer(text, category)
+        return text   # AI 생성/규정 안내문 미부착 (사용자 요청)
 
     result = run_text_generation(
         'blog', brand, input_data, system, user,

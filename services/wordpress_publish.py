@@ -53,6 +53,27 @@ def _marker_only(s: str) -> bool:
     return not re.sub(r'[*_#\s]', '', s or '')
 
 
+def _strip_ai_disclaimer(text: str) -> str:
+    """생성 시 본문 끝에 붙은 AI/규정 안내문(맨 끝 '---' + '⚠️ …' 블록)을 제거.
+    이미 생성·저장된 글도 발행 직전에 벗겨내 워드프레스에 안내문이 안 나가게 한다."""
+    if not text:
+        return text
+    return re.sub(r'\n+\s*-{3,}\s*\n+\s*⚠️[\s\S]*$', '', text).rstrip()
+
+
+def _parse_tags(raw: str) -> list:
+    """'태그:' 값 → 태그 이름 리스트.
+    쉼표/줄바꿈/가운뎃점/해시태그(#) 어떤 구분자든 대응, 마크다운·# 장식 제거."""
+    parts = re.split(r'[,\n·、#]+', raw or '')
+    out, seen = [], set()
+    for p in parts:
+        t = _clean_inline(p).lstrip('#').strip()
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            out.append(t)
+    return out[:10]
+
+
 def parse_google_post(text: str) -> dict:
     """구글(워드프레스)판 원문 → {title, excerpt, slug, tags[], html}.
 
@@ -82,9 +103,8 @@ def parse_google_post(text: str) -> dict:
                 title = ln.strip().lstrip('#').strip()[:120]
                 break
 
-    # 태그 파싱 (쉼표/가운뎃점/줄바꿈 구분)
-    tags_raw = sections.get('tags') or ''
-    tags = [t.strip().lstrip('#') for t in re.split(r'[,\n·、]', tags_raw) if t.strip()]
+    # 태그 파싱 (쉼표/가운뎃점/줄바꿈/해시태그 구분)
+    tags = _parse_tags(sections.get('tags') or '')
 
     # FAQ 를 본문 뒤에 붙임 (소제목이 없으면 헤더 추가)
     combined_md = body_md
@@ -137,7 +157,7 @@ def create_google_post(supabase, brand_id: str, google_text: str, *,
     if not client:
         return {'ok': False, 'message': '먼저 이 브랜드의 워드프레스를 연결해주세요.'}
 
-    raw = (google_text or '').strip()
+    raw = _strip_ai_disclaimer((google_text or '').strip())
     if not raw:
         return {'ok': False, 'message': '발행할 구글(워드프레스)판 내용이 없습니다.'}
 
@@ -314,7 +334,7 @@ def create_full_post(supabase, brand_id: str, google_text: str, *,
     if not client:
         return {'ok': False, 'message': '먼저 이 브랜드의 워드프레스를 연결해주세요.'}
 
-    raw = (google_text or '').strip()
+    raw = _strip_ai_disclaimer((google_text or '').strip())
     if not raw:
         return {'ok': False, 'message': '발행할 구글(워드프레스)판 내용이 없습니다.'}
     if status not in ('draft', 'publish', 'pending'):
@@ -326,8 +346,7 @@ def create_full_post(supabase, brand_id: str, google_text: str, *,
     slug    = _slugify(sec.get('slug') or '')
     body_md = (sec.get('body') or '').strip() or raw
     faq_md  = (sec.get('faq') or '').strip()
-    tags = [t.strip().lstrip('#')
-            for t in re.split(r'[,\n·、]', sec.get('tags') or '') if t.strip()]
+    tags = _parse_tags(sec.get('tags') or '')
 
     # ── 본문 이미지 업로드 (썸네일 제외) ──────────────────────
     uploaded = []

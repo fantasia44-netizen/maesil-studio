@@ -254,30 +254,42 @@ class WordPressClient:
         except ValueError:
             raise WordPressError('invalid_response', r.status_code, 'non-JSON response')
 
+    def _search_tag_id(self, name: str):
+        """GET /tags?search= → 이름이 정확히 일치하는 태그 ID (없으면 None)."""
+        found = self._request('GET', '/tags', params={'search': name, 'per_page': 20})
+        for t in (found or []):
+            if isinstance(t, dict) and (t.get('name') or '').strip().lower() == name.lower():
+                return t.get('id')
+        return None
+
     def resolve_tag_ids(self, names: list) -> list:
         """태그 이름 목록 → 태그 ID 목록 (없으면 생성). best-effort — 실패는 건너뜀."""
         ids: list = []
         for raw in (names or [])[:10]:
-            name = (raw or '').strip()
+            name = (raw or '').strip().lstrip('#').strip()
             if not name:
                 continue
             try:
-                found = self._request('GET', '/tags',
-                                      params={'search': name, 'per_page': 5})
-                match = None
-                for t in (found or []):
-                    if (t.get('name') or '').strip().lower() == name.lower():
-                        match = t
-                        break
-                if match:
-                    ids.append(match['id'])
+                tid = self._search_tag_id(name)          # ① 기존 태그 검색
+                if tid is None:
+                    try:                                  # ② 없으면 생성
+                        created = self._request('POST', '/tags', json_body={'name': name})
+                        if isinstance(created, dict):
+                            tid = created.get('id')
+                    except WordPressError as e:
+                        # 이미 존재(term_exists)하거나 검색이 놓친 경우 → 재검색으로 확보
+                        if e.code == 'term_exists' or e.status == 400:
+                            tid = self._search_tag_id(name)
+                        else:
+                            raise
+                if tid:
+                    ids.append(tid)
                 else:
-                    created = self._request('POST', '/tags', json_body={'name': name})
-                    if created.get('id'):
-                        ids.append(created['id'])
+                    logger.warning('[WP] 태그 확보 실패(%s) — 검색·생성 모두 미해결', name)
             except WordPressError as e:
                 logger.warning('[WP] 태그 처리 실패(%s): %s', name, e)
                 continue
+        logger.info('[WP] 태그 해석 %d/%d개 성공', len(ids), len([n for n in (names or []) if (n or '').strip()]))
         return ids
 
 
