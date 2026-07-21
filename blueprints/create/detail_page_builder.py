@@ -9,6 +9,29 @@ from services.detail_page_templates import list_templates, get_template
 
 logger = logging.getLogger(__name__)
 
+
+def _owned_product(supabase, product_id: str) -> dict | None:
+    """소유권 검증 포함 — product.py::_get_product 와 동일한 OR 매칭 정책.
+    검증 없이 id로만 조회하면 타 사용자/팀 상품 정보가 그대로 노출된다."""
+    if not product_id:
+        return None
+    try:
+        res = supabase.table('products').select('*').eq('id', product_id).single().execute()
+        p = res.data
+    except Exception:
+        return None
+    if not p:
+        return None
+    if getattr(current_user, 'is_superadmin', False):
+        return p
+    if (getattr(current_user, 'operator_id', None)
+            and p.get('operator_id') == current_user.operator_id):
+        return p
+    if p.get('user_id') == str(current_user.id):
+        return p
+    return None
+
+
 # ── 블록 역할별 텍스트 생성 가이드 ──────────────────────────
 _ROLE_GUIDE = {
     'hook':       '강렬하고 공감을 유발하는 헤드라인을 1~3줄로 작성하세요. 질문형이나 강조형 문장을 사용하세요.',
@@ -81,17 +104,19 @@ def dpb_products():
     """브랜드별 등록 상품 목록 JSON 반환"""
     supabase = current_app.supabase
     brand_id = request.args.get('brand_id', '').strip()
+    from blueprints.create._base import get_accessible_brands
+    accessible_ids = [b['id'] for b in get_accessible_brands(supabase)]
+    if brand_id and brand_id not in accessible_ids:
+        brand_id = ''   # 소유 안 한 브랜드 — 전체 접근 가능 브랜드로 폴백
     try:
         q = supabase.table('products').select('id,name,description,features,category') \
             .eq('is_active', True)
         if brand_id:
             q = q.eq('brand_id', brand_id)
         else:
-            # 브랜드 미지정 시 접근 가능한 전체 브랜드 상품
-            from blueprints.create._base import get_accessible_brands
-            brand_ids = [b['id'] for b in get_accessible_brands(supabase)]
-            if brand_ids:
-                q = q.in_('brand_id', brand_ids)
+            # 브랜드 미지정(또는 무효) 시 접근 가능한 전체 브랜드 상품
+            if accessible_ids:
+                q = q.in_('brand_id', accessible_ids)
         result = q.order('created_at', desc=True).limit(50).execute()
         products = result.data or []
         # features가 list면 join
@@ -437,11 +462,7 @@ def dpb_section_feature3_autofill():
         return jsonify(ok=False, message='product_id가 필요합니다.')
 
     # 제품 로드
-    try:
-        res = supabase.table('products').select('*').eq('id', product_id).single().execute()
-        product = res.data
-    except Exception:
-        return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
+    product = _owned_product(supabase, product_id)
     if not product:
         return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
 
@@ -630,9 +651,7 @@ def dpb_story_product_images():
     if not product_id:
         return jsonify(ok=True, images=[])
     try:
-        res = supabase.table('products').select('images,image_url,thumbnail_url') \
-                      .eq('id', product_id).single().execute()
-        p = res.data or {}
+        p = _owned_product(supabase, product_id) or {}
         imgs = []
         # images 필드 (배열 or JSON)
         raw = p.get('images')
@@ -670,11 +689,7 @@ def dpb_story_plan():
     if not product_id:
         return jsonify(ok=False, message='product_id가 필요합니다.')
 
-    try:
-        res = supabase.table('products').select('*').eq('id', product_id).single().execute()
-        product = res.data
-    except Exception:
-        return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
+    product = _owned_product(supabase, product_id)
     if not product:
         return jsonify(ok=False, message='제품을 찾을 수 없습니다.')
 

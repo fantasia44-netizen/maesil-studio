@@ -14,10 +14,21 @@ logger = logging.getLogger(__name__)
 
 
 def _get_product(supabase, product_id: str):
+    """소유권 검증 포함 — product.py::_get_product 와 동일한 OR 매칭 정책."""
     if not product_id:
         return None
     r = supabase.table('products').select('*').eq('id', product_id).execute()
-    return r.data[0] if r.data else None
+    p = r.data[0] if r.data else None
+    if not p:
+        return None
+    if getattr(current_user, 'is_superadmin', False):
+        return p
+    if (getattr(current_user, 'operator_id', None)
+            and p.get('operator_id') == current_user.operator_id):
+        return p
+    if p.get('user_id') == str(current_user.id):
+        return p
+    return None
 
 
 def _first_product_image(product: dict | None) -> str | None:
@@ -108,7 +119,7 @@ def banner_analyze():
 def banner_products():
     supabase = current_app.supabase
     brand_id = request.args.get('brand_id', '').strip()
-    if not brand_id:
+    if not brand_id or not get_brand_by_id(supabase, brand_id):
         return jsonify(ok=True, products=[])
     r = supabase.table('products').select('id,name,category,images').eq(
         'brand_id', brand_id
@@ -204,6 +215,9 @@ def banner_generate():
         product = _get_product(supabase, product_id)
         product_url = _first_product_image(product)
 
+    if brand_id and not get_brand_by_id(supabase, brand_id):
+        brand_id = ''   # 소유 안 한 브랜드로 태깅 방지
+
     creation_id = str(uuid.uuid4())
     try:
         _row = {
@@ -286,6 +300,8 @@ def banner_text_generate():
     brand_id    = (data.get('brand_id')         or '').strip()
     product_id  = (data.get('product_id')       or '').strip()
     use_product = bool(data.get('use_product_img', True))
+    if brand_id and not get_brand_by_id(supabase, brand_id):
+        brand_id = ''   # 소유 안 한 브랜드로 태깅 방지
 
     if not headline:
         return jsonify(ok=False, message='제목 문구가 필요합니다.')
@@ -379,6 +395,8 @@ def banner_product_generate():
     data     = request.get_json(force=True) or {}
 
     brand_id        = (data.get('brand_id')         or '').strip()
+    if brand_id and not get_brand_by_id(supabase, brand_id):
+        brand_id = ''   # 소유 안 한 브랜드로 태깅 방지
     product_id      = (data.get('product_id')       or '').strip()
     headline        = (data.get('headline')         or '').strip()
     subline         = (data.get('subline')          or '').strip()

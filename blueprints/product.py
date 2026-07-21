@@ -97,7 +97,10 @@ def save_new():
     brands   = get_accessible_brands(supabase)
     data     = request.get_json(force=True) or {}
 
+    accessible_ids = {b['id'] for b in brands}
     brand_id = data.get('brand_id') or None
+    if brand_id and brand_id not in accessible_ids:
+        return jsonify(ok=False, message='유효하지 않은 브랜드입니다.')
     if not brand_id and brands:
         default  = next((b for b in brands if b.get('is_default')), brands[0] if brands else None)
         brand_id = default['id'] if default else None
@@ -167,6 +170,7 @@ def edit(product_id):
 
 
 def _save_product(supabase, brands, product_id):
+    accessible_ids = {b['id'] for b in brands}
     brand_id = request.form.get('brand_id') or None
     # brand_id 없으면 기본 브랜드
     if not brand_id and brands:
@@ -186,6 +190,9 @@ def _save_product(supabase, brands, product_id):
 
     if not data['name']:
         flash('상품명을 입력하세요.', 'warning')
+        return render_template('product/edit.html', product=data, brands=brands)
+    if brand_id and brand_id not in accessible_ids:
+        flash('유효하지 않은 브랜드입니다.', 'danger')
         return render_template('product/edit.html', product=data, brands=brands)
 
     try:

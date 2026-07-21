@@ -51,13 +51,25 @@ def _accessible_products(supabase, brand_id: str | None = None) -> list:
 
 
 def _get_product(supabase, product_id: str) -> dict | None:
+    """소유권 검증 포함 — product.py::_get_product 와 동일한 OR 매칭 정책.
+    검증 없이 id로만 조회하면 타 사용자/팀 상품 정보가 그대로 노출된다."""
     if not product_id:
         return None
     try:
         res = supabase.table('products').select('*').eq('id', product_id).limit(1).execute()
-        return res.data[0] if res.data else None
+        p = res.data[0] if res.data else None
     except Exception:
         return None
+    if not p:
+        return None
+    if getattr(current_user, 'is_superadmin', False):
+        return p
+    if (getattr(current_user, 'operator_id', None)
+            and p.get('operator_id') == current_user.operator_id):
+        return p
+    if p.get('user_id') == str(current_user.id):
+        return p
+    return None
 
 
 def _recent_blog_creations(supabase, user_id: str, brand_id: str | None,
@@ -189,7 +201,7 @@ def _related_creation_payload(supabase, ref_id: str) -> dict | None:
     try:
         r = supabase.table('creations').select(
             'id,output_data,input_data'
-        ).eq('id', ref_id).limit(1).execute()
+        ).eq('id', ref_id).eq('user_id', current_user.id).limit(1).execute()
         if not r.data:
             return None
         row = r.data[0]
@@ -912,6 +924,8 @@ def blog_thumbnail():
     # ── 유료 경로: FLUX 신규 배경 생성 — 워커 제출 ───────────────
     # brand_id 자동 결정 (creations NOT NULL 제약 회피 — 운영자 환경 호환)
     _brand_id_for_thumb = (data.get('brand_id') or '').strip()
+    if _brand_id_for_thumb and not get_brand_by_id(current_app.supabase, _brand_id_for_thumb):
+        _brand_id_for_thumb = ''   # 소유 안 한 브랜드로 태깅 방지
     if not _brand_id_for_thumb:
         try:
             _default = get_default_brand(current_app.supabase)
@@ -1188,6 +1202,8 @@ def blog_thumbnail_mascot_save():
 
     # 현재 선택된 브랜드에 귀속 (없으면 기본 브랜드)
     brand_id = (data.get('brand_id') or '').strip() or None
+    if brand_id and not get_brand_by_id(current_app.supabase, brand_id):
+        brand_id = None   # 소유 안 한 브랜드로 태깅 방지
     if not brand_id:
         try:
             brand_id = (get_default_brand(current_app.supabase) or {}).get('id') or None

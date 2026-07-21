@@ -131,13 +131,24 @@ def build_user_prompt(label: str, type_guide: str, brand: dict,
 
 
 def fetch_product(supabase, product_id: str) -> dict | None:
+    """소유권 검증 포함 — product.py::_get_product 와 동일한 OR 매칭 정책."""
     if not product_id:
         return None
     try:
         res = supabase.table('products').select('*').eq('id', product_id).execute()
-        return res.data[0] if res.data else None
+        p = res.data[0] if res.data else None
     except Exception:
         return None
+    if not p:
+        return None
+    if getattr(current_user, 'is_superadmin', False):
+        return p
+    if (getattr(current_user, 'operator_id', None)
+            and p.get('operator_id') == current_user.operator_id):
+        return p
+    if p.get('user_id') == str(current_user.id):
+        return p
+    return None
 
 
 def run_promo_generation(doc_type: str, type_meta: dict, type_guide: str,

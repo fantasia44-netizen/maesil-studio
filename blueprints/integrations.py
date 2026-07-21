@@ -129,6 +129,20 @@ def _can_manage() -> bool:
     return getattr(current_user, 'is_operator_admin', False)
 
 
+def _owned_brand_or_none(brand_id: str) -> dict | None:
+    """brand_id 가 현재 로그인 사용자(팀 포함)가 접근 가능한 브랜드인지 검증.
+
+    워드프레스 라우트들이 요청의 brand_id를 그대로 신뢰하면 다른 팀의 브랜드
+    ID만 알아도 그 브랜드의 워드프레스 연결(사이트 주소·자격증명)에 접근/발행
+    할 수 있는 IDOR가 생긴다 — 반드시 이 함수를 거쳐야 한다.
+    """
+    if not brand_id:
+        return None
+    from blueprints.create._base import get_brand_by_id
+    sb = current_app.supabase
+    return get_brand_by_id(sb, brand_id) if sb else None
+
+
 @integrations_bp.route('/')
 @login_required
 def index():
@@ -325,6 +339,12 @@ def import_apply():
         flash('DB 연결이 없어 가져오기를 진행할 수 없습니다.', 'danger')
         return redirect(url_for('integrations.import_list'))
 
+    if brand_id:
+        from blueprints.create._base import get_accessible_brands
+        if brand_id not in {b['id'] for b in get_accessible_brands(sb)}:
+            flash('유효하지 않은 브랜드입니다.', 'danger')
+            return redirect(url_for('integrations.import_list'))
+
     # 이미 가져온 것 사전 조회 (중복 차단)
     existing: set[str] = set()
     try:
@@ -429,9 +449,7 @@ def wordpress_brand_connect(brand_id):
         flash('워드프레스 연결은 팀 관리자만 설정할 수 있습니다.', 'warning')
         return redirect(url_for('integrations.index', wp_brand_id=brand_id))
 
-    from blueprints.create._base import get_brand_by_id
-    sb = current_app.supabase
-    brand = get_brand_by_id(sb, brand_id) if sb else None
+    brand = _owned_brand_or_none(brand_id)
     if not brand:
         flash('브랜드를 찾을 수 없습니다.', 'danger')
         return redirect(url_for('integrations.index'))
@@ -477,6 +495,9 @@ def wordpress_brand_disconnect(brand_id):
     if not _can_manage():
         flash('연결 해제는 팀 관리자만 할 수 있습니다.', 'warning')
         return redirect(url_for('integrations.index', wp_brand_id=brand_id))
+    if not _owned_brand_or_none(brand_id):
+        flash('브랜드를 찾을 수 없습니다.', 'danger')
+        return redirect(url_for('integrations.index'))
 
     try:
         wp_disconnect_conn(brand_id)
@@ -499,6 +520,8 @@ def wordpress_publish():
     brand_id = (data.get('brand_id') or '').strip()
     if not brand_id:
         return jsonify(ok=False, message='브랜드를 선택해주세요.'), 400
+    if not _owned_brand_or_none(brand_id):
+        return jsonify(ok=False, message='브랜드를 찾을 수 없습니다.'), 404
 
     result = create_google_post(
         current_app.supabase, brand_id,
@@ -528,6 +551,8 @@ def wordpress_publish_full():
     brand_id = (data.get('brand_id') or '').strip()
     if not brand_id:
         return jsonify(ok=False, message='브랜드를 선택해주세요.'), 400
+    if not _owned_brand_or_none(brand_id):
+        return jsonify(ok=False, message='브랜드를 찾을 수 없습니다.'), 404
 
     body_images = data.get('body_images')
     body_images = [u for u in body_images if isinstance(u, str) and u] \
@@ -557,6 +582,8 @@ def wordpress_go_live(brand_id, post_id):
 
     create_google_post로 새 글을 또 만들지 않고, 같은 post_id의 상태만 바꾼다.
     """
+    if not _owned_brand_or_none(brand_id):
+        return jsonify(ok=False, message='브랜드를 찾을 수 없습니다.'), 404
     result = publish_existing_post(current_app.supabase, brand_id, post_id)
     return jsonify(**result)
 
@@ -574,6 +601,8 @@ def wordpress_test():
     brand_id = (request.args.get('brand_id') or '').strip()
     if not brand_id:
         return jsonify(ok=False, message='brand_id 쿼리가 필요합니다. 예: ?brand_id=xxxx')
+    if not _owned_brand_or_none(brand_id):
+        return jsonify(ok=False, message='브랜드를 찾을 수 없습니다.'), 404
 
     out = {'brand_id': brand_id, 'steps': {}}
 
