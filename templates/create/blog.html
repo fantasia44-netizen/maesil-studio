@@ -2156,6 +2156,13 @@ function goStep(n, pushHistory = true) {
   for (let i = 1; i <= 5; i++)
     document.getElementById('step' + i).classList.toggle('d-none', i !== n);
   updateStepIndicator(n);
+  // step3(글 초안) 자가치유: 글이 이미 있으면 로딩 스피너 대신 본문을 보여준다.
+  //   (이미지 재작업으로 바로 step4에 진입했다가 뒤로가기로 step3에 오면
+  //    step3가 기본 로딩 상태로 남아 '글이 삭제된 듯 무한로딩'되던 버그 방지)
+  if (n === 3 && (blogText || blogGoogleText)) {
+    document.getElementById('step3Loading')?.classList.add('d-none');
+    document.getElementById('step3Content')?.classList.remove('d-none');
+  }
   // 썸네일 에디터가 기본으로 펼쳐져 있으므로, step4 진입 시 제목 후보를 채워둠
   if (n === 4 && thumbEnabled && typeof _populateThumbTitles === 'function') {
     _populateThumbTitles();
