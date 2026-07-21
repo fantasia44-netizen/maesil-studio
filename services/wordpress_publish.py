@@ -61,6 +61,13 @@ def _strip_ai_disclaimer(text: str) -> str:
     return re.sub(r'\n+\s*-{3,}\s*\n+\s*⚠️[\s\S]*$', '', text).rstrip()
 
 
+def _demote_h1(md: str) -> str:
+    """본문 속 H1('# 제목')을 H2('## 제목')로 낮춘다.
+    글 제목(post title)이 이미 H1이므로, 본문에 또 H1이 있으면 제목이 두 개처럼
+    과대하게 보이고 SEO상 H1이 중복된다. (##·### 소제목은 건드리지 않음)"""
+    return re.sub(r'(?m)^#[ \t]+', '## ', md or '')
+
+
 def _parse_tags(raw: str) -> list:
     """'태그:' 값 → 태그 이름 리스트.
     쉼표/줄바꿈/가운뎃점/해시태그(#) 어떤 구분자든 대응, 마크다운·# 장식 제거."""
@@ -122,6 +129,7 @@ def parse_google_post(text: str) -> dict:
     )
 
     # 마크다운 → HTML
+    combined_md = _demote_h1(combined_md)   # 본문 H1 → H2 (글 제목과 중복 방지)
     try:
         import markdown as _md
         html = _md.markdown(
@@ -385,6 +393,7 @@ def create_full_post(supabase, brand_id: str, google_text: str, *,
         else:
             combined += '\n\n' + faq_md
 
+    combined = _demote_h1(combined)   # 본문 H1 → H2 (글 제목과 중복 방지)
     try:
         import markdown as _md
         html = _md.markdown(combined, extensions=['tables', 'fenced_code', 'sane_lists', 'nl2br'])
