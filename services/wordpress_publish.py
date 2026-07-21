@@ -33,6 +33,26 @@ def _slugify(s: str) -> str:
     return s[:80]
 
 
+# 단일 라인 라벨(값이 한 줄) vs 블록 라벨(여러 줄).
+#   단일 라벨 뒤에 이어지는 산문이 slug 등으로 잘못 흡수돼 본문이 통째로
+#   사라지던 문제를 막기 위해 구분한다.
+_SINGLE_KEYS = {'title', 'excerpt', 'slug', 'tags'}
+
+
+def _clean_inline(s: str) -> str:
+    """라벨 값에서 마크다운 볼드/헤딩 장식(**, __, #)을 벗긴다.
+    예) '** 네이버 쇼핑 API…' → '네이버 쇼핑 API…'  (모델이 **SEO 제목:** 처럼 볼드 처리한 잔여물)"""
+    s = (s or '').strip()
+    s = re.sub(r'^[\s*_#]+', '', s)
+    s = re.sub(r'[\s*_]+$', '', s)
+    return s.strip()
+
+
+def _marker_only(s: str) -> bool:
+    """마크다운 기호·공백만 있는 줄인지 (예: '**' — 볼드 라벨의 잔여 마커)."""
+    return not re.sub(r'[*_#\s]', '', s or '')
+
+
 def parse_google_post(text: str) -> dict:
     """구글(워드프레스)판 원문 → {title, excerpt, slug, tags[], html}.
 
@@ -45,32 +65,10 @@ def parse_google_post(text: str) -> dict:
         태그: a, b, c
     형식을 못 지킨 응답도 폴백 처리(전체를 본문으로).
     """
-    sections: dict = {}
-    current = None
-    buf: list = []
+    sections = _split_sections(text)
 
-    def _flush():
-        if current is not None:
-            sections[current] = ('\n'.join(buf)).strip()
-
-    for line in (text or '').splitlines():
-        matched = False
-        for pat, key in _WP_LABELS:
-            m = pat.match(line)
-            if m:
-                _flush()
-                current = key
-                buf = [m.group(1)] if m.group(1).strip() else []
-                matched = True
-                break
-        if not matched:
-            if current is None:
-                current = 'body'   # 라벨 전 서두는 본문으로
-            buf.append(line)
-    _flush()
-
-    title   = (sections.get('title') or '').strip()
-    excerpt = (sections.get('excerpt') or '').strip()
+    title   = _clean_inline(sections.get('title') or '')
+    excerpt = _clean_inline(sections.get('excerpt') or '')
     slug    = _slugify(sections.get('slug') or '')
     body_md = (sections.get('body') or '').strip()
     faq_md  = (sections.get('faq') or '').strip()
@@ -232,31 +230,43 @@ _MIME_EXT = {
 
 
 def _split_sections(text: str) -> dict:
-    """구글판 라벨 텍스트 → {title, excerpt, slug, body, faq, tags} 원문 조각."""
-    sections: dict = {}
-    current = None
-    buf: list = []
+    """구글판 라벨 텍스트 → {title, excerpt, slug, body, faq, tags} 원문 조각.
 
-    def _flush():
-        if current is not None:
-            sections[current] = ('\n'.join(buf)).strip()
+    - title/excerpt/slug/tags: 한 줄짜리 라벨 → 그 줄의 값만 취하고, 이어지는
+      산문은 본문으로 넘긴다. (모델이 '본문:' 라벨을 생략하고 곧바로 ## 소제목을
+      쓰면, 예전엔 슬러그가 본문 전체를 삼켜 body가 비어버렸다.)
+    - body/faq: 여러 줄 블록 → 다음 라벨 전까지 이어붙인다.
+    - 볼드 라벨(**본문:**)이 남긴 '**' 마커 줄과 값 장식은 제거한다.
+    """
+    single: dict = {}
+    blocks: dict = {'body': [], 'faq': []}
+    target = 'body'   # 라벨 밖 산문이 쌓이는 곳 (항상 'body' 또는 'faq')
 
     for line in (text or '').splitlines():
         matched = False
         for pat, key in _WP_LABELS:
             m = pat.match(line)
             if m:
-                _flush()
-                current = key
-                buf = [m.group(1)] if m.group(1).strip() else []
+                val = m.group(1)
+                if key in _SINGLE_KEYS:
+                    single[key] = _clean_inline(val)
+                    target = 'body'   # 이 라벨 뒤 산문은 본문으로 흘려보낸다
+                else:
+                    target = key
+                    if val.strip() and not _marker_only(val):
+                        blocks[key].append(val)
                 matched = True
                 break
-        if not matched:
-            if current is None:
-                current = 'body'
-            buf.append(line)
-    _flush()
-    return sections
+        if matched:
+            continue
+        # 라벨 아닌 줄: 마커(**)만 있는 줄은 버리고, 빈 줄(문단 구분)은 보존
+        if line.strip() == '' or not _marker_only(line):
+            blocks[target].append(line)
+
+    out = dict(single)
+    out['body'] = '\n'.join(blocks['body']).strip()
+    out['faq'] = '\n'.join(blocks['faq']).strip()
+    return out
 
 
 def _figure_html(src: str, alt: str = '') -> str:
@@ -311,8 +321,8 @@ def create_full_post(supabase, brand_id: str, google_text: str, *,
         status = 'draft'
 
     sec = _split_sections(raw)
-    title   = (title_override or (sec.get('title') or '').strip() or '제목 없음').strip()[:200]
-    excerpt = (sec.get('excerpt') or '').strip()
+    title   = (title_override or _clean_inline(sec.get('title') or '') or '제목 없음').strip()[:200]
+    excerpt = _clean_inline(sec.get('excerpt') or '')
     slug    = _slugify(sec.get('slug') or '')
     body_md = (sec.get('body') or '').strip() or raw
     faq_md  = (sec.get('faq') or '').strip()
