@@ -358,20 +358,25 @@ def _scene_layout(bg_phrase: str, bg_mode: str, subject: str) -> str:
     if bg_mode == 'photo':
         return (
             f'Shoot it against a plain, evenly-lit {bg_phrase} toned wall or surface that falls '
-            f'softly out of focus. IMPORTANT: leave the TOP ~40% of the frame as clean, '
-            f'uncluttered background for a title. Place {subject} in the lower ~55% of the frame, '
-            f'keeping a comfortable clean margin below the title — do NOT push {subject} up into '
-            f'the top title area. Frame the shot a little wider and keep {subject} fully inside '
-            f'the frame with clear margins on every side — never crop or cut off {subject} at any '
-            f'edge of the image.'
+            f'softly out of focus. CRITICAL COMPOSITION — this is the most important rule: the '
+            f'ENTIRE TOP HALF (the top 50%) of the frame MUST be completely empty, clean, '
+            f'uncluttered background ONLY — absolutely no subject, objects, props, hands or '
+            f'anything at all in the top half; it is reserved for a big title overlay. Position '
+            f'{subject} entirely within the BOTTOM 45% of the frame, anchored toward the bottom '
+            f'edge, with a clear empty gap of background above. Do NOT push {subject} up into the '
+            f'top half. Frame the shot a little wider and keep {subject} fully inside the frame '
+            f'with clear margins on every side — never crop or cut off {subject} at any edge.'
         )
     return (
         f'Paint the whole square background as a soft flat {bg_phrase} color palette with gentle '
-        f'shapes. IMPORTANT: leave the TOP ~40% of the image as clean empty space of that '
-        f'background color for a title. Place {subject} in the lower ~55% of the image, keeping a '
-        f'comfortable clean margin below the title — do NOT push {subject} up into the top title area. '
-        f'Frame a little wider and keep {subject} fully inside the frame with clear margins on every '
-        f'side — never crop or cut off {subject} at any edge of the image.'
+        f'shapes. CRITICAL COMPOSITION — this is the most important rule: the ENTIRE TOP HALF '
+        f'(the top 50%) of the image MUST be completely empty flat background color ONLY — '
+        f'absolutely no objects, characters, icons, doodles or elements of any kind in the top '
+        f'half; it is reserved for a big title. Position all of {subject} entirely within the '
+        f'BOTTOM 45% of the image, anchored toward the bottom edge, with a clear empty gap of '
+        f'plain background above them. Do NOT push {subject} up into the top half. Frame a little '
+        f'wider and keep {subject} fully inside the frame with clear margins on every side — '
+        f'never crop or cut off {subject} at any edge.'
     )
 
 
