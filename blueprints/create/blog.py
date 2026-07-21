@@ -1308,7 +1308,61 @@ def blog_thumbnail_scene_status(creation_id):
             'id, status, output_data, user_id').eq('id', creation_id).single().execute().data
     except Exception:
         return jsonify(ok=False, status='error', message='조회 실패')
-    return render_status_response(row, current_user.id, done_fields={'url': 'url', 'style': 'style'})
+    return render_status_response(row, current_user.id,
+                                  done_fields={'url': 'url', 'style': 'style',
+                                               'scene_bg_url': 'scene_bg_url'})
+
+
+@create_bp.route('/blog/thumbnail/scene/reposition', methods=['POST'])
+@login_required
+def blog_thumbnail_scene_reposition():
+    """씬 제목 박스 위치 이동 — 같은 AI 배경에 텍스트만 다시 얹어 재합성.
+    나노바나나 재생성 없이 PIL만 돌리므로 무료·즉시(동기) 처리."""
+    data = request.get_json(force=True) or {}
+    bg_url = (data.get('bg_url') or '').strip()
+    if not bg_url:
+        return jsonify(ok=False, message='배경 이미지를 찾을 수 없습니다. 씬을 다시 생성해 주세요.')
+
+    headline = (data.get('line1') or '').strip()[:40]
+    if not headline:
+        return jsonify(ok=False, message='메인 텍스트(헤드라인)를 입력해 주세요.')
+    sub   = (data.get('sub') or '').strip()[:40]
+    badge = (data.get('badge') or '').strip()[:20]
+    cta   = (data.get('cta') or '').strip()[:24]
+    theme = (data.get('theme') or 'baby_blue').strip()
+    title_style = 'plate' if (data.get('title_style') == 'plate') else 'banner'
+    try:
+        title_v = max(0.0, min(1.0, float(data.get('title_v_frac') or 0.0)))
+    except (TypeError, ValueError):
+        title_v = 0.0
+
+    try:
+        import requests, base64, time as _time
+        from services.thumbnail_studio import render_thumbnail
+        from services.imagen_service import upload_to_supabase
+
+        if bg_url.startswith('data:image/'):
+            bg_bytes = base64.b64decode(bg_url.split(',', 1)[1])
+        else:
+            r = requests.get(bg_url, timeout=60)
+            r.raise_for_status()
+            bg_bytes = r.content
+
+        img_bytes = render_thumbnail(
+            headline=headline, sub=sub, badge=badge, cta=cta, theme=theme,
+            bg_image=bg_bytes, title_style=title_style, title_v_frac=title_v,
+        )
+        b64 = f"data:image/png;base64,{base64.b64encode(img_bytes).decode()}"
+        try:
+            url = upload_to_supabase(b64, current_user.id,
+                                     f'blog_thumb_scene_move_{int(_time.time())}.png',
+                                     supabase=current_app.supabase)
+        except Exception:
+            url = b64
+        return jsonify(ok=True, url=url)
+    except Exception as e:
+        logger.error(f'[blog/thumbnail/scene/reposition] 실패: {e}', exc_info=True)
+        return jsonify(ok=False, message='제목 위치 조정 중 오류가 발생했습니다.')
 
 
 # ─────────────────────────────────────────────────────────────

@@ -237,7 +237,8 @@ def scene(self, creation_id, user_id, headline, sub, badge, cta, theme, title_st
 
         supabase.table('creations').update({
             'status': 'done',
-            'output_data': {'url': url, 'style': 'scene', 'scene_style': style},
+            'output_data': {'url': url, 'style': 'scene', 'scene_style': style,
+                            'scene_bg_url': scene_url},
         }).eq('id', creation_id).execute()
         logger.info('[blog_thumb_task] scene 완료 cid=%s theme=%s style=%s topic=%s char=%s',
                    creation_id, theme, style, topic[:30], 'Y' if refs else 'N')

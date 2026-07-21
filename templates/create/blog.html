@@ -895,6 +895,23 @@
             CSS 미리보기 — 버튼 클릭 시 실제 이미지 생성
           </div>
 
+          <!-- AI 씬 전용: 제목 박스 위치 이동 (생성 후 표시) -->
+          <div id="sceneMoveBox" class="d-none mt-3 p-2"
+               style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label small fw-semibold mb-0" for="sceneTitleV">
+                <i class="bi bi-arrows-move me-1"></i>제목 박스 위치
+              </label>
+              <span class="text-muted" style="font-size:.68rem">위 ↕ 아래로 드래그</span>
+            </div>
+            <input type="range" class="form-range" id="sceneTitleV"
+                   min="0" max="100" step="1" value="0"
+                   oninput="onSceneTitleVInput()">
+            <div id="sceneMoveHint" class="text-muted mt-1" style="font-size:.68rem">
+              그림이 글자를 가리면 슬라이더로 제목을 아래로 내려보세요. (배경 재생성 없이 즉시 반영)
+            </div>
+          </div>
+
           <!-- 다운로드 버튼 (생성 후 표시) -->
           <button id="thumbDownloadBtn" class="btn btn-sm mt-2 d-none fw-semibold"
                   style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac;border-radius:8px;font-size:.82rem"
@@ -1663,6 +1680,8 @@ async function transformChar() {
 let _thumbPreviewUrl   = null;   // 이미 생성된 PNG 합성본 URL 캐시
 let _thumbGeneratedBgUrl = '';   // 생성에 사용된 배경(업로드 사진/FLUX) URL — 생성 후 실시간 미리보기 배경으로 재사용
 let _thumbBgUrl        = null;   // FLUX로 생성한 배경 URL — 텍스트만 수정 시 재사용
+let _sceneBgUrl        = '';     // AI 씬: 텍스트 없는 원본 일러스트 URL — 제목 위치 이동 시 재합성 배경
+let _sceneMoveTimer    = null;   // 슬라이더 디바운스 타이머
 let _thumbLastBgTopic  = '';     // 마지막 FLUX 생성 시 사용된 bg_topic (바뀌면 신규 생성)
 
 async function generateThumbPreview() {
@@ -1771,6 +1790,17 @@ async function generateThumbPreview() {
     }
 
     _thumbPreviewUrl = data.url;
+    // AI 씬: 제목 박스 위치 이동용 원본 배경 저장 + 슬라이더 노출/초기화
+    const _moveBox = document.getElementById('sceneMoveBox');
+    if (_mode === 'scene' && data.scene_bg_url) {
+      _sceneBgUrl = data.scene_bg_url;
+      const _sl = document.getElementById('sceneTitleV');
+      if (_sl) _sl.value = 0;
+      _moveBox?.classList.remove('d-none');
+    } else {
+      _sceneBgUrl = '';
+      _moveBox?.classList.add('d-none');
+    }
     // FLUX 배경 URL 저장 → 다음 재합성 시 재사용 (100P 절약)
     if (data.bg_url) {
       _thumbBgUrl       = data.bg_url;
@@ -1799,6 +1829,42 @@ async function generateThumbPreview() {
     if (btn)     btn.disabled = false;
     if (loading) loading.classList.add('d-none');
   }
+}
+
+// ── AI 씬 제목 박스 위치 이동 (같은 배경에 텍스트만 재합성) ──────
+function onSceneTitleVInput() {
+  if (!_sceneBgUrl) return;
+  if (_sceneMoveTimer) clearTimeout(_sceneMoveTimer);
+  const hint = document.getElementById('sceneMoveHint');
+  _sceneMoveTimer = setTimeout(async () => {
+    const frac = (parseInt(document.getElementById('sceneTitleV')?.value || 0, 10) || 0) / 100;
+    if (hint) hint.textContent = '제목 위치 조정 중...';
+    try {
+      const res = await fetch('{{ url_for("create.blog_thumbnail_scene_reposition") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          bg_url:       _sceneBgUrl,
+          line1:        document.getElementById('thumbScHeadline')?.value.trim()
+                          || document.getElementById('thumbLine1')?.value.trim() || '',
+          sub:          document.getElementById('thumbScSub')?.value.trim() || '',
+          badge:        document.getElementById('thumbScBadge')?.value.trim() || '',
+          cta:          document.getElementById('thumbScCta')?.value.trim() || '',
+          theme:        document.getElementById('thumbScTheme')?.value || 'baby_blue',
+          title_style:  document.getElementById('thumbScTitleStyle')?.value || 'banner',
+          title_v_frac: frac,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message || '조정 실패');
+      _thumbPreviewUrl = data.url;
+      const imgEl = document.getElementById('thumbRealImg');
+      if (imgEl) imgEl.src = data.url;
+      if (hint) hint.textContent = '그림이 글자를 가리면 슬라이더로 제목을 아래로 내려보세요. (배경 재생성 없이 즉시 반영)';
+    } catch (e) {
+      if (hint) hint.textContent = '조정 실패: ' + (e.message || e);
+    }
+  }, 260);
 }
 
 // ── 브랜드 변경 시 워터마크 동기화 ───────────────────────────

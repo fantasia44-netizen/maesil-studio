@@ -439,6 +439,7 @@ def render_thumbnail(
     bg_image=None,            # AI 씬 배경(경로/PIL/bytes). 있으면 그라데이션·캐릭터·아이콘 스킵.
     title_plate: bool = True, # 씬 모드에서 상단 타이틀 플레이트 표시
     title_style: str = 'banner',  # 씬 제목 스타일 'banner'(컬러+흰글자) | 'plate'(흰+진한글자)
+    title_v_frac: float = 0.0, # 씬 제목 박스 수직 위치 0.0=상단(기본) ~ 1.0=하단
 ) -> bytes:
     """썸네일 1080×1080 PNG(bytes) 생성.
 
@@ -458,6 +459,10 @@ def render_thumbnail(
     d = ImageDraw.Draw(img)
 
     tz_x, tz_y, tz_w, tz_h = tpl['text_zone']
+    # 씬 모드: 제목 박스를 위↔아래로 이동 (0.0=상단 기본, 1.0=하단)
+    if scene is not None and title_v_frac:
+        vf = max(0.0, min(1.0, float(title_v_frac)))
+        tz_y = int(60 + vf * max(0, H - tz_h - 120))
     cx = tz_x + tz_w // 2
 
     if scene is None:
