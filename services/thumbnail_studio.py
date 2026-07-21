@@ -532,6 +532,11 @@ def render_thumbnail(
         for ln in hl_lines:
             bb = d.textbbox((0, 0), ln, font=hl_font, stroke_width=stroke)
             plate_w = max(plate_w, bb[2] - bb[0])
+        # 서브 라인도 반영 — 서브가 헤드라인보다 넓으면 글자가 칸(플레이트)을 벗어나던 버그 수정
+        if sf is not None:
+            for ln in sub_lines:
+                bb = d.textbbox((0, 0), ln, font=sf, stroke_width=sub_stroke)
+                plate_w = max(plate_w, bb[2] - bb[0])
         plate_w = int(min(tz_w + 24, plate_w + 100))
         _title_plate(img, cx, y - 30, plate_w, block_h + 56, fill=plate_fill)
         d = ImageDraw.Draw(img)
