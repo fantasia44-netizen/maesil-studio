@@ -547,19 +547,22 @@ def wordpress_publish_full():
       status         str            draft | publish | pending (기본 draft)
       title          str            제목 오버라이드 (선택)
     """
-    data = request.get_json(force=True) or {}
-    brand_id = (data.get('brand_id') or '').strip()
-    if not brand_id:
-        return jsonify(ok=False, message='브랜드를 선택해주세요.'), 400
-    if not _owned_brand_or_none(brand_id):
-        return jsonify(ok=False, message='브랜드를 찾을 수 없습니다.'), 404
-
-    body_images = data.get('body_images')
-    body_images = [u for u in body_images if isinstance(u, str) and u] \
-        if isinstance(body_images, list) else []
-
-    # 어떤 예외든 원인을 그대로 노출 (일반 500 '서버 오류'로 뭉개지지 않게 — 진단용)
+    # 어떤 예외든 원인을 그대로 노출 (일반 500 '서버 오류'로 뭉개지지 않게 — 진단용).
+    #   brand_id 조회(_owned_brand_or_none)나 최종 jsonify까지 포함해 함수 전체를 감싼다 —
+    #   그 부분만 빠지면 DB/네트워크 일시 오류 시 진단 메시지 없이 그대로 500이 난다.
+    brand_id = ''
     try:
+        data = request.get_json(force=True) or {}
+        brand_id = (data.get('brand_id') or '').strip()
+        if not brand_id:
+            return jsonify(ok=False, message='브랜드를 선택해주세요.'), 400
+        if not _owned_brand_or_none(brand_id):
+            return jsonify(ok=False, message='브랜드를 찾을 수 없습니다.'), 404
+
+        body_images = data.get('body_images')
+        body_images = [u for u in body_images if isinstance(u, str) and u] \
+            if isinstance(body_images, list) else []
+
         result = create_full_post(
             current_app.supabase, brand_id,
             data.get('google_text') or '',
