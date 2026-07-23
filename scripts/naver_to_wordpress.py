@@ -169,12 +169,15 @@ def _validate_image(img_bytes: bytes, mime: str, expect_style: str) -> tuple:
         # 실제 사용자 불만은 ① 명백한 만화/애니 드리프트 ② 화면 속 중국어 글자 두 가지뿐.
         #   부드러운/스타일리시한 실사도 반려되지 않도록 '명백한 경우만' 걸러낸다.
         q = ('Check this blog image. Reply ONLY compact JSON: '
-             '{"cjk_text": true|false, "cartoon": true|false}. '
+             '{"cjk_text": true|false, "cartoon": true|false, "bad_anatomy": true|false}. '
              'cjk_text=true ONLY if real Chinese or Japanese characters, or clearly garbled fake '
              'text, are prominently rendered in the image. Normal English words or incidental '
              'blur = false. '
              'cartoon=true ONLY if the image is clearly a drawn cartoon / anime / vector '
-             'illustration. A real photograph — even softly lit, warm, or stylish — = false.')
+             'illustration. A real photograph — even softly lit, warm, or stylish — = false. '
+             'bad_anatomy=true if a person has an OBVIOUS anatomical error: an extra hand or arm, '
+             'more than two hands, fused / extra / missing fingers, or a clearly deformed hand or '
+             'limb. Correct normal hands and body = false.')
         out = generate_with_images('You are an image QA checker. Reply only JSON.',
                                    q, images=[(b64, mime)], max_tokens=120)
         m = re.search(r'\{.*\}', out, re.S)
@@ -185,6 +188,8 @@ def _validate_image(img_bytes: bytes, mime: str, expect_style: str) -> tuple:
         return False, '중국어/엉터리 글자'
     if expect_style == 'photo' and d.get('cartoon'):
         return False, '만화체'
+    if expect_style == 'photo' and d.get('bad_anatomy'):
+        return False, '손/신체 이상'
     return True, 'ok'
 
 
