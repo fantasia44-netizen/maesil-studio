@@ -122,10 +122,14 @@ FAQ: (### 질문 + 답변 3개)
 포커스 키워드: (구글 검색용 핵심 키워드 1개, 2~4단어, 제목의 핵심어와 일치)
 
 [[[IMAGES]]]
-(본문에 넣을 밝고 긍정적인 라이프스타일 이미지 생성 프롬프트를 영문으로 5줄,
- 각 줄은 본문의 서로 다른 소제목 내용을 반영하고, 끝에 반드시 다음을 그대로 포함:
- ", photorealistic photograph, realistic real people, NOT illustration, NOT cartoon, NOT anime,
- absolutely no text, no letters, no chinese characters, bright warm daylight, positive uplifting mood".
+(본문에 넣을 밝고 긍정적인 이미지 생성 프롬프트를 영문으로 5줄. 각 줄은 본문의 서로 다른
+ 소제목 내용을 반영한다. 매우 중요: AI가 사람 손·손가락을 자주 기형으로 그리므로,
+ 원칙적으로 **사람을 넣지 않는다**. 대신 제품·포장·박스·매대 진열·상점 인테리어·작업 책상 위
+ 소품·쇼핑백·노트북과 커피가 놓인 데스크 같은 정물/환경 위주로 구성한다(사람 없음).
+ 각 줄 끝에 반드시 다음을 그대로 포함:
+ ", photorealistic still life / interior photograph, no people, no hands, no fingers,
+ NOT illustration, NOT cartoon, NOT anime, absolutely no text, no letters, no chinese characters,
+ bright warm daylight, clean and positive mood".
  한 줄에 하나씩, 번호·기호 없이.)
 """
 
@@ -221,10 +225,10 @@ def make_thumbnail(sb, user_id, headline, sub, scene_topic) -> str:
 
 # ── 3) 본문 이미지 (검증+재생성, 실사 강제) ──────────────────
 # 사진 프롬프트를 앞에 강하게 배치해 FLUX의 만화 드리프트를 억제.
-_PHOTO_PREFIX = ('Professional editorial photograph, photorealistic, shot on DSLR, '
-                 'natural realistic lighting, real people. ')
-_PHOTO_RETRY  = ('RAW candid documentary photograph, ultra realistic real human photo, '
-                 'absolutely NOT illustration, NOT cartoon, NOT anime, NOT drawing. ')
+_PHOTO_PREFIX = ('Professional still-life / interior photograph, photorealistic, shot on DSLR, '
+                 'natural realistic lighting, no people, no hands, no fingers. ')
+_PHOTO_RETRY  = ('RAW product / environment photograph, ultra realistic, empty of people, '
+                 'no hands, no fingers, absolutely NOT illustration, NOT cartoon, NOT anime. ')
 
 
 def make_body_images(prompts, n) -> list:
