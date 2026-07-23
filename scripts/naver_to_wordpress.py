@@ -48,7 +48,7 @@ BRAND_ID = 'eada3911-dddf-4986-adfe-6a79dcde7407'
 SCENE_STYLE = 'pastel_person'   # 밝은 파스텔 인물 일러스트
 SCENE_THEME = 'baby_blue'       # 썸네일 색 테마
 MODEL = 'claude-sonnet-4-6'
-IMG_MAX_TRIES = 3               # 이미지 검증 실패 시 최대 재생성 횟수
+IMG_MAX_TRIES = 4               # 이미지 검증 실패 시 최대 재생성 횟수
 
 import requests
 from supabase import create_client
@@ -64,13 +64,14 @@ def _sb():
 
 
 def _clean_naver(text: str) -> str:
-    """네이버 편집기 잡음 줄 제거."""
+    """네이버 편집기 잡음 줄 제거 (이미지 자리표시자·구분선·제로폭 공백 등)."""
+    NOISE = {'AI 활용 설정', 'AI 활용', '사진 설명을 입력하세요.', '사진 설명을 입력하세요', '---'}
     out = []
     for ln in text.splitlines():
-        s = ln.strip()
-        if s in ('AI 활용 설정', '사진 설명을 입력하세요.', '사진 설명을 입력하세요'):
+        s = ln.replace('​', '').strip()   # 제로폭 공백(​) 제거
+        if s in NOISE or set(s) <= {'ㅡ', '—', '-', '='}:   # 구분선류 스킵
             continue
-        out.append(ln)
+        out.append(ln.replace('​', ''))
     return '\n'.join(out).strip()
 
 
@@ -118,6 +119,7 @@ FAQ: (### 질문 + 답변 3개)
 헤드라인: (썸네일용 15자 이내 핵심 문구)
 서브: (썸네일용 20자 이내 보조 문구)
 장면: (썸네일 일러스트로 그릴 밝고 긍정적인 장면 묘사, 한글 한 문장)
+포커스 키워드: (구글 검색용 핵심 키워드 1개, 2~4단어, 제목의 핵심어와 일치)
 
 [[[IMAGES]]]
 (본문에 넣을 밝고 긍정적인 라이프스타일 이미지 생성 프롬프트를 영문으로 5줄,
@@ -144,10 +146,11 @@ def rewrite(naver_text: str, persona: str) -> dict:
     headline = (re.search(r'헤드라인\s*[:：]\s*(.+)', thumb) or [None, ''])[1].strip()
     sub      = (re.search(r'서브\s*[:：]\s*(.+)', thumb) or [None, ''])[1].strip()
     scene    = (re.search(r'장면\s*[:：]\s*(.+)', thumb) or [None, ''])[1].strip()
+    focus    = (re.search(r'포커스\s*키워드\s*[:：]\s*(.+)', thumb) or [None, ''])[1].strip()
     img_prompts = [l.strip(' -*·\t') for l in images.splitlines() if l.strip()][:5]
 
     return {'google': google, 'headline': headline, 'sub': sub,
-            'scene': scene, 'img_prompts': img_prompts}
+            'scene': scene, 'focus': focus, 'img_prompts': img_prompts}
 
 
 # ── 이미지 검증 (Claude Vision) ──────────────────────────────
@@ -163,25 +166,25 @@ def _validate_image(img_bytes: bytes, mime: str, expect_style: str) -> tuple:
     try:
         from services.claude_service import generate_with_images
         b64 = base64.b64encode(img_bytes).decode()
-        q = ('Check this image for a blog. Reply ONLY compact JSON: '
-             '{"cjk_text": true|false, "style": "photo"|"illustration"|"other"}. '
-             'cjk_text=true if ANY Chinese/Japanese/Korean characters or garbled fake letters '
-             'are visibly rendered anywhere in the image (incidental blurry non-letter marks are fine). '
-             'style="photo" if it looks like a real photograph, '
-             '"illustration" if drawn/cartoon/anime/vector art.')
-        out = generate_with_images('You are a strict image QA checker. Reply only JSON.',
-                                   q, images=[(b64, mime)], max_tokens=150)
+        # 실제 사용자 불만은 ① 명백한 만화/애니 드리프트 ② 화면 속 중국어 글자 두 가지뿐.
+        #   부드러운/스타일리시한 실사도 반려되지 않도록 '명백한 경우만' 걸러낸다.
+        q = ('Check this blog image. Reply ONLY compact JSON: '
+             '{"cjk_text": true|false, "cartoon": true|false}. '
+             'cjk_text=true ONLY if real Chinese or Japanese characters, or clearly garbled fake '
+             'text, are prominently rendered in the image. Normal English words or incidental '
+             'blur = false. '
+             'cartoon=true ONLY if the image is clearly a drawn cartoon / anime / vector '
+             'illustration. A real photograph — even softly lit, warm, or stylish — = false.')
+        out = generate_with_images('You are an image QA checker. Reply only JSON.',
+                                   q, images=[(b64, mime)], max_tokens=120)
         m = re.search(r'\{.*\}', out, re.S)
         d = json.loads(m.group(0)) if m else {}
     except Exception as e:
         return True, f'검증skip({str(e)[:40]})'
     if d.get('cjk_text'):
-        return False, 'CJK/엉터리 글자 검출'
-    st = d.get('style')
-    if expect_style == 'photo' and st != 'photo':
-        return False, f'실사 아님({st})'
-    if expect_style == 'illustration' and st == 'photo':
-        return False, f'일러스트 아님({st})'
+        return False, '중국어/엉터리 글자'
+    if expect_style == 'photo' and d.get('cartoon'):
+        return False, '만화체'
     return True, 'ok'
 
 
@@ -211,55 +214,72 @@ def make_thumbnail(sb, user_id, headline, sub, scene_topic) -> str:
     return upload_to_supabase(b64, user_id, f'thumb_scene_{int(time.time()*1000)}.png', supabase=sb)
 
 
-# ── 3) 본문 이미지 (검증+재생성) ─────────────────────────────
+# ── 3) 본문 이미지 (검증+재생성, 실사 강제) ──────────────────
+# 사진 프롬프트를 앞에 강하게 배치해 FLUX의 만화 드리프트를 억제.
+_PHOTO_PREFIX = ('Professional editorial photograph, photorealistic, shot on DSLR, '
+                 'natural realistic lighting, real people. ')
+_PHOTO_RETRY  = ('RAW candid documentary photograph, ultra realistic real human photo, '
+                 'absolutely NOT illustration, NOT cartoon, NOT anime, NOT drawing. ')
+
+
 def make_body_images(prompts, n) -> list:
     from services.imagen_service import generate_image
     urls = []
     for p in prompts[:n]:
-        chosen = None
+        good = None
         for t in range(IMG_MAX_TRIES):
+            full = (_PHOTO_RETRY if t > 0 else _PHOTO_PREFIX) + p
             try:
-                url, _ = generate_image(p, engine='flux_dev', size='1024x1024')
+                url, _ = generate_image(full, engine='flux_dev', size='1024x1024')
             except Exception as e:
                 print(f'  (경고) 본문 이미지 생성 실패: {e}')
                 break
-            chosen = url
             try:
                 content, mime = _fetch(url)
                 ok, reason = _validate_image(content, mime, 'photo')
             except Exception:
-                ok = True   # 다운로드/검증 실패 시 통과
+                ok, reason = True, ''   # 다운로드/검증 실패 시 통과
             if ok:
+                good = url
                 break
             print(f'      본문 이미지 재생성({t+1}/{IMG_MAX_TRIES}): {reason}')
-        if chosen:
-            urls.append(chosen)
+        if good:
+            urls.append(good)
+        else:
+            print('      → 실사 확보 실패, 이 이미지는 건너뜀(만화 삽입 방지)')
     return urls
 
 
 # ── 4) 발행 ──────────────────────────────────────────────────
-def publish(sb, google_text, body_urls, thumb_url, status):
+def publish(sb, google_text, body_urls, thumb_url, status, focus_kw=''):
     from services.wordpress_publish import create_full_post
     from services.wordpress_connection import get_client_for_user
     res = create_full_post(sb, BRAND_ID, google_text,
                            body_image_urls=body_urls, thumbnail_url=thumb_url, status=status)
     if not res.get('ok'):
         return res
-    # 본문 최상단에도 썸네일 삽입 (대표이미지 패널 외에 본문에서도 보이게)
     try:
         client = get_client_for_user(BRAND_ID, supabase=sb)
         pid = res['post_id']
         post = client._request('GET', f'/posts/{pid}', params={'context': 'edit'})
         fid = post.get('featured_media')
         html = (post.get('content') or {}).get('raw') or ''
+        # 본문 최상단에도 썸네일 삽입 (대표이미지 패널 외에 본문에서도 보이게)
         if fid:
             media = client._request('GET', f'/media/{fid}')
             src = media.get('source_url') or ''
             if src and src not in html:
                 fig = f'<figure class="wp-block-image size-large"><img src="{src}" alt=""/></figure>\n'
                 client._request('POST', f'/posts/{pid}', json_body={'content': fig + html})
+        # Rank Math 포커스 키워드 설정 (스니펫으로 meta 등록돼 있어야 반영됨)
+        if focus_kw:
+            try:
+                client._request('POST', f'/posts/{pid}',
+                                json_body={'meta': {'rank_math_focus_keyword': focus_kw}})
+            except Exception as e:
+                print(f'  (경고) 포커스 키워드 설정 실패(무시): {e}')
     except Exception as e:
-        print(f'  (경고) 본문 썸네일 삽입 실패(무시): {e}')
+        print(f'  (경고) 후처리 실패(무시): {e}')
     return res
 
 
@@ -306,7 +326,7 @@ def main():
                 raise RuntimeError('재작성 결과가 비어 있음')
             thumb = make_thumbnail(sb, user_id, r['headline'] or head, r['sub'], r['scene'])
             body_urls = make_body_images(r['img_prompts'], args.body_images)
-            res = publish(sb, r['google'], body_urls, thumb, args.status)
+            res = publish(sb, r['google'], body_urls, thumb, args.status, focus_kw=r.get('focus', ''))
             if res.get('ok'):
                 print(f"    OK post_id={res['post_id']}  {res.get('edit_link')}")
                 results.append((i, res['post_id'], res.get('edit_link')))
