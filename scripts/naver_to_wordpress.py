@@ -48,6 +48,7 @@ BRAND_ID = 'eada3911-dddf-4986-adfe-6a79dcde7407'
 SCENE_STYLE = 'pastel_person'   # 밝은 파스텔 인물 일러스트
 SCENE_THEME = 'baby_blue'       # 썸네일 색 테마
 MODEL = 'claude-sonnet-4-6'
+IMG_MAX_TRIES = 3               # 이미지 검증 실패 시 최대 재생성 횟수
 
 import requests
 from supabase import create_client
@@ -120,8 +121,9 @@ FAQ: (### 질문 + 답변 3개)
 
 [[[IMAGES]]]
 (본문에 넣을 밝고 긍정적인 라이프스타일 이미지 생성 프롬프트를 영문으로 5줄,
- 각 줄은 본문의 서로 다른 소제목 내용을 반영하고, 끝에
- ", bright warm daylight, positive uplifting mood, photorealistic, no text" 포함.
+ 각 줄은 본문의 서로 다른 소제목 내용을 반영하고, 끝에 반드시 다음을 그대로 포함:
+ ", photorealistic photograph, realistic real people, NOT illustration, NOT cartoon, NOT anime,
+ absolutely no text, no letters, no chinese characters, bright warm daylight, positive uplifting mood".
  한 줄에 하나씩, 번호·기호 없이.)
 """
 
@@ -148,29 +150,90 @@ def rewrite(naver_text: str, persona: str) -> dict:
             'scene': scene, 'img_prompts': img_prompts}
 
 
-# ── 2) AI 씬 썸네일 ──────────────────────────────────────────
+# ── 이미지 검증 (Claude Vision) ──────────────────────────────
+def _validate_image(img_bytes: bytes, mime: str, expect_style: str) -> tuple:
+    """생성 이미지 품질 검사 → (ok, reason).
+
+    expect_style: 'photo'(실사) | 'illustration'(일러스트) | 'any'.
+    걸러내는 것: ① 화면에 렌더된 CJK(중국어·일본어·한글)·엉터리 글자,
+                ② 기대한 그림체와 다른 경우(실사인데 만화 등).
+    검증 자체가 실패하면 통과 처리(무한루프 방지).
+    """
+    import json
+    try:
+        from services.claude_service import generate_with_images
+        b64 = base64.b64encode(img_bytes).decode()
+        q = ('Check this image for a blog. Reply ONLY compact JSON: '
+             '{"cjk_text": true|false, "style": "photo"|"illustration"|"other"}. '
+             'cjk_text=true if ANY Chinese/Japanese/Korean characters or garbled fake letters '
+             'are visibly rendered anywhere in the image (incidental blurry non-letter marks are fine). '
+             'style="photo" if it looks like a real photograph, '
+             '"illustration" if drawn/cartoon/anime/vector art.')
+        out = generate_with_images('You are a strict image QA checker. Reply only JSON.',
+                                   q, images=[(b64, mime)], max_tokens=150)
+        m = re.search(r'\{.*\}', out, re.S)
+        d = json.loads(m.group(0)) if m else {}
+    except Exception as e:
+        return True, f'검증skip({str(e)[:40]})'
+    if d.get('cjk_text'):
+        return False, 'CJK/엉터리 글자 검출'
+    st = d.get('style')
+    if expect_style == 'photo' and st != 'photo':
+        return False, f'실사 아님({st})'
+    if expect_style == 'illustration' and st == 'photo':
+        return False, f'일러스트 아님({st})'
+    return True, 'ok'
+
+
+def _fetch(url: str) -> tuple:
+    r = requests.get(url, timeout=40); r.raise_for_status()
+    return r.content, (r.headers.get('Content-Type') or 'image/jpeg').split(';')[0].strip()
+
+
+# ── 2) AI 씬 썸네일 (검증+재생성) ────────────────────────────
 def make_thumbnail(sb, user_id, headline, sub, scene_topic) -> str:
     from services.imagen_service import generate_scene, upload_to_supabase
     from services.thumbnail_studio import render_thumbnail
-    scene_url = generate_scene([], topic=scene_topic or headline, user_id=user_id,
-                               bg_color='soft pastel baby blue', style=SCENE_STYLE, supabase=sb)
-    r = requests.get(scene_url, timeout=60); r.raise_for_status()
+    scene_bytes = None
+    for t in range(IMG_MAX_TRIES):
+        scene_url = generate_scene([], topic=scene_topic or headline, user_id=user_id,
+                                   bg_color='soft pastel baby blue', style=SCENE_STYLE, supabase=sb)
+        content, mime = _fetch(scene_url)
+        ok, reason = _validate_image(content, mime, 'illustration')
+        if ok:
+            scene_bytes = content
+            break
+        print(f'      썸네일 씬 재생성({t+1}/{IMG_MAX_TRIES}): {reason}')
+        scene_bytes = content   # 마지막 것 보관
     png = render_thumbnail(headline=headline[:15], sub=sub[:20], badge='', cta='',
-                           theme=SCENE_THEME, bg_image=r.content, title_style='banner')
+                           theme=SCENE_THEME, bg_image=scene_bytes, title_style='banner')
     b64 = 'data:image/png;base64,' + base64.b64encode(png).decode()
     return upload_to_supabase(b64, user_id, f'thumb_scene_{int(time.time()*1000)}.png', supabase=sb)
 
 
-# ── 3) 본문 이미지 ───────────────────────────────────────────
+# ── 3) 본문 이미지 (검증+재생성) ─────────────────────────────
 def make_body_images(prompts, n) -> list:
     from services.imagen_service import generate_image
     urls = []
     for p in prompts[:n]:
-        try:
-            url, _ = generate_image(p, engine='flux_dev', size='1024x1024')
-            urls.append(url)
-        except Exception as e:
-            print(f'  (경고) 본문 이미지 생성 실패: {e}')
+        chosen = None
+        for t in range(IMG_MAX_TRIES):
+            try:
+                url, _ = generate_image(p, engine='flux_dev', size='1024x1024')
+            except Exception as e:
+                print(f'  (경고) 본문 이미지 생성 실패: {e}')
+                break
+            chosen = url
+            try:
+                content, mime = _fetch(url)
+                ok, reason = _validate_image(content, mime, 'photo')
+            except Exception:
+                ok = True   # 다운로드/검증 실패 시 통과
+            if ok:
+                break
+            print(f'      본문 이미지 재생성({t+1}/{IMG_MAX_TRIES}): {reason}')
+        if chosen:
+            urls.append(chosen)
     return urls
 
 
