@@ -277,6 +277,42 @@ class User(UserMixin):
         return self.site_role in ('superadmin', 'operator_admin')
 
     @property
+    def is_subscription_active(self) -> bool:
+        """구독/트라이얼이 현재 유효한지 (런타임 판단).
+
+        만료 배치는 하루 1회(09:00 KST)라 status 갱신이 지연될 수 있으므로,
+        current_period_end / trial_ends_at 을 지금 시각과 직접 비교해 지연 창까지 막는다.
+        슈퍼어드민은 항상 통과. status 가 명시적 비활성(expired/canceled/past_due)이거나
+        종료일이 지났으면 False.
+        """
+        if self.is_superadmin:
+            return True
+        status = (self.subscription_status or '').lower()
+        # 명시적 비활성(해지·연체·만료) → 차단
+        if status in ('expired', 'canceled', 'cancelled', 'past_due', 'unpaid', 'incomplete'):
+            return False
+        # 유료 활성 구독은 status 만 신뢰 — 갱신 대기 창(기간말 직후)에 잘못 잠그지 않게
+        # 날짜 비교는 하지 않는다. 갱신 실패는 past_due/cancelled 로 위에서 걸린다.
+        if status == 'active':
+            return True
+        # 트라이얼은 종료일을 직접 비교(배치 지연 창 커버) — 지났으면 만료
+        if status in ('trial', 'trialing'):
+            end = self.current_period_end or self.trial_ends_at
+            if not end:
+                return True   # 종료일 정보 없으면 정상 유저 잠금 방지 위해 통과
+            try:
+                from datetime import datetime, timezone
+                s = str(end).replace('Z', '+00:00')
+                dt = datetime.fromisoformat(s)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt >= datetime.now(timezone.utc)
+            except Exception:
+                return True   # 파싱 실패 시 통과
+        # 알 수 없는 status → 차단
+        return False
+
+    @property
     def plan_info(self):
         return PLAN_FEATURES.get(self.plan_type, PLAN_FEATURES['free'])
 

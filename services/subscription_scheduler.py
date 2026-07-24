@@ -334,6 +334,13 @@ def _handle_renewal_failure(supabase, sub, owner_id, owner_tbl,
                 'updated_at':           now_iso,
             }).eq('id', sub['id']).execute()
             supabase.table(owner_tbl).update({'is_active': False}).eq('id', owner_id).execute()
+            # 잔여 포인트 전액 소각 (구독 해지 — 복구 불가)
+            try:
+                from services.point_service import expire_all_points
+                expire_all_points(sub.get('user_id'), sub.get('operator_id'), supabase,
+                                  note='구독 갱신 실패 해지 — 포인트 소각')
+            except Exception as pe:
+                logger.error(f'[Renewal] 포인트 소각 실패 owner={owner_id}: {pe}')
             locked = True
             logger.warning(f'[Renewal] 3회 실패 — 서비스 잠금 owner={owner_id}')
         except Exception as e:
@@ -394,6 +401,14 @@ def _check_trial_expiry(app):
                         supabase.table('users').update({
                             'plan_type': 'free',
                         }).eq('id', uid).execute()
+
+                    # 잔여 포인트 전액 소각 (약관: 만료 시 포인트 0, 복구 불가)
+                    try:
+                        from services.point_service import expire_all_points
+                        expire_all_points(uid, row.get('operator_id'), supabase,
+                                          note='트라이얼/구독 만료 — 포인트 소각')
+                    except Exception as pe:
+                        logger.error(f'[TrialExpiry] 포인트 소각 실패 sub_id={row["id"]}: {pe}')
                 except Exception as e:
                     logger.error(f'[TrialExpiry] 처리 실패 sub_id={row["id"]}: {e}')
 

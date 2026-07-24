@@ -323,6 +323,12 @@ def _webhook_handle_failed(supabase, data: dict):
                 supabase.table('users').update({'is_active': False}).eq('id', user_id).execute()
             except Exception:
                 pass
+        # 잔여 포인트 전액 소각 (구독 해지 — 복구 불가)
+        try:
+            from services.point_service import expire_all_points
+            expire_all_points(user_id, operator_id, supabase, note='구독 해지 — 포인트 소각')
+        except Exception as pe:
+            logger.error(f'[Dunning] 포인트 소각 실패: {pe}')
         logger.warning(f'[Dunning] 3회 실패 잠금: user={user_id} op={operator_id}')
     else:
         # 1~2회 — past_due, 3일 후 재시도

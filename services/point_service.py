@@ -201,7 +201,18 @@ def _consume_from_buckets(user_id: str, operator_id: str | None, amount: int, su
 # ─────────────────────────────────────────────────────────────
 
 def get_balance(owner: Any) -> int:
-    """현재 유효 잔액 — 만료 포인트 자동 처리 후 반환."""
+    """현재 유효 잔액 — 만료 포인트 자동 처리 후 반환.
+
+    구독/트라이얼이 만료된 User 는 잔액을 0으로 취급한다(포인트 소각 정책).
+    배치가 실제 소각하기 전이라도 즉시 0으로 보이게 하기 위한 런타임 안전장치.
+    (워커에서 문자열 user_id 로 호출되는 경우는 이 판단을 건너뜀 — 라우트에서 이미 차단)
+    """
+    if getattr(owner, 'is_authenticated', False) and hasattr(owner, 'is_subscription_active'):
+        try:
+            if not owner.is_subscription_active:
+                return 0
+        except Exception:
+            pass
     user_id, operator_id = _resolve_owner(owner)
     supabase = current_app.supabase
     if not supabase or not user_id:
@@ -276,6 +287,48 @@ def get_expiry_summary(owner: Any) -> list[dict]:
     except Exception as e:
         logger.error(f'[POINT] get_expiry_summary error: {e}')
         return []
+
+
+def expire_all_points(user_id: str, operator_id: str | None, supabase,
+                      note: str = '구독 만료 — 포인트 소각') -> int:
+    """구독/트라이얼 만료 시 잔여 포인트 전액 소각. 소각 금액 반환.
+
+    scheduler 등 Flask 컨텍스트가 애매한 곳에서 쓰이므로 supabase 클라이언트를 직접 받는다.
+    소멸분은 복구 불가(약관). 잔여 버킷 remaining=0 처리 + balance=0 확정 행 삽입.
+    """
+    if not supabase or not user_id:
+        return 0
+    try:
+        # 현재 잔액 (재귀 방지 — get_balance 미사용)
+        bal_q = supabase.table('point_ledger').select('balance')
+        bal_q = _scope_filter(bal_q, operator_id, user_id)
+        bal_r = bal_q.order('created_at', desc=True).limit(1).execute()
+        current_bal = bal_r.data[0].get('balance', 0) if bal_r.data else 0
+
+        # 잔여 버킷 전부 remaining=0
+        try:
+            upd = supabase.table('point_ledger').update({'remaining': 0})
+            upd = _scope_filter(upd, operator_id, user_id)
+            upd.gt('remaining', 0).execute()
+        except Exception as e:
+            logger.warning(f'[POINT] expire_all remaining 소각 경고: {e}')
+
+        if current_bal <= 0:
+            return 0
+
+        row = {
+            'user_id': user_id, 'type': 'expire', 'amount': -current_bal, 'balance': 0,
+            'ref_id': 'subscription_expire', 'note': note,
+            'created_at': now_kst().isoformat(), 'remaining': None, 'expires_at': None,
+        }
+        if operator_id:
+            row['operator_id'] = operator_id
+        supabase.table('point_ledger').insert(row).execute()
+        logger.info(f'[POINT] 구독 만료 소각: user={user_id} op={operator_id or "-"} -{current_bal}P')
+        return current_bal
+    except Exception as e:
+        logger.error(f'[POINT] expire_all_points error: {e}')
+        return 0
 
 
 # ─────────────────────────────────────────────────────────────

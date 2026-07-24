@@ -233,6 +233,37 @@ def _register_hooks(app):
         session['last_activity'] = now_kst().isoformat()
 
     @app.before_request
+    def enforce_active_subscription():
+        """구독/트라이얼 만료 유저는 구독 페이지에 고정 — 다른 페이지 이동 불가.
+
+        허용: 정적파일 / 인증(로그아웃 포함) / 결제·구독(billing) / 랜딩.
+        그 외 페이지는 만료 시 전부 billing.index 로. AJAX/POST 는 JSON(402)로
+        redirect 필드를 내려 프론트가 이동하게 한다. 슈퍼어드민은 통과.
+        """
+        if not current_user.is_authenticated:
+            return
+        ep = request.endpoint or ''
+        if (ep == 'static'
+                or ep.startswith('auth.')
+                or ep.startswith('billing.')
+                or ep.startswith('landing.')):
+            return
+        try:
+            if current_user.is_subscription_active:
+                return
+        except Exception:
+            return  # 판단 실패 시 통과(정상 유저 잠금 방지)
+        billing_url = url_for('billing.index')
+        if (request.is_json
+                or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                or request.method != 'GET'):
+            return jsonify(ok=False, subscription_expired=True, redirect=billing_url,
+                           message='구독이 만료되었습니다. 구독 후 이용할 수 있습니다.'), 402
+        from flask import flash
+        flash('구독이 만료되었습니다. 구독 후 이용해 주세요.', 'warning')
+        return redirect(billing_url)
+
+    @app.before_request
     def track_last_seen():
         """5분마다 users.last_seen_at 갱신 (정적 파일·로그인·로그아웃 제외)."""
         if not current_user.is_authenticated:
