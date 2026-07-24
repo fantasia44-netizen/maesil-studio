@@ -5,6 +5,11 @@ from flask import flash, redirect, url_for
 from flask_login import current_user
 
 
+# 트라이얼 기간(일) — auth.py 의 trial 생성과 동일해야 함.
+# 구닝 계정(종료일 미기록)의 만료 추정에 사용: 가입일 + TRIAL_PERIOD_DAYS.
+TRIAL_PERIOD_DAYS = 15
+
+
 # ──────────────────────────────────────────
 # 요금제별 기능 플래그
 # ──────────────────────────────────────────
@@ -297,18 +302,24 @@ class User(UserMixin):
             return True
         # 트라이얼은 종료일을 직접 비교(배치 지연 창 커버) — 지났으면 만료
         if status in ('trial', 'trialing'):
-            end = self.current_period_end or self.trial_ends_at
-            if not end:
-                return True   # 종료일 정보 없으면 정상 유저 잠금 방지 위해 통과
-            try:
-                from datetime import datetime, timezone
-                s = str(end).replace('Z', '+00:00')
-                dt = datetime.fromisoformat(s)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt >= datetime.now(timezone.utc)
-            except Exception:
-                return True   # 파싱 실패 시 통과
+            from datetime import datetime, timezone, timedelta
+
+            def _parse(v):
+                try:
+                    d = datetime.fromisoformat(str(v).replace('Z', '+00:00'))
+                    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+                except Exception:
+                    return None
+
+            end = _parse(self.current_period_end) or _parse(self.trial_ends_at)
+            # 종료일 미기록(구닝 데이터) → 가입일 + 15일(트라이얼 기간)로 추정
+            if end is None and self.created_at:
+                c = _parse(self.created_at)
+                if c is not None:
+                    end = c + timedelta(days=TRIAL_PERIOD_DAYS)
+            if end is None:
+                return True   # 그래도 판단 근거 없으면 정상 유저 잠금 방지 위해 통과
+            return end >= datetime.now(timezone.utc)
         # 알 수 없는 status → 차단
         return False
 

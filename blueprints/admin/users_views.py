@@ -112,6 +112,30 @@ def user_detail(user_id):
 
     view_as_uid = session.get('view_as_user_id')
 
+    # 구독 상태 (operator 풀 우선 — 포인트 스코프와 동일). is_active(계정 정지)와 별개 축.
+    sub_status = None
+    sub_end = None
+    sub_active = False
+    try:
+        op_id = user.get('operator_id')
+        sq = supabase.table('subscriptions').select('status, current_period_end')
+        if op_id:
+            sq = sq.eq('operator_id', op_id)
+        else:
+            sq = sq.is_('operator_id', 'null').eq('user_id', user_id)
+        sr = sq.order('created_at', desc=True).limit(1).execute()
+        if sr.data:
+            sub_status = sr.data[0].get('status')
+            sub_end = sr.data[0].get('current_period_end')
+        from models import User as _U
+        _chk = dict(user)
+        if sub_status is not None:
+            _chk['subscription_status'] = sub_status
+        _chk['current_period_end'] = sub_end
+        sub_active = _U(_chk).is_subscription_active
+    except Exception as e:
+        logger.warning(f'[ADMIN] 구독 상태 조회 실패 user={user_id}: {e}')
+
     return render_template('admin/user_detail.html',
                            user=user,
                            balance=balance,
@@ -119,6 +143,9 @@ def user_detail(user_id):
                            creations=creations_r.data or [],
                            payments=payments_r.data or [],
                            view_as_uid=view_as_uid,
+                           sub_status=sub_status,
+                           sub_end=sub_end,
+                           sub_active=sub_active,
                            PLAN_FEATURES=PLAN_FEATURES)
 
 

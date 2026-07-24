@@ -45,10 +45,29 @@
           </dd>
           <dt class="col-5 text-muted">플랜</dt><dd class="col-7"><span class="badge bg-light text-dark">{{ user.plan_type }}</span></dd>
           <dt class="col-5 text-muted">포인트</dt><dd class="col-7 fw-bold text-success">{{ balance | number }}P</dd>
-          <dt class="col-5 text-muted">상태</dt>
+          <dt class="col-5 text-muted">구독</dt>
+          <dd class="col-7">
+            {% if sub_active %}
+              {% if sub_status in ['trial', 'trialing'] %}
+                <span class="badge bg-info">체험중</span>
+              {% else %}
+                <span class="badge bg-success">활성</span>
+              {% endif %}
+            {% else %}
+              {% if sub_status in ['past_due', 'unpaid', 'incomplete'] %}
+                <span class="badge bg-warning text-dark">연체</span>
+              {% elif sub_status in ['canceled', 'cancelled'] %}
+                <span class="badge bg-danger">해지</span>
+              {% else %}
+                <span class="badge bg-danger">만료</span>
+              {% endif %}
+            {% endif %}
+            {% if sub_end %}<small class="text-muted ms-1">~ {{ sub_end | kst('%Y-%m-%d') }}</small>{% endif %}
+          </dd>
+          <dt class="col-5 text-muted">계정 상태</dt>
           <dd class="col-7">
             {% if not user.is_active %}
-              <span class="badge bg-danger">비활성</span>
+              <span class="badge bg-danger">비활성(정지)</span>
             {% elif user.failed_login_count and user.failed_login_count > 0 %}
               <span class="badge bg-warning text-dark">잠금 ({{ user.failed_login_count }}회)</span>
             {% else %}
