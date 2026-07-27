@@ -579,6 +579,46 @@ def blog_text_status(creation_id):
 # Step 2 — 소구포인트 3개 AI 생성
 # ─────────────────────────────────────────────────────────────
 
+def _parse_json_array(text: str) -> list:
+    """LLM 출력에서 JSON 배열을 견고하게 파싱한다.
+
+    마크다운 코드펜스 제거 → 문자열 내부 대괄호를 무시하는 균형 괄호 매칭으로
+    배열 범위를 잡고, 응답이 잘린 경우 마지막 완결 객체까지만 살려 복구한다.
+    """
+    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', (text or '').strip(), flags=re.MULTILINE).strip()
+    start = s.find('[')
+    if start < 0:
+        raise ValueError('JSON 배열을 찾지 못함')
+    depth, end = 0, -1
+    in_str, esc = False, False
+    for i in range(start, len(s)):
+        c = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == '\\':
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == '[':
+            depth += 1
+        elif c == ']':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end > 0:
+        return json.loads(s[start:end])
+    # 응답 잘림 — 마지막 완결 객체까지만 살려 복구
+    last_obj = s.rfind('}')
+    if last_obj <= start:
+        raise ValueError('완전한 JSON 객체 없음(응답 잘림)')
+    return json.loads(s[start:last_obj + 1] + ']')
+
+
 @create_bp.route('/blog/angles', methods=['POST'])
 @login_required
 def blog_angles():
@@ -637,22 +677,23 @@ JSON 배열 형식 예시:
 
 순수 JSON만 출력하세요."""
 
-    try:
-        raw = generate_text(system_prompt, user_prompt, max_tokens=1500)
-        # JSON 파싱 — 마크다운 코드블록 제거 후 파싱
-        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=re.MULTILINE).strip()
-        # 배열 부분만 추출
-        arr_start = clean.find('[')
-        arr_end   = clean.rfind(']') + 1
-        if arr_start >= 0 and arr_end > arr_start:
-            clean = clean[arr_start:arr_end]
-        angles = json.loads(clean)
-        if not isinstance(angles, list) or not angles:
-            raise ValueError('angles 배열이 비어있음')
-        return jsonify(ok=True, angles=angles[:3])
-    except Exception as e:
-        logger.error(f'[blog/angles] 소구포인트 생성 실패: {e}')
-        return jsonify(ok=False, message=f'소구포인트 생성 중 오류가 발생했습니다: {e}')
+    angles, last_err = None, None
+    for attempt in range(2):  # LLM JSON 파싱 실패 시 1회 재시도
+        try:
+            raw = generate_text(system_prompt, user_prompt, max_tokens=4000)
+            angles = _parse_json_array(raw)
+            if not isinstance(angles, list) or not angles:
+                raise ValueError('angles 배열이 비어있음')
+            break
+        except Exception as e:
+            last_err = e
+            logger.warning(f'[blog/angles] 파싱 시도 {attempt + 1} 실패: {e}')
+            angles = None
+
+    if not angles:
+        logger.error(f'[blog/angles] 소구포인트 생성 실패: {last_err}')
+        return jsonify(ok=False, message=f'소구포인트 생성 중 오류가 발생했습니다: {last_err}')
+    return jsonify(ok=True, angles=angles[:3])
 
 
 # ─────────────────────────────────────────────────────────────
