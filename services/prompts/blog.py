@@ -63,6 +63,22 @@ def _experience_directive(experience_block: str) -> str:
 3. 익명 처리 지시가 있는 항목은 회사명/고객사명을 노출하지 마라.'''
 
 
+def _internal_links_directive(internal_links_block: str) -> str:
+    """관련 발행글이 있으면 본문에 자연스러운 내부 링크로 삽입."""
+    block = (internal_links_block or '').strip()
+    if not block:
+        return ''
+    return f'''
+[내부 링크 — 관련 발행글]
+아래는 이미 발행된 관련 글이다. 본문 흐름상 자연스러운 위치에 2~4개를 마크다운 링크로 삽입하시오.
+{block}
+
+지시:
+1. 억지로 다 넣지 말고, 문맥상 실제로 도움 되는 글만 골라 2~4개.
+2. "여기를 클릭" 같은 앵커 대신, 글 제목의 핵심어를 앵커 텍스트로.
+3. 한 문단에 링크를 몰아넣지 말고 본문 곳곳에 분산.'''
+
+
 _ANGLE_LABEL = {
     'information': '정보형 가이드 — 독자가 모르는 사실/방법을 친절히 설명',
     'review':      '후기형 — 실제 사용 시나리오·체감 위주',
@@ -237,6 +253,7 @@ def build_prompt(brand: dict, input_data: dict,
                  recent_creations: list[dict] | None = None,
                  related_creation: dict | None = None,
                  experience_block: str = '',
+                 internal_links_block: str = '',
                  targets: str = 'naver') -> tuple[str, str, int]:
     """블로그 프롬프트 빌드 → (system, user, max_tokens).
 
@@ -283,6 +300,7 @@ def build_prompt(brand: dict, input_data: dict,
 
 {_CTA_RESTRAINT}
 {_experience_directive(experience_block)}
+{_internal_links_directive(internal_links_block)}
 """
 
     user_parts = [f'''다음 조건의 블로그 포스트를 작성해 주세요.

@@ -496,6 +496,19 @@ def blog_generate():
         except Exception as e:
             logger.warning('[blog_generate] 경험 데이터 조회 실패(계속): %s', e)
 
+    # 관련 발행글 → 내부 링크 추천(구글/세트 판에만, 발행 대상이므로)
+    internal_links_block = ''
+    if targets in ('google', 'both'):
+        try:
+            from services.internal_links import search_related, format_for_prompt as _fmt_links
+            posts = search_related(
+                supabase, brand_id=brand['id'],
+                topic=input_data['topic'], keyword=input_data['keyword'],
+                seo_keywords=input_data['seo_keywords'], top_k=4)
+            internal_links_block = _fmt_links(posts)
+        except Exception as e:
+            logger.warning('[blog_generate] 내부링크 조회 실패(계속): %s', e)
+
     # 프롬프트 빌드
     from services.prompts.blog import build_prompt
     system, user, max_tokens = build_prompt(
@@ -506,6 +519,7 @@ def blog_generate():
         recent_creations=recent,
         related_creation=related,
         experience_block=experience_block,
+        internal_links_block=internal_links_block,
         targets=targets,
     )
 

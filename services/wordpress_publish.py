@@ -203,6 +203,17 @@ def create_google_post(supabase, brand_id: str, google_text: str, *,
     post_id = post.get('id')
     edit_link = f'{client.site}/wp-admin/post.php?post={post_id}&action=edit' if post_id else None
     logger.info(f'[WP] 발행 완료 brand={brand_id} post={post_id} status={status}')
+
+    # 공개 발행이면 내부 링크 인덱스에 등록(초안 제외)
+    if status == 'publish' and post.get('link'):
+        try:
+            from services.internal_links import index_post
+            index_post(supabase, brand_id=brand_id, title=title,
+                       url=post.get('link'), slug=parsed.get('slug') or '',
+                       summary=parsed.get('excerpt') or '', tags=parsed.get('tags') or [],
+                       wp_post_id=post_id)
+        except Exception as e:
+            logger.warning(f'[WP] 내부링크 인덱싱 실패(무시): {e}')
     return {
         'ok': True,
         'post_id': post_id,
