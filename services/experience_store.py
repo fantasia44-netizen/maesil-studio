@@ -100,30 +100,41 @@ def _fmt_numbers(numbers: dict | None) -> str:
     return ', '.join(parts)
 
 
+_FIELD_CAP = 280   # 항목별 최대 글자(토큰 방어)
+_BLOCK_CAP = 1800  # 경험 블록 전체 최대 글자
+
+
+def _trim(s: str, cap: int = _FIELD_CAP) -> str:
+    s = (s or '').strip()
+    return s if len(s) <= cap else s[:cap] + '…'
+
+
 def format_for_prompt(records: list[dict]) -> str:
     """검색된 경험을 프롬프트 주입용 텍스트로 포맷.
 
     confidentiality=private 는 제외(공개 불가), anonymized 는 회사/고객명 노출 주의 표시.
+    항목·전체 길이를 캡핑해 입력 토큰이 과도하게 커지지 않게 한다.
     """
     usable = [r for r in records if (r.get('confidentiality') or 'anonymized') != 'private']
     if not usable:
         return ''
     lines = []
     for i, r in enumerate(usable, 1):
-        block = [f'{i}. {r.get("title", "").strip()}']
+        block = [f'{i}. {_trim(r.get("title", ""), 120)}']
         if r.get('problem'):
-            block.append(f'   - 문제: {r["problem"].strip()}')
+            block.append(f'   - 문제: {_trim(r["problem"])}')
         if r.get('action'):
-            block.append(f'   - 조치: {r["action"].strip()}')
+            block.append(f'   - 조치: {_trim(r["action"])}')
         if r.get('result'):
-            block.append(f'   - 결과: {r["result"].strip()}')
+            block.append(f'   - 결과: {_trim(r["result"])}')
         nums = _fmt_numbers(r.get('numbers_json'))
         if nums:
-            block.append(f'   - 수치(사용 가능): {nums}')
+            block.append(f'   - 수치(사용 가능): {_trim(nums, 200)}')
         if (r.get('confidentiality') or 'anonymized') == 'anonymized':
             block.append('   - ※ 회사명/고객사명은 익명 처리할 것')
         lines.append('\n'.join(block))
-    return '\n'.join(lines)
+    out = '\n'.join(lines)
+    return out if len(out) <= _BLOCK_CAP else out[:_BLOCK_CAP] + '\n…(이하 생략)'
 
 
 # ── 빠른 입력: 자유 텍스트 → 구조화 (Claude Haiku) ──────────────────────
