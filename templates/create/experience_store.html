@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% block title %}경험 저장소 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 경험 저장소{% endblock %}
+
+{% block content %}
+<div style="max-width:900px">
+
+  <div class="card mb-4">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-journal-richtext me-2" style="color:#0d9488"></i>경험 저장소
+        <span class="badge bg-light text-dark ms-2 fw-normal" style="font-size:.72rem">실제 운영 경험 → 블로그 근거로 자동 주입</span>
+      </h6>
+    </div>
+    <div class="card-body p-4">
+      <div class="alert alert-success py-2 px-3 mb-4" style="font-size:.78rem">
+        여기 쌓은 <b>실제 경험(문제·조치·결과·수치)</b>은 블로그 생성 시 주제와 매칭되어 <b>근거로 자동 삽입</b>됩니다.
+        AI가 없는 수치를 지어내지 못하게 하는 <b>E-E-A-T</b> 데이터예요. 구글·애드센스가 좋아하는 독창성의 핵심.
+      </div>
+
+      <!-- 빠른 입력 -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">빠른 입력 — 자유롭게 적으면 AI가 구조화합니다</label>
+        <textarea id="memo" class="form-control" rows="3" style="font-size:.85rem"
+          placeholder="예) 쿠팡 광고비를 월 4천만원 쓰다가 효율 없는 구좌·키워드를 정리했더니 광고비는 400만원까지 줄었는데 매출은 유지되고 순이익이 개선됐다."></textarea>
+        <button type="button" id="structureBtn" class="btn btn-outline-secondary btn-sm mt-2">
+          <i class="bi bi-magic me-1"></i>AI로 구조화 → 아래 폼 채우기
+        </button>
+      </div>
+
+      <hr class="my-4">
+
+      <!-- 구조화 폼 -->
+      <form id="expForm">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">제목 <span class="text-danger">*</span></label>
+            <input name="title" id="f_title" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">카테고리</label>
+            <select name="category" id="f_category" class="form-select form-select-sm">
+              <option value="">선택</option>
+              {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">요약</label>
+            <input name="summary" id="f_summary" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">문제</label>
+            <textarea name="problem" id="f_problem" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">조치</label>
+            <textarea name="action" id="f_action" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">결과</label>
+            <textarea name="result" id="f_result" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">수치 <span class="text-muted fw-normal">(항목=값, 항목=값)</span></label>
+            <input name="numbers" id="f_numbers" class="form-control form-control-sm"
+              placeholder="before_ad_cost=40000000, after_ad_cost=4000000">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">플랫폼</label>
+            <input name="platform" id="f_platform" class="form-control form-control-sm" placeholder="쿠팡/네이버…">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">공개 범위</label>
+            <select name="confidentiality" id="f_conf" class="form-select form-select-sm">
+              <option value="anonymized" selected>익명(회사명 숨김)</option>
+              <option value="public">공개</option>
+              <option value="private">비공개(글 미사용)</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label small fw-semibold">매칭 키워드 <span class="text-muted fw-normal">(쉼표 구분)</span></label>
+            <input name="keywords" id="f_keywords" class="form-control form-control-sm"
+              placeholder="쿠팡, 광고비, ROAS, 공헌이익">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">브랜드</label>
+            <select name="brand_id" id="f_brand" class="form-select form-select-sm">
+              <option value="">공통(전체)</option>
+              {% for b in brands %}
+                <option value="{{ b.id }}" {% if default_brand and b.id == default_brand.id %}selected{% endif %}>{{ b.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="mt-3">
+          <button type="submit" class="btn btn-success btn-sm px-4"><i class="bi bi-save me-1"></i>경험 저장</button>
+          <span id="saveMsg" class="ms-2 small"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 저장된 경험 목록 -->
+  <div class="card">
+    <div class="card-header py-3"><h6 class="mb-0 fw-bold">저장된 경험 <span id="cnt" class="text-muted fw-normal">{{ records|length }}건</span></h6></div>
+    <div class="card-body p-0">
+      <ul class="list-group list-group-flush" id="recList">
+        {% for r in records %}
+        <li class="list-group-item d-flex justify-content-between align-items-start" data-id="{{ r.id }}">
+          <div style="font-size:.83rem">
+            <b>{{ r.title }}</b>
+            {% if r.category %}<span class="badge bg-light text-dark ms-1">{{ r.category }}</span>{% endif %}
+            {% if r.confidentiality == 'private' %}<span class="badge bg-secondary ms-1">비공개</span>{% endif %}
+            {% if r.summary %}<div class="text-muted mt-1">{{ r.summary }}</div>{% endif %}
+          </div>
+          <button class="btn btn-outline-danger btn-sm delBtn" data-id="{{ r.id }}">삭제</button>
+        </li>
+        {% else %}
+        <li class="list-group-item text-muted small">아직 저장된 경험이 없습니다.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  // AI 구조화
+  $('#structureBtn').addEventListener('click', async () => {
+    const memo = $('#memo').value.trim();
+    if (!memo) return;
+    const btn = $('#structureBtn'); btn.disabled = true; btn.textContent = '구조화 중…';
+    try {
+      const fd = new FormData(); fd.append('memo', memo);
+      const r = await fetch('{{ url_for("create.experience_store_structure") }}', {method:'POST', body:fd});
+      const j = await r.json();
+      if (j.ok && j.data) {
+        const d = j.data;
+        $('#f_title').value = d.title || '';
+        $('#f_summary').value = d.summary || '';
+        $('#f_problem').value = d.problem || '';
+        $('#f_action').value = d.action || '';
+        $('#f_result').value = d.result || '';
+        $('#f_platform').value = d.platform || '';
+        if (d.category) $('#f_category').value = d.category;
+        if (d.keywords) $('#f_keywords').value = (d.keywords||[]).join(', ');
+        if (d.numbers) $('#f_numbers').value = Object.entries(d.numbers).map(([k,v])=>`${k}=${v}`).join(', ');
+      } else { alert(j.message || '구조화 실패'); }
+    } catch(e){ alert('오류: '+e); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-magic me-1"></i>AI로 구조화 → 아래 폼 채우기'; }
+  });
+  // 저장
+  $('#expForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msg = $('#saveMsg');
+    try {
+      const r = await fetch('{{ url_for("create.experience_store_create") }}', {method:'POST', body:fd});
+      const j = await r.json();
+      if (j.ok) { msg.textContent = '저장됨 — 새로고침'; msg.className='ms-2 small text-success'; setTimeout(()=>location.reload(), 600); }
+      else { msg.textContent = j.message || '실패'; msg.className='ms-2 small text-danger'; }
+    } catch(err){ msg.textContent='오류'; msg.className='ms-2 small text-danger'; }
+  });
+  // 삭제
+  document.querySelectorAll('.delBtn').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm('삭제할까요?')) return;
+    const id = b.dataset.id;
+    const r = await fetch('/create/experience-store/' + id, {method:'DELETE'});
+    const j = await r.json();
+    if (j.ok) document.querySelector(`li[data-id="${id}"]`)?.remove();
+  }));
+})();
+</script>
+{% endblock %}

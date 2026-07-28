@@ -44,6 +44,25 @@ _CTA_RESTRAINT = '''[홍보 절제 — 애드센스 대응]
 - "이 모든 문제는 OO로 해결됩니다"식 강매 문구 금지. 필요할 때만, 왜 그 도구가 필요한지 맥락으로 자연스럽게 연결하시오.'''
 
 
+def _experience_directive(experience_block: str) -> str:
+    """운영자 실제 경험 데이터가 있으면 근거로 강제 주입."""
+    block = (experience_block or '').strip()
+    if not block:
+        # 경험 데이터가 없으면 날조 방지 규칙만 강조
+        return ('\n[경험 데이터 없음]\n'
+                '- 참고할 실제 경험 데이터가 제공되지 않았다. 구체적 성과 수치·고객사례를 지어내지 말고, '
+                '일반적인 설명임이 드러나게 작성하시오(예시 수치는 "예시"로 명시).')
+    return f'''
+[운영자 실제 경험 데이터 — 본문 근거로 활용]
+아래는 이 브랜드 운영자가 실제로 겪은 경험이다. 본문의 핵심 논리를 이 경험으로 뒷받침하시오.
+{block}
+
+지시:
+1. 위 경험의 문제→조치→결과 흐름을 본문 한 곳 이상에서 1인칭 실무 사례로 자연스럽게 녹여라.
+2. "수치(사용 가능)"에 있는 숫자만 사용하고, 여기 없는 성과 수치는 새로 지어내지 마라.
+3. 익명 처리 지시가 있는 항목은 회사명/고객사명을 노출하지 마라.'''
+
+
 _ANGLE_LABEL = {
     'information': '정보형 가이드 — 독자가 모르는 사실/방법을 친절히 설명',
     'review':      '후기형 — 실제 사용 시나리오·체감 위주',
@@ -217,6 +236,7 @@ def build_prompt(brand: dict, input_data: dict,
                  merged_avoid_words: list[str] | None = None,
                  recent_creations: list[dict] | None = None,
                  related_creation: dict | None = None,
+                 experience_block: str = '',
                  targets: str = 'naver') -> tuple[str, str, int]:
     """블로그 프롬프트 빌드 → (system, user, max_tokens).
 
@@ -262,6 +282,7 @@ def build_prompt(brand: dict, input_data: dict,
 {_EEAT_GROUNDING}
 
 {_CTA_RESTRAINT}
+{_experience_directive(experience_block)}
 """
 
     user_parts = [f'''다음 조건의 블로그 포스트를 작성해 주세요.

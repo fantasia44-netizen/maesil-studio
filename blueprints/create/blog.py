@@ -482,6 +482,20 @@ def blog_generate():
     elif relation_mode in ('series', 'variant') and relation_ref_id:
         related = _related_creation_payload(supabase, relation_ref_id)
 
+    # 운영자 실제 경험 데이터 검색 → E-E-A-T 근거 주입 (옵션, 기본 ON)
+    experience_block = ''
+    use_experience = (request.form.get('use_experience') or '1').strip() not in ('0', 'false', '')
+    if use_experience:
+        try:
+            from services.experience_store import search_relevant, format_for_prompt
+            recs = search_relevant(
+                supabase, brand_id=brand['id'],
+                topic=input_data['topic'], keyword=input_data['keyword'],
+                seo_keywords=input_data['seo_keywords'], top_k=4)
+            experience_block = format_for_prompt(recs)
+        except Exception as e:
+            logger.warning('[blog_generate] 경험 데이터 조회 실패(계속): %s', e)
+
     # 프롬프트 빌드
     from services.prompts.blog import build_prompt
     system, user, max_tokens = build_prompt(
@@ -491,6 +505,7 @@ def blog_generate():
         merged_avoid_words=merged_avoids,
         recent_creations=recent,
         related_creation=related,
+        experience_block=experience_block,
         targets=targets,
     )
 

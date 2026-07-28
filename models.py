@@ -226,6 +226,7 @@ MENU_REGISTRY = [
     ('상품 관리',   'bi-box-seam',            'product.index',        None,  '상품'),
     # ── 콘텐츠 생성
     ('블로그',      'bi-file-text',           'create.blog',          None,  '콘텐츠 생성'),
+    ('경험 저장소', 'bi-journal-richtext',    'create.experience_store_page', None, '콘텐츠 생성'),
     ('경험담 블로그', 'bi-camera',            'create.experience',    None,  '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',     None,  '콘텐츠 생성'),
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
