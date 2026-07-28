@@ -420,6 +420,17 @@ def blog_ref_preview():
         return jsonify(ok=False, message=str(e))
 
 
+@create_bp.route('/blog/quality-check', methods=['POST'])
+@login_required
+def blog_quality_check():
+    """생성 본문 → AI 문체/품질 점수 + 개선 포인트(규칙 기반, 즉시)."""
+    text = (request.form.get('text') or '').strip()
+    if not text:
+        return jsonify(ok=False, message='검사할 본문이 없습니다.')
+    from services.blog_quality import analyze
+    return jsonify(ok=True, result=analyze(text))
+
+
 @create_bp.route('/blog/generate', methods=['POST'])
 @login_required
 def blog_generate():

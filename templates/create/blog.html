@@ -292,12 +292,16 @@
         </li>
       </ul>
       <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm py-1" onclick="runBlogQualityCheck()" id="qualBtn">
+          <i class="bi bi-shield-check me-1"></i>AI 문체·품질 검사
+        </button>
         <span class="text-muted" style="font-size:.7rem">워드프레스 발행은 5단계(완성본)에서 이미지와 함께 한 번에</span>
       </div>
     </div>
     <div class="px-3 pt-2">
       <span class="small text-muted" id="step3Meta"></span>
     </div>
+    <div id="qualPanel" class="mx-3 mt-2 p-3 rounded d-none" style="background:#f8f9fa;border-left:4px solid #0d9488;font-size:.8rem"></div>
     <div class="card-body p-0 pt-2">
       <textarea id="blogTextArea" class="form-control border-0 rounded-0" oninput="onBlogTextEdit()"
                 rows="30"
@@ -2533,6 +2537,43 @@ function switchBlogTab(t) {
 function onBlogTextEdit() {
   const v = document.getElementById('blogTextArea').value;
   if (_blogTab === 'google') blogGoogleText = v; else blogText = v;
+}
+
+// ── AI 문체·품질 검사 ───────────────────────────────────────
+async function runBlogQualityCheck() {
+  const text = document.getElementById('blogTextArea').value.trim();
+  const panel = document.getElementById('qualPanel');
+  const btn = document.getElementById('qualBtn');
+  if (!text) { alert('검사할 본문이 없습니다.'); return; }
+  btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>검사 중…';
+  try {
+    const fd = new FormData(); fd.append('text', text);
+    const r = await fetch('{{ url_for("create.blog_quality_check") }}', {method:'POST', body:fd});
+    const j = await r.json();
+    if (!j.ok) { alert(j.message || '검사 실패'); return; }
+    const s = j.result.scores, risk = j.result.ai_risk;
+    const bar = (label, val, invert) => {
+      const good = invert ? (100 - val) : val;
+      const color = good >= 70 ? '#16a34a' : good >= 45 ? '#d97706' : '#dc2626';
+      return `<div class="d-flex align-items-center gap-2 mb-1"><span style="width:110px">${label}</span>
+        <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+        <div style="width:${val}%;height:100%;background:${color}"></div></div>
+        <span style="width:34px;text-align:right">${val}</span></div>`;
+    };
+    const issues = (j.result.issues||[]).map(i=>`<li>${i}</li>`).join('') || '<li class="text-success">특이사항 없음</li>';
+    const vColor = risk >= 55 ? '#dc2626' : risk <= 25 ? '#16a34a' : '#d97706';
+    panel.innerHTML = `
+      <div class="fw-bold mb-2">판정: <span style="color:${vColor}">${j.result.verdict}</span></div>
+      ${bar('경험성', s['경험성'])}
+      ${bar('독창성', s['독창성'])}
+      ${bar('사실성', s['사실성'])}
+      ${bar('실행가능성', s['실행가능성'])}
+      ${bar('AI문체위험도', s['AI문체위험도'], true)}
+      <div class="mt-2 fw-semibold">개선 포인트</div>
+      <ul class="mb-0 ps-3">${issues}</ul>`;
+    panel.classList.remove('d-none');
+  } catch(e){ alert('오류: '+e); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-shield-check me-1"></i>AI 문체·품질 검사'; }
 }
 
 // ── 발행 대상 토글 변경 시 워드프레스 연결 안내 갱신 ───────────
