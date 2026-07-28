@@ -17,3 +17,6 @@ openai==1.77.0
 sentry-sdk[flask]==2.20.0
 markdown==3.7
 beautifulsoup4==4.12.3
+# Search Console 성과 동기화용 (서비스계정 설정 시 사용, 미설정이면 코드가 우아하게 스킵)
+google-api-python-client==2.149.0
+google-auth==2.35.0

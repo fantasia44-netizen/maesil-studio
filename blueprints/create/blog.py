@@ -420,6 +420,23 @@ def blog_ref_preview():
         return jsonify(ok=False, message=str(e))
 
 
+@create_bp.route('/blog/gsc-sync', methods=['POST'])
+@login_required
+def blog_gsc_sync():
+    """Search Console 성과 동기화 → published_content_index.sc_* 갱신."""
+    from services.search_console import sync_performance
+    return jsonify(sync_performance(current_app.supabase))
+
+
+@create_bp.route('/blog/gsc-suggestions', methods=['GET'])
+@login_required
+def blog_gsc_suggestions():
+    """저장된 성과 기반 리라이트 제안(규칙 기반)."""
+    from services.search_console import rewrite_suggestions
+    brand_id = (request.args.get('brand_id') or '').strip() or None
+    return jsonify(ok=True, suggestions=rewrite_suggestions(current_app.supabase, brand_id=brand_id))
+
+
 @create_bp.route('/blog/quality-check', methods=['POST'])
 @login_required
 def blog_quality_check():
