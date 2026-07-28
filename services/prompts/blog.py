@@ -63,6 +63,21 @@ def _experience_directive(experience_block: str) -> str:
 3. 익명 처리 지시가 있는 항목은 회사명/고객사명을 노출하지 마라.'''
 
 
+def _product_ref_directive(product_ref_block: str) -> str:
+    """연결된 실제 상품 정보가 있으면 사실 근거로 참조(스펙 날조 금지)."""
+    block = (product_ref_block or '').strip()
+    if not block:
+        return ''
+    return f'''
+[연결된 실제 상품 — 사실 근거로 참조]
+아래는 이 브랜드가 실제로 판매 중인 상품이다(매실인사이트 연동).
+{block}
+
+지시:
+1. 상품을 언급할 때 위 실제 정보(이름·가격·특징)만 사용하고, 없는 사양·효능을 지어내지 마라.
+2. 억지로 모든 상품을 넣지 말고, 주제와 맞는 상품만 자연스럽게 예로 들어라.'''
+
+
 def _internal_links_directive(internal_links_block: str) -> str:
     """관련 발행글이 있으면 본문에 자연스러운 내부 링크로 삽입."""
     block = (internal_links_block or '').strip()
@@ -254,6 +269,7 @@ def build_prompt(brand: dict, input_data: dict,
                  related_creation: dict | None = None,
                  experience_block: str = '',
                  internal_links_block: str = '',
+                 product_ref_block: str = '',
                  targets: str = 'naver') -> tuple[str, str, int]:
     """블로그 프롬프트 빌드 → (system, user, max_tokens).
 
@@ -300,6 +316,7 @@ def build_prompt(brand: dict, input_data: dict,
 
 {_CTA_RESTRAINT}
 {_experience_directive(experience_block)}
+{_product_ref_directive(product_ref_block)}
 {_internal_links_directive(internal_links_block)}
 """
 

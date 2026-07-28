@@ -524,6 +524,18 @@ def blog_generate():
         except Exception as e:
             logger.warning('[blog_generate] 경험 데이터 조회 실패(계속): %s', e)
 
+    # 연결된 실제 상품(매실인사이트 임포트) → 사실 근거로 자동 주입
+    product_ref_block = ''
+    if use_experience:
+        try:
+            from services.product_reference import search_relevant as _psearch, format_for_prompt as _pfmt
+            prods = _psearch(supabase, brand_id=brand['id'],
+                             topic=input_data['topic'], keyword=input_data['keyword'],
+                             seo_keywords=input_data['seo_keywords'], top_k=5)
+            product_ref_block = _pfmt(prods)
+        except Exception as e:
+            logger.warning('[blog_generate] 상품 근거 조회 실패(계속): %s', e)
+
     # 관련 발행글 → 내부 링크 추천(구글/세트 판에만, 발행 대상이므로)
     internal_links_block = ''
     if targets in ('google', 'both'):
@@ -548,6 +560,7 @@ def blog_generate():
         related_creation=related,
         experience_block=experience_block,
         internal_links_block=internal_links_block,
+        product_ref_block=product_ref_block,
         targets=targets,
     )
 
