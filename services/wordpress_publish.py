@@ -331,7 +331,9 @@ def _upload_image_to_wp(client, url: str, idx) -> dict | None:
     """이미지 URL 다운로드 → WP 미디어 업로드 → {id, source_url}. 실패 시 None."""
     try:
         content, mime = _fetch_image_bytes(url)
-        ext = _MIME_EXT.get(mime, 'jpg')
+        # 업로드 전 저용량 변환(리사이즈 + WebP). 실패 시 원본 유지.
+        from services.image_utils import compress_image
+        content, mime, ext = compress_image(content, mime)
         media = client.upload_media(f'maesil_{idx}.{ext}', content, mime)
         return {'id': media.get('id'), 'source_url': media.get('source_url')}
     except Exception as e:

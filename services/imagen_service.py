@@ -1742,19 +1742,24 @@ def upload_to_supabase(image_data: str, user_id: str, filename: str, supabase=No
     if not supabase:
         return image_data
 
-    import uuid
-    path = f'{user_id}/{uuid.uuid4()}_{filename}'
+    import uuid, os
+    from services.image_utils import compress_image
     bucket = 'creations'
 
     if image_data.startswith('data:image/'):
         header, b64data = image_data.split(',', 1)
         raw = base64.b64decode(b64data)
         mime = header.split(';')[0].split(':')[1]
-        supabase.storage.from_(bucket).upload(path, raw, {'content-type': mime})
     else:
         r = requests.get(image_data, timeout=30)
         r.raise_for_status()
+        raw = r.content
         mime = r.headers.get('Content-Type', 'image/png')
-        supabase.storage.from_(bucket).upload(path, r.content, {'content-type': mime})
+
+    # 저장 전 저용량 변환(리사이즈 + WebP). 실패 시 원본 유지.
+    raw, mime, ext = compress_image(raw, mime)
+    base_name = os.path.splitext(filename)[0]
+    path = f'{user_id}/{uuid.uuid4()}_{base_name}.{ext}'
+    supabase.storage.from_(bucket).upload(path, raw, {'content-type': mime})
 
     return supabase.storage.from_(bucket).get_public_url(path)
