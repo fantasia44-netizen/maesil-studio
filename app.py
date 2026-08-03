@@ -124,11 +124,32 @@ def _init_csrf(app):
         return redirect(request.referrer or url_for('main.dashboard'))
 
 
+def _wants_json():
+    """AJAX/fetch 요청인지 판별 — 세션 만료 시 HTML(로그인 페이지) 대신 JSON(401)을
+    돌려주기 위함. 프론트(base.html)가 모든 fetch에 X-Requested-With 를 달아준다."""
+    accept = request.headers.get('Accept') or ''
+    return (request.is_json
+            or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            or 'application/json' in accept)
+
+
 def _init_login(app):
     login_manager = LoginManager(app)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = '로그인이 필요합니다.'
     login_manager.login_message_category = 'warning'
+
+    @login_manager.unauthorized_handler
+    def _handle_unauthorized():
+        """@login_required 실패(미로그인/세션만료) 처리.
+        AJAX 면 JSON(401)+redirect 필드, 일반 페이지면 로그인으로 리다이렉트."""
+        login_url = url_for('auth.login')
+        if _wants_json():
+            return jsonify(ok=False, session_expired=True, redirect=login_url,
+                           message='로그인이 만료되었습니다. 다시 로그인해 주세요.'), 401
+        from flask import flash
+        flash('로그인이 필요합니다.', 'warning')
+        return redirect(login_url)
 
     _user_cache = {}
     CACHE_TTL = 300  # 5분
@@ -225,9 +246,13 @@ def _register_hooks(app):
                     from flask_login import logout_user
                     logout_user()
                     session.clear()
+                    login_url = url_for('auth.login')
+                    if _wants_json():
+                        return jsonify(ok=False, session_expired=True, redirect=login_url,
+                                       message='세션이 만료되었습니다. 다시 로그인해 주세요.'), 401
                     from flask import flash
                     flash('세션이 만료되었습니다. 다시 로그인하세요.', 'warning')
-                    return redirect(url_for('auth.login'))
+                    return redirect(login_url)
             except Exception:
                 pass
         session['last_activity'] = now_kst().isoformat()

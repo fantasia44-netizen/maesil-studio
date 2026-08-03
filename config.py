@@ -32,7 +32,7 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     PERMANENT_SESSION_LIFETIME = 86400  # 24시간
-    SESSION_INACTIVITY_TIMEOUT = 120   # 분
+    SESSION_INACTIVITY_TIMEOUT = 480   # 분 (8시간 — 작업 중 세션 만료 방지)
 
     # 로그인 보안
     LOGIN_MAX_ATTEMPTS = 5
@@ -57,6 +57,6 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
-    SESSION_INACTIVITY_TIMEOUT = 120
+    SESSION_INACTIVITY_TIMEOUT = 480
     SESSION_COOKIE_SECURE = True
     LOGIN_MAX_ATTEMPTS = 3
