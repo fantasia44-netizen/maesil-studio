@@ -62,36 +62,73 @@ def _ass_ts(sec: float) -> str:
     return f'{h}:{m:02d}:{s:02d}.{cs:02d}'
 
 
-def _build_ass(timed: list[dict], w: int, h: int) -> str:
-    """세그먼트 타이밍 → ASS 자막 문자열 (하단 중앙, 흰 글자 + 검은 외곽선)."""
-    fontsize = max(28, int(h / 16))
-    outline = max(2, fontsize // 14)
-    marginv = int(h * 0.18)   # 하단에서 18% 위 — 릴스/쇼츠 하단 UI 회피
+def _accent_numbers(text: str) -> str:
+    """훅 문구의 숫자를 오렌지로 강조 (\\c 는 &HBBGGRR: 오렌지=&H00A5FF, 흰색=&H00FFFFFF)."""
+    import re as _re
+    def repl(m):
+        return '{\\c&H00A5FF&}' + m.group(0) + '{\\c&H00FFFFFF&}'
+    return _re.sub(r'\d[\d,]*', repl, text)
+
+
+# 자막 스타일 프리셋
+CAPTION_STYLES = {
+    'outline': {'label': '검정 외곽선', 'border': 1, 'color': '&H00000000', 'thick': 7, 'shadow': 1},
+    'cyan':    {'label': '파랑 외곽선', 'border': 1, 'color': '&H00FF901E', 'thick': 7, 'shadow': 1},
+    'box':     {'label': '반투명 박스', 'border': 3, 'color': '&H80202020', 'thick': 5, 'shadow': 0},
+}
+DEFAULT_CAPTION_STYLE = 'outline'
+
+
+def _build_ass(timed: list[dict], w: int, h: int, style: str = DEFAULT_CAPTION_STYLE) -> str:
+    """세그먼트 타이밍 → ASS 자막.
+
+    Sub = 흘러가는 자막(하단 22%), Hook = 첫 훅(상단 대형 + 숫자 강조).
+    style: outline(검정 외곽선) | cyan(파랑 외곽선) | box(반투명 박스).
+    """
+    p = CAPTION_STYLES.get(style, CAPTION_STYLES[DEFAULT_CAPTION_STYLE])
+    base = max(30, int(h / 16))
+    hook_fs = int(base * 1.45)
+    thick = max(2, base // p['thick'])
+    sub_marginv = int(h * 0.22)
+    hook_marginv = int(h * 0.12)
+    WHITE = '&H00FFFFFF'
+    SHADOWCOL = '&H90000000'
+    bs, col, sh = p['border'], p['color'], p['shadow']
+
+    def _style(name, fs, align, mv):
+        return (f'Style: {name},NanumGothic,{fs},{WHITE},{WHITE},{col},{SHADOWCOL},'
+                f'-1,0,0,0,100,100,0,0,{bs},{thick},{sh},{align},60,60,{mv},1')
+
     header = (
         '[Script Info]\n'
         'ScriptType: v4.00+\n'
         f'PlayResX: {w}\nPlayResY: {h}\n'
-        'WrapStyle: 2\nScaledBorderAndShadow: yes\n\n'
+        'WrapStyle: 0\nScaledBorderAndShadow: yes\n\n'
         '[V4+ Styles]\n'
-        'Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, '
-        'Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, '
+        'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, '
+        'BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, '
         'BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n'
-        f'Style: Default,NanumGothic,{fontsize},&H00FFFFFF,&H00202020,&H90000000,'
-        f'-1,0,0,0,100,100,0,0,1,{outline},1,2,60,60,{marginv},1\n\n'
+        + _style('Sub', base, 2, sub_marginv) + '\n'
+        + _style('Hook', hook_fs, 8, hook_marginv) + '\n\n'
         '[Events]\n'
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n'
     )
     lines = []
     for seg in timed:
-        txt = (seg['text'] or '').replace('\n', ' ').replace('{', '(').replace('}', ')')
+        txt = (seg.get('text') or '').replace('\n', ' ').replace('{', '(').replace('}', ')')
+        is_hook = seg.get('role') == 'hook'
+        if is_hook:
+            txt = _accent_numbers(txt)
         lines.append(
-            f"Dialogue: 0,{_ass_ts(seg['start'])},{_ass_ts(seg['end'])},Default,,0,0,0,,{txt}")
+            f"Dialogue: 0,{_ass_ts(seg['start'])},{_ass_ts(seg['end'])},"
+            f"{'Hook' if is_hook else 'Sub'},,0,0,0,,{txt}")
     return header + '\n'.join(lines) + '\n'
 
 
 def render_narration(muted_local: str, segments: list, voice_key: str,
                      tts_speed: float, tts_api_key: str,
-                     out_path: str, work_dir: str) -> dict:
+                     out_path: str, work_dir: str,
+                     caption_style: str = DEFAULT_CAPTION_STYLE) -> dict:
     """무음 영상에 TTS 나레이션 + 타임라인 자막을 합성해 out_path 로 저장.
 
     반환: {duration, seg_count, width, height}
@@ -151,7 +188,7 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
     # 3) ASS 자막 파일
     ass_path = os.path.join(work_dir, 'subs.ass')
     with open(ass_path, 'w', encoding='utf-8') as f:
-        f.write(_build_ass(timed, w, h))
+        f.write(_build_ass(timed, w, h, caption_style))
 
     # 4) 최종 합성 — 무음영상(길이 부족시 루프) + 자막 번인 + 나레이션, 나레이션 길이에 맞춰 컷
     #    fontsdir 로 나눔폰트 위치를 libass 에 명시 (fontconfig 미스로 한글이 □ 로 깨지는 것 방지)

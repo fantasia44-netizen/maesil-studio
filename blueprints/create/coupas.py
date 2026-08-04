@@ -226,6 +226,7 @@ def coupas_render():
     video_url = (body.get('video_url') or '').strip()
     segments = body.get('segments') or []
     voice = (body.get('voice') or 'female_natural').strip()
+    caption_style = (body.get('caption_style') or 'outline').strip()
     texts = [s.get('text', '').strip() for s in segments if isinstance(s, dict) and s.get('text', '').strip()]
 
     if not video_url:
@@ -254,7 +255,7 @@ def coupas_render():
     render_narrated_video.delay(
         creation_id=creation_id, user_id=current_user.id,
         video_url=video_url, segments=segments, voice_key=voice, tts_speed=1.05,
-        supabase_url=su, supabase_key=sk)
+        caption_style=caption_style, supabase_url=su, supabase_key=sk)
 
     return jsonify(ok=True, creation_id=creation_id)
 

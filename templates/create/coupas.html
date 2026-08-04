@@ -129,6 +129,14 @@
               <option value="male_clear">남성 · 또렷한</option>
             </select>
           </div>
+          <div>
+            <label class="form-label small fw-semibold">자막 스타일</label>
+            <select id="capStyleSel" class="form-select form-select-sm" style="width:auto">
+              <option value="outline">굵은 검정 외곽선</option>
+              <option value="cyan">파랑 외곽선</option>
+              <option value="box">반투명 박스</option>
+            </select>
+          </div>
           <button id="btnRender" class="btn btn-danger"><i class="bi bi-film me-1"></i>음성·자막 입혀 영상 만들기</button>
         </div>
         <div class="form-text">위 멘트로 TTS 음성을 만들고, 그 타이밍에 자막을 영상에 입힙니다. (배경음·CTA는 다음 단계)</div>
@@ -347,7 +355,8 @@
       const r = await fetch('/create/coupas/render', {
         method:'POST',
         headers:{'Content-Type':'application/json','X-CSRFToken': CSRF},
-        body: JSON.stringify({ video_url: state.video_url, segments: segs, voice: $('#voiceSel').value }),
+        body: JSON.stringify({ video_url: state.video_url, segments: segs,
+                               voice: $('#voiceSel').value, caption_style: $('#capStyleSel').value }),
       });
       const j = await r.json();
       if (!j.ok) { renderFail(j.message); return; }

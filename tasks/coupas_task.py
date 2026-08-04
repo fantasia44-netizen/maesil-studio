@@ -54,6 +54,7 @@ def _fail(supabase, creation_id, step, e):
              max_retries=0, soft_time_limit=300, time_limit=360)
 def render_narrated_video(self, creation_id, user_id, video_url, segments,
                           voice_key='female_natural', tts_speed=1.05,
+                          caption_style='outline',
                           supabase_url='', supabase_key=''):
     """무음 영상 + 멘트 → TTS 음성 + 타임라인 자막 합성 → 최종 MP4 (B·C단계)."""
     import sys
@@ -85,7 +86,7 @@ def render_narrated_video(self, creation_id, user_id, video_url, segments,
         _set_step(supabase, creation_id, step)
         out = os.path.join(tmp_dir, 'out.mp4')
         meta = cr.render_narration(muted, segments, voice_key, float(tts_speed),
-                                   tts_key, out, tmp_dir)
+                                   tts_key, out, tmp_dir, caption_style)
 
         step = '저장 중'
         _set_step(supabase, creation_id, step)
