@@ -216,7 +216,7 @@
       <div id="renderResult" class="d-none">
         <video id="finalVideo" controls playsinline
                style="max-width:320px;width:100%;border-radius:10px;background:#000"></video>
-        <div class="mt-2"><a id="finalDl" class="btn btn-sm btn-outline-secondary" download><i class="bi bi-download me-1"></i>영상 다운로드</a></div>
+        <div class="mt-2"><button id="finalDl" type="button" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i>영상 다운로드</button></div>
       </div>
       <div id="renderFail" class="alert alert-danger py-2 px-3 mb-0 d-none" style="font-size:.82rem"></div>
     </div>
@@ -442,7 +442,7 @@
           clearInterval(renderTimer);
           $('#renderProgress').classList.add('d-none');
           $('#finalVideo').src = od.video_url || '';
-          $('#finalDl').href = od.video_url || '';
+          $('#finalDl').dataset.url = od.video_url || '';
           $('#renderResult').classList.remove('d-none');
         } else if (j.status === 'failed'){
           renderFail(od.error);
@@ -498,6 +498,27 @@
     const v = $('#bgmSel').value;
     return v === '__upload' ? (state.bgmUploaded || '') : v;
   }
+
+  // 다운로드 — Supabase(교차도메인)라 <a download>이 안 먹혀서 blob으로 강제 저장
+  $('#finalDl').addEventListener('click', async () => {
+    const url = $('#finalDl').dataset.url;
+    if (!url) return;
+    const btn = $('#finalDl'); const orig = btn.innerHTML;
+    btn.disabled = true; btn.textContent = '준비 중…';
+    try {
+      const r = await fetch(url);
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'coupas_' + Date.now() + '.mp4';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch(e) {
+      window.open(url, '_blank');   // CORS 등 실패 시 새 탭 열기(폴백)
+    } finally {
+      btn.disabled = false; btn.innerHTML = orig;
+    }
+  });
 
   $('#btnRender').addEventListener('click', async () => {
     const segs = collectSegs();
