@@ -109,7 +109,21 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
         if not raw:
             continue
         spoken = _normalize_tts_text(raw)
-        mp3 = tts_synthesize(spoken, tts_api_key, voice_key, tts_speed)
+        try:
+            mp3 = tts_synthesize(spoken, tts_api_key, voice_key, tts_speed)
+        except requests.HTTPError as he:
+            code = getattr(he.response, 'status_code', '?')
+            body = ''
+            try:
+                body = (he.response.text or '')[:400]
+            except Exception:
+                pass
+            if code == 403:
+                hint = ('Google TTS 403(권한 거부). 확인: ①Cloud Text-to-Speech API 사용설정(Enable) '
+                        '②API 키의 애플리케이션 제한(HTTP리퍼러/IP) 해제 또는 서버 허용 ③결제(billing) 연결. ')
+            else:
+                hint = f'Google TTS HTTP {code}. '
+            raise RuntimeError(f'{hint}상세: {body or he}')
         p = os.path.join(work_dir, f'seg{used}.mp3')
         with open(p, 'wb') as f:
             f.write(mp3)
