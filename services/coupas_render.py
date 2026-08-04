@@ -17,7 +17,7 @@ import tempfile
 import requests
 
 from services.shorts_service import (
-    _get_audio_duration, _ffmpeg, _ensure_font, _normalize_tts_text,
+    _get_audio_duration, _get_video_duration, _ffmpeg, _ensure_font, _normalize_tts_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -243,7 +243,10 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
 
     if not seg_files:
         raise ValueError('음성으로 만들 멘트가 없습니다.')
-    total = max(t, 1.0)
+    narration_total = max(t, 1.0)
+    # 최종 길이 = max(나레이션, 원본 영상) — 영상이 더 길면 잘리지 않게(나레이션 끝나도 영상 지속)
+    video_dur = _get_video_duration(muted_local)
+    total = max(narration_total, video_dur)
 
     # 2) 나레이션 오디오 합성 (concat demuxer — 동일 인코딩 mp3 이어붙이기)
     list_path = os.path.join(work_dir, 'concat.txt')
@@ -271,9 +274,10 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
     if bgm_path and os.path.exists(bgm_path):
         # 나레이션(원음) + BGM(볼륨↓, 시작지점 skip, 0.4s 페이드인) amix.
         vol = max(0.0, min(1.0, bgm_volume))
+        # duration=longest: 나레이션이 짧아도 BGM이 영상 끝까지 채움 (-t 로 최종 컷)
         fc = (f'[0:v]{ass_f}[v];'
               f'[2:a]volume={vol:.3f},afade=t=in:st=0:d=0.4[bg];'
-              f'[1:a][bg]amix=inputs=2:duration=first:normalize=0[a]')
+              f'[1:a][bg]amix=inputs=2:duration=longest:normalize=0[a]')
         _ffmpeg('-y',
                 '-stream_loop', '-1', '-i', muted_local,
                 '-i', narration,
