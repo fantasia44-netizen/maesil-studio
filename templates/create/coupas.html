@@ -83,6 +83,7 @@
 <script>
 (function(){
   const $ = s => document.querySelector(s);
+  const CSRF = '{{ csrf_token() }}';   // CSRFProtect 전역 활성 — 모든 POST에 필수
   let poll = null;
 
   // 탭 전환
@@ -142,8 +143,9 @@
   async function submit(payload, isFile){
     showPanel();
     try {
-      const opt = isFile ? { method:'POST', body: payload }
-                         : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) };
+      const opt = isFile
+        ? { method:'POST', headers:{'X-CSRFToken': CSRF}, body: payload }
+        : { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken': CSRF}, body: JSON.stringify(payload) };
       const r = await fetch('/create/coupas/import', opt);
       const j = await r.json();
       if (!j.ok) return fail(j.message);
