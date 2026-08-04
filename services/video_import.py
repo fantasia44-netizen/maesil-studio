@@ -87,16 +87,21 @@ def is_direct_video_url(url: str) -> bool:
     if u.endswith(('.mp4', '.mov', '.m4v', '.webm')):
         return True
     host = urlparse(url).netloc.lower()
-    return any(h in host for h in _ALI_VIDEO_HOSTS) or host.endswith('alicdn.com')
+    return (any(h in host for h in _ALI_VIDEO_HOSTS)
+            or host.endswith('alicdn.com')
+            or 'xhscdn.' in host)          # 샤오홍슈 영상 CDN
 
 
 def detect_source_platform(url: str) -> str:
     """상품 URL 의 플랫폼 감지."""
     host = urlparse(url).netloc.lower()
-    if 'video.taobao.com' in host or host.endswith('alicdn.com') or 'video.1688.com' in host:
+    if ('video.taobao.com' in host or host.endswith('alicdn.com')
+            or 'video.1688.com' in host or 'xhscdn.' in host):
         return 'direct'
     if '1688.com' in host:
         return '1688'
+    if 'xiaohongshu.com' in host or 'xhslink.com' in host:
+        return 'xiaohongshu'
     if 'tmall.com' in host:
         return 'tmall'
     if 'taobao.com' in host:
@@ -383,12 +388,15 @@ def import_from_url(page_url: str) -> dict:
         candidates = fetch_page_video_urls(page_url)
 
     if not candidates:
-        hint = ('상품 URL 자동추출이 1688 차단에 막혔습니다. '
-                '👉 브라우저에서 상품 영상 위 우클릭 → "동영상 주소 복사" 후 그 링크를 붙여넣으세요. '
-                '(그래도 안 되면 파일 업로드)')
+        where = '샤오홍슈' if platform == 'xiaohongshu' else '해당 사이트'
+        hint = (f'{where} 페이지 자동추출은 안티봇으로 막힙니다. '
+                '👉 브라우저에서 영상 위 우클릭 → "동영상 주소 복사"(cloud.video.taobao.com / xhscdn.com 형태) '
+                '후 그 링크를 붙여넣으세요. (그래도 안 되면 파일 업로드)')
         return {'ok': False, 'platform': platform, 'candidates': [], 'error': hint}
 
-    referer = page_url
+    # 샤오홍슈 CDN 은 xiaohongshu.com referer 필요
+    _h = urlparse(page_url).netloc.lower()
+    referer = 'https://www.xiaohongshu.com/' if 'xhscdn.' in _h else page_url
     last_err = None
     for cand in candidates:
         try:
