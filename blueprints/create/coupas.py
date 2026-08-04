@@ -63,7 +63,7 @@ def coupas_import():
                 ext = cand
         raw_storage_path = f'coupas/source/{current_user.id}/{creation_id}_raw.{ext}'
         try:
-            supabase.storage.from_('maesil-files').upload(
+            supabase.storage.from_('creations').upload(
                 raw_storage_path, data,
                 file_options={'content-type': file.mimetype or 'video/mp4',
                               'upsert': 'true'})

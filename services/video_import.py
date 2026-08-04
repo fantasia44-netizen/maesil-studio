@@ -406,7 +406,8 @@ def import_from_url(page_url: str) -> dict:
 
 
 # ── Supabase Storage ──────────────────────────────────────────
-STORAGE_BUCKET = 'maesil-files'
+# 'creations' = 프로젝트 전 기능(쇼츠 영상·배너·상품 등)이 공용으로 쓰는 버킷.
+STORAGE_BUCKET = 'creations'
 SOURCE_PREFIX = 'coupas/source'          # 원본(무음화) 영상 보관 경로 prefix
 SOURCE_RETENTION_DAYS = 7                 # 원본 자동 삭제 기한
 
