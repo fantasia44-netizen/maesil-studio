@@ -77,9 +77,24 @@ _ALI_VIDEO_HOSTS = (
 
 
 # ── 플랫폼 감지 ────────────────────────────────────────────────
+def is_direct_video_url(url: str) -> bool:
+    """직접 영상 파일 링크인지 판별.
+
+    사용자가 상품페이지에서 '영상 우클릭 → 동영상 주소 복사'로 얻는 CDN 링크
+    (cloud.video.taobao.com/....mp4)가 여기 해당 — 안티봇/로그인 우회하는 가장 안정적 경로.
+    """
+    u = url.lower().split('?')[0]
+    if u.endswith(('.mp4', '.mov', '.m4v', '.webm')):
+        return True
+    host = urlparse(url).netloc.lower()
+    return any(h in host for h in _ALI_VIDEO_HOSTS) or host.endswith('alicdn.com')
+
+
 def detect_source_platform(url: str) -> str:
     """상품 URL 의 플랫폼 감지."""
     host = urlparse(url).netloc.lower()
+    if 'video.taobao.com' in host or host.endswith('alicdn.com') or 'video.1688.com' in host:
+        return 'direct'
     if '1688.com' in host:
         return '1688'
     if 'tmall.com' in host:
@@ -360,19 +375,17 @@ def import_from_url(page_url: str) -> dict:
         return {'ok': False, 'platform': platform,
                 'error': '더우인/콰이쇼우는 아직 지원하지 않습니다(Phase 2). 파일 업로드를 이용하세요.'}
 
-    # 상품페이지 URL 자체가 .mp4 직링크인 경우도 허용
-    if page_url.lower().split('?')[0].endswith('.mp4'):
+    # ① 직접 영상 링크(우클릭→동영상 주소 복사)면 스크래핑 없이 바로 다운로드 — 가장 안정적
+    if is_direct_video_url(page_url):
         candidates = [page_url]
+    # ② 상품페이지 URL이면 HTML에서 추출 시도 (안티봇으로 실패 가능 → 상위에서 안내)
     else:
         candidates = fetch_page_video_urls(page_url)
 
     if not candidates:
-        if platform in ('taobao', 'tmall'):
-            hint = ('타오바오/티몰은 로그인 벽으로 서버 자동추출이 막혀있습니다. '
-                    '영상을 직접 다운로드해 파일 업로드로 진행하세요.')
-        else:
-            hint = ('페이지에서 영상을 찾지 못했습니다. (일시적 차단이거나 영상이 없는 상품) '
-                    '잠시 후 다시 시도하거나, 파일 업로드로 진행하세요.')
+        hint = ('상품 URL 자동추출이 1688 차단에 막혔습니다. '
+                '👉 브라우저에서 상품 영상 위 우클릭 → "동영상 주소 복사" 후 그 링크를 붙여넣으세요. '
+                '(그래도 안 되면 파일 업로드)')
         return {'ok': False, 'platform': platform, 'candidates': [], 'error': hint}
 
     referer = page_url

@@ -15,25 +15,32 @@
     <div class="card-body p-4">
 
       <div class="alert alert-secondary py-2 px-3 mb-4" style="font-size:.78rem">
-        원본 영상을 가져와 <b>소리를 제거</b>합니다. 이후 단계에서 자막·음성(TTS)·배경음을 새로 입힙니다.<br>
-        · <b>1688</b> 상품 URL 붙여넣기 지원 · <b>타오바오/티몰</b>은 로그인 벽으로 불가 → 파일 업로드 · 원본은 <b>7일 후 자동 삭제</b>
+        원본 영상을 가져와 <b>소리를 제거</b>합니다. 이후 단계에서 자막·음성(TTS)·배경음을 새로 입힙니다.
+        원본은 <b>7일 후 자동 삭제</b>됩니다.
       </div>
 
       <!-- 탭 -->
       <ul class="nav nav-pills mb-3" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-tab="url" type="button">URL 붙여넣기</button></li>
+        <li class="nav-item"><button class="nav-link active" data-tab="url" type="button">영상 링크 (추천)</button></li>
         <li class="nav-item"><button class="nav-link" data-tab="upload" type="button">파일 업로드</button></li>
       </ul>
 
       <!-- URL 탭 -->
       <div id="tab-url">
-        <label class="form-label small fw-semibold">1688 상품 URL</label>
+        <div class="alert alert-success py-2 px-3 mb-3" style="font-size:.78rem">
+          <b>가장 확실한 방법</b> — 1688 상품페이지에서 <b>재생 영상 위 마우스 우클릭 → "동영상 주소 복사"</b>
+          → 아래에 붙여넣기. (링크가 <code>cloud.video.taobao.com/....mp4</code> 형태면 정확합니다)
+        </div>
+        <label class="form-label small fw-semibold">영상 링크 붙여넣기</label>
         <div class="input-group">
           <input type="url" id="srcUrl" class="form-control"
-                 placeholder="https://detail.1688.com/offer/........html">
+                 placeholder="https://cloud.video.taobao.com/.../xxxxx.mp4  또는  1688 상품 URL">
           <button class="btn btn-danger" id="btnUrl"><i class="bi bi-download me-1"></i>가져오기</button>
         </div>
-        <div class="form-text">데스크톱 URL 그대로 붙여넣으면 됩니다 (모바일 자동 변환).</div>
+        <div class="form-text">
+          1688 <b>상품 URL</b>을 그대로 넣어도 자동 추출을 시도하지만, 1688 차단으로 실패할 수 있어요.
+          그럴 땐 위의 <b>우클릭 → 동영상 주소 복사</b> 링크를 넣으면 확실합니다.
+        </div>
       </div>
 
       <!-- 업로드 탭 -->
@@ -96,7 +103,8 @@
   function fail(msg){
     if (poll) clearInterval(poll);
     $('#progress').classList.add('d-none');
-    $('#failBox').textContent = msg || '가져오기에 실패했습니다.';
+    $('#failBox').textContent = msg ||
+      '가져오기에 실패했습니다. 상품 영상 위에서 마우스 우클릭 → "동영상 주소 복사" 후 그 링크를 넣어보세요.';
     $('#failBox').classList.remove('d-none');
   }
   function done(od){
