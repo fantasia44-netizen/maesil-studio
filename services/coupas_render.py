@@ -66,7 +66,7 @@ def _build_ass(timed: list[dict], w: int, h: int) -> str:
     """세그먼트 타이밍 → ASS 자막 문자열 (하단 중앙, 흰 글자 + 검은 외곽선)."""
     fontsize = max(28, int(h / 16))
     outline = max(2, fontsize // 14)
-    marginv = int(h * 0.10)
+    marginv = int(h * 0.18)   # 하단에서 18% 위 — 릴스/쇼츠 하단 UI 회피
     header = (
         '[Script Info]\n'
         'ScriptType: v4.00+\n'
@@ -96,7 +96,10 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
 
     반환: {duration, seg_count, width, height}
     """
-    _ensure_font('NanumGothic.ttf')   # fontconfig 미스 대비 로컬 폰트 확보
+    # 한글 폰트 확보 + libass 가 참조할 폰트 디렉토리 확정
+    _ensure_font('NanumGothicBold.ttf')
+    font_path = _ensure_font('NanumGothic.ttf')
+    fonts_dir = os.path.dirname(font_path) if font_path else None
     w, h = _probe_wh(muted_local)
 
     # 1) 세그먼트별 TTS → mp3 + 길이 측정 → 타이밍 누적
@@ -151,12 +154,16 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
         f.write(_build_ass(timed, w, h))
 
     # 4) 최종 합성 — 무음영상(길이 부족시 루프) + 자막 번인 + 나레이션, 나레이션 길이에 맞춰 컷
+    #    fontsdir 로 나눔폰트 위치를 libass 에 명시 (fontconfig 미스로 한글이 □ 로 깨지는 것 방지)
+    ass_vf = f'ass={ass_path}'
+    if fonts_dir:
+        ass_vf = f'ass={ass_path}:fontsdir={fonts_dir}'
     _ffmpeg(
         '-y',
         '-stream_loop', '-1', '-i', muted_local,   # 영상 (필요시 반복)
         '-i', narration,                            # 나레이션 오디오
         '-t', f'{total:.3f}',
-        '-vf', f'ass={ass_path}',
+        '-vf', ass_vf,
         '-map', '0:v:0', '-map', '1:a:0',
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
         '-c:a', 'aac', '-b:a', '128k',
