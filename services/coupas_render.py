@@ -8,6 +8,7 @@ FFmpeg 는 Render 워커에 libass 포함(자막) + fonts-nanum(한글) 설치�
 """
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import re
@@ -16,10 +17,47 @@ import tempfile
 import requests
 
 from services.shorts_service import (
-    tts_synthesize, _get_audio_duration, _ffmpeg, _ensure_font, _normalize_tts_text,
+    _get_audio_duration, _ffmpeg, _ensure_font, _normalize_tts_text,
 )
 
 logger = logging.getLogger(__name__)
+
+# ── 음성: Google Chirp3-HD(자연스러움↑) 우선, 실패 시 Neural2 폴백 ─────────
+#    (locale, voiceName, is_chirp) — Chirp3-HD 는 pitch 파라미터 미지원
+COUPAS_VOICES = {
+    'ko_female_1': ('ko-KR', 'ko-KR-Chirp3-HD-Aoede', True),   # 여성·자연
+    'ko_female_2': ('ko-KR', 'ko-KR-Chirp3-HD-Leda',  True),   # 여성·밝은
+    'ko_male_1':   ('ko-KR', 'ko-KR-Chirp3-HD-Charon', True),  # 남성·차분
+    'ko_male_2':   ('ko-KR', 'ko-KR-Chirp3-HD-Puck',   True),  # 남성·경쾌
+    # Neural2 (폴백/호환)
+    'female_natural': ('ko-KR', 'ko-KR-Neural2-A', False),
+    'female_bright':  ('ko-KR', 'ko-KR-Neural2-B', False),
+    'male_calm':      ('ko-KR', 'ko-KR-Neural2-C', False),
+    'male_clear':     ('ko-KR', 'ko-KR-Wavenet-C', False),
+}
+_CHIRP_FALLBACK = {
+    'ko_female_1': 'female_natural', 'ko_female_2': 'female_bright',
+    'ko_male_1': 'male_calm', 'ko_male_2': 'male_clear',
+}
+
+
+def _synth(text: str, api_key: str, voice_key: str, speed: float) -> bytes:
+    """Google TTS → MP3. Chirp3-HD/Neural2 모두 지원 (Chirp 는 pitch 생략)."""
+    lang, name, is_chirp = COUPAS_VOICES.get(voice_key, COUPAS_VOICES['ko_female_1'])
+    audio_cfg = {'audioEncoding': 'MP3', 'speakingRate': max(0.25, min(2.0, speed))}
+    if not is_chirp:
+        audio_cfg['pitch'] = 0.0
+    resp = requests.post(
+        f'https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}',
+        json={'input': {'text': text},
+              'voice': {'languageCode': lang, 'name': name},
+              'audioConfig': audio_cfg},
+        timeout=25)
+    resp.raise_for_status()
+    b64 = resp.json().get('audioContent', '')
+    if not b64:
+        raise ValueError('Google TTS 응답에 audioContent가 없습니다.')
+    return base64.b64decode(b64)
 
 MAX_SEGMENTS = 12
 
@@ -173,20 +211,27 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
         if not spoken:
             continue
         try:
-            mp3 = tts_synthesize(spoken, tts_api_key, voice_key, tts_speed)
+            mp3 = _synth(spoken, tts_api_key, voice_key, tts_speed)
         except requests.HTTPError as he:
             code = getattr(he.response, 'status_code', '?')
-            body = ''
-            try:
-                body = (he.response.text or '')[:400]
-            except Exception:
-                pass
-            if code == 403:
-                hint = ('Google TTS 403(권한 거부). 확인: ①Cloud Text-to-Speech API 사용설정(Enable) '
-                        '②API 키의 애플리케이션 제한(HTTP리퍼러/IP) 해제 또는 서버 허용 ③결제(billing) 연결. ')
+            fb = _CHIRP_FALLBACK.get(voice_key)
+            if fb and code in (400, 404):
+                # Chirp3-HD 미지원/오류 → Neural2 로 자동 전환(이후 세그먼트도 유지)
+                logger.warning('[coupas_render] Chirp3-HD(%s) 오류 %s → Neural2 폴백', voice_key, code)
+                voice_key = fb
+                mp3 = _synth(spoken, tts_api_key, voice_key, tts_speed)
             else:
-                hint = f'Google TTS HTTP {code}. '
-            raise RuntimeError(f'{hint}상세: {body or he}')
+                body = ''
+                try:
+                    body = (he.response.text or '')[:400]
+                except Exception:
+                    pass
+                if code == 403:
+                    hint = ('Google TTS 403(권한 거부). 확인: ①Cloud Text-to-Speech API 사용설정(Enable) '
+                            '②API 키의 애플리케이션 제한(HTTP리퍼러/IP) 해제 또는 서버 허용 ③결제(billing) 연결. ')
+                else:
+                    hint = f'Google TTS HTTP {code}. '
+                raise RuntimeError(f'{hint}상세: {body or he}')
         p = os.path.join(work_dir, f'seg{used}.mp3')
         with open(p, 'wb') as f:
             f.write(mp3)
