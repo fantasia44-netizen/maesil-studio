@@ -102,6 +102,80 @@ def coupas_import():
     return jsonify(ok=True, creation_id=creation_id)
 
 
+@create_bp.route('/coupas/script/save', methods=['POST'])
+@login_required
+def coupas_script_save():
+    """생성/편집한 멘트를 저장 (creation_type='coupas_script') — 재사용용."""
+    supabase = current_app.supabase
+    body = request.get_json(silent=True) or {}
+    segments = [s for s in (body.get('segments') or [])
+                if isinstance(s, dict) and (s.get('text') or '').strip()]
+    if not segments:
+        return jsonify(ok=False, message='저장할 멘트가 없습니다.')
+    product_name = (body.get('product_name') or '').strip() or '제목 없음'
+    selling_points = (body.get('selling_points') or '').strip()
+    creation_id = str(uuid.uuid4())
+    try:
+        row = {
+            'id': creation_id, 'user_id': current_user.id,
+            'creation_type': 'coupas_script',
+            'input_data': {'product_name': product_name, 'selling_points': selling_points},
+            'output_data': {'segments': segments, 'caption': body.get('caption') or '',
+                            'product_name': product_name, 'selling_points': selling_points},
+            'points_used': 0, 'status': 'done', 'created_at': now_kst().isoformat(),
+        }
+        if getattr(current_user, 'operator_id', None):
+            row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(row).execute()
+    except Exception as e:
+        logger.error('[coupas/script/save] %s', e)
+        return jsonify(ok=False, message=f'저장 실패: {e}')
+    return jsonify(ok=True, id=creation_id)
+
+
+@create_bp.route('/coupas/scripts', methods=['GET'])
+@login_required
+def coupas_scripts():
+    """저장된 멘트 목록 (전체 데이터 포함 → 즉시 불러오기)."""
+    supabase = current_app.supabase
+    try:
+        rows = (supabase.table('creations')
+                .select('id, output_data, created_at')
+                .eq('user_id', current_user.id)
+                .eq('creation_type', 'coupas_script')
+                .eq('status', 'done')
+                .order('created_at', desc=True)
+                .limit(40).execute()).data or []
+    except Exception as e:
+        logger.error('[coupas/scripts] %s', e)
+        rows = []
+    items = []
+    for r in rows:
+        od = r.get('output_data') or {}
+        items.append({
+            'id': r['id'],
+            'product_name': od.get('product_name') or '제목 없음',
+            'selling_points': od.get('selling_points') or '',
+            'segments': od.get('segments') or [],
+            'caption': od.get('caption') or '',
+            'seg_count': len(od.get('segments') or []),
+            'created_at': (r.get('created_at') or '')[:10],
+        })
+    return jsonify(ok=True, items=items)
+
+
+@create_bp.route('/coupas/script/delete/<sid>', methods=['POST'])
+@login_required
+def coupas_script_delete(sid):
+    supabase = current_app.supabase
+    try:
+        supabase.table('creations').delete().eq('id', sid).eq(
+            'user_id', current_user.id).eq('creation_type', 'coupas_script').execute()
+    except Exception as e:
+        return jsonify(ok=False, message=str(e))
+    return jsonify(ok=True)
+
+
 @create_bp.route('/coupas/my-videos', methods=['GET'])
 @login_required
 def coupas_my_videos():

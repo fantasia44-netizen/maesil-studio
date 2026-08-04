@@ -97,6 +97,13 @@
       </h6>
     </div>
     <div class="card-body p-4">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <i class="bi bi-folder2-open text-muted"></i>
+        <select id="scriptLoadSel" class="form-select form-select-sm" style="max-width:340px">
+          <option value="">저장된 멘트 불러오기…</option>
+        </select>
+        <button id="scriptDelBtn" type="button" class="btn btn-sm btn-outline-danger d-none" title="선택 멘트 삭제"><i class="bi bi-trash"></i></button>
+      </div>
       <div class="row g-3">
         <div class="col-md-5">
           <label class="form-label small fw-semibold">상품명</label>
@@ -117,6 +124,10 @@
 
         <label class="form-label small fw-semibold mt-4">쿠팡 캡션 초안 <span class="text-muted fw-normal">(링크 자리 <code>[쿠팡링크]</code>)</span></label>
         <textarea id="captionBox" class="form-control" rows="6" style="font-size:.85rem"></textarea>
+        <div class="mt-2">
+          <button id="btnSaveScript" type="button" class="btn btn-sm btn-outline-secondary"><i class="bi bi-save me-1"></i>이 멘트 저장</button>
+          <span id="saveScriptStatus" class="small ms-2 text-muted"></span>
+        </div>
 
         <hr class="my-4">
         <div class="d-flex align-items-end gap-2 flex-wrap">
@@ -353,6 +364,59 @@
     }
   });
   $('#btnAddSeg').addEventListener('click', () => addSegRow('', 'body'));
+
+  // ── 멘트 저장 / 불러오기 ────────────────────────────────────
+  const scriptMap = {};
+  async function loadScriptList(){
+    try {
+      const r = await fetch('/create/coupas/scripts');
+      const j = await r.json();
+      const sel = $('#scriptLoadSel');
+      sel.innerHTML = '<option value="">저장된 멘트 불러오기…</option>';
+      Object.keys(scriptMap).forEach(k => delete scriptMap[k]);
+      (j.items || []).forEach(it => {
+        scriptMap[it.id] = it;
+        const o = document.createElement('option');
+        o.value = it.id;
+        o.textContent = it.product_name + ' · ' + it.created_at + ' (' + it.seg_count + '줄)';
+        sel.appendChild(o);
+      });
+    } catch(e){}
+  }
+  loadScriptList();
+  $('#scriptLoadSel').addEventListener('change', () => {
+    const it = scriptMap[$('#scriptLoadSel').value];
+    $('#scriptDelBtn').classList.toggle('d-none', !it);
+    if (!it) return;
+    $('#prodName').value = it.product_name === '제목 없음' ? '' : it.product_name;
+    $('#sellPoints').value = it.selling_points || '';
+    renderSegs(it.segments || []);
+    $('#captionBox').value = it.caption || '';
+    $('#scriptResult').classList.remove('d-none');
+  });
+  $('#scriptDelBtn').addEventListener('click', async () => {
+    const id = $('#scriptLoadSel').value;
+    if (!id || !confirm('이 멘트를 삭제할까요?')) return;
+    try { await fetch('/create/coupas/script/delete/' + id, { method:'POST', headers:{'X-CSRFToken': CSRF} }); } catch(e){}
+    await loadScriptList();
+    $('#scriptDelBtn').classList.add('d-none');
+  });
+  $('#btnSaveScript').addEventListener('click', async () => {
+    const segs = collectSegs();
+    if (!segs.length) return alert('저장할 멘트가 없습니다.');
+    $('#saveScriptStatus').textContent = '저장 중…';
+    try {
+      const r = await fetch('/create/coupas/script/save', {
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken': CSRF},
+        body: JSON.stringify({ product_name: $('#prodName').value.trim(),
+                               selling_points: $('#sellPoints').value.trim(),
+                               segments: segs, caption: $('#captionBox').value }),
+      });
+      const j = await r.json();
+      $('#saveScriptStatus').textContent = j.ok ? '✓ 저장됨' : (j.message || '실패');
+      if (j.ok) loadScriptList();
+    } catch(e){ $('#saveScriptStatus').textContent = '저장 오류'; }
+  });
 
   // ── 3단계: 음성+자막 합성 ───────────────────────────────────
   function collectSegs(){
