@@ -102,6 +102,40 @@ def coupas_import():
     return jsonify(ok=True, creation_id=creation_id)
 
 
+@create_bp.route('/coupas/my-videos', methods=['GET'])
+@login_required
+def coupas_my_videos():
+    """이미 가져온(무음화 저장된) 영상 목록 — 재다운로드 없이 재사용.
+
+    7일 정리 잡으로 원본이 삭제된 것(source_deleted)은 제외.
+    """
+    supabase = current_app.supabase
+    try:
+        rows = (supabase.table('creations')
+                .select('id, output_data, created_at')
+                .eq('user_id', current_user.id)
+                .eq('creation_type', 'coupas_import')
+                .eq('status', 'done')
+                .order('created_at', desc=True)
+                .limit(24).execute()).data or []
+    except Exception as e:
+        logger.error('[coupas/my-videos] %s', e)
+        rows = []
+    items = []
+    for r in rows:
+        od = r.get('output_data') or {}
+        if od.get('source_deleted') or not od.get('video_url'):
+            continue
+        items.append({
+            'id': r['id'],
+            'video_url': od.get('video_url'),
+            'meta': od.get('meta') or {},
+            'platform': od.get('platform') or '',
+            'created_at': (r.get('created_at') or '')[:10],
+        })
+    return jsonify(ok=True, items=items)
+
+
 @create_bp.route('/coupas/script', methods=['POST'])
 @login_required
 def coupas_script():

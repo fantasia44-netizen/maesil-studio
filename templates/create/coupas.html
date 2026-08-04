@@ -23,6 +23,7 @@
       <ul class="nav nav-pills mb-3" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-tab="url" type="button">영상 링크 (추천)</button></li>
         <li class="nav-item"><button class="nav-link" data-tab="upload" type="button">파일 업로드</button></li>
+        <li class="nav-item"><button class="nav-link" data-tab="saved" type="button"><i class="bi bi-collection-play me-1"></i>내 영상</button></li>
       </ul>
 
       <!-- URL 탭 -->
@@ -50,6 +51,15 @@
           <input type="file" id="srcFile" class="form-control" accept="video/*">
           <button class="btn btn-danger" id="btnFile"><i class="bi bi-upload me-1"></i>가져오기</button>
         </div>
+      </div>
+
+      <!-- 내 영상 탭 -->
+      <div id="tab-saved" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <label class="form-label small fw-semibold mb-0">저장된 영상 <span class="text-muted fw-normal">(최근 · 7일 후 자동삭제)</span></label>
+          <button id="btnRefreshSaved" class="btn btn-sm btn-outline-secondary" type="button"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+        <div id="savedList" class="row g-2"><div class="col text-muted small">불러오는 중…</div></div>
       </div>
 
     </div>
@@ -127,7 +137,48 @@
     btn.classList.add('active');
     $('#tab-url').classList.toggle('d-none', btn.dataset.tab !== 'url');
     $('#tab-upload').classList.toggle('d-none', btn.dataset.tab !== 'upload');
+    $('#tab-saved').classList.toggle('d-none', btn.dataset.tab !== 'saved');
+    if (btn.dataset.tab === 'saved') loadSaved();
   }));
+
+  // ── 내 영상 (재다운로드 없이 재사용) ────────────────────────
+  async function loadSaved(){
+    const box = $('#savedList');
+    box.innerHTML = '<div class="col text-muted small">불러오는 중…</div>';
+    try {
+      const r = await fetch('/create/coupas/my-videos');
+      const j = await r.json();
+      const items = (j.ok && j.items) ? j.items : [];
+      if (!items.length){
+        box.innerHTML = '<div class="col text-muted small">저장된 영상이 없습니다. 먼저 영상을 가져오세요.</div>';
+        return;
+      }
+      box.innerHTML = '';
+      items.forEach(it => {
+        const m = it.meta || {};
+        const info = [ m.duration ? m.duration+'초' : '', (m.width&&m.height)?m.width+'×'+m.height : '' ].filter(Boolean).join(' · ');
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-4';
+        col.innerHTML =
+          '<div class="card h-100 saved-item" style="cursor:pointer">'
+          + '<video src="'+it.video_url+'#t=0.5" muted preload="metadata" '
+          + 'style="width:100%;height:110px;object-fit:cover;border-radius:6px 6px 0 0;background:#000"></video>'
+          + '<div class="p-2" style="font-size:.75rem"><div class="text-truncate">'+(info||'영상')+'</div>'
+          + '<div class="text-muted" style="font-size:.68rem">'+(it.platform||'')+' · '+(it.created_at||'')+'</div></div></div>';
+        col.querySelector('.saved-item').addEventListener('click', () => selectSaved(it));
+        box.appendChild(col);
+      });
+    } catch(e){
+      box.innerHTML = '<div class="col text-danger small">불러오기 실패</div>';
+    }
+  }
+  function selectSaved(it){
+    $('#panel').classList.remove('d-none');
+    $('#failBox').classList.add('d-none');
+    done({ video_url: it.video_url, meta: it.meta || {}, platform: it.platform });
+    $('#panel').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  $('#btnRefreshSaved').addEventListener('click', loadSaved);
 
   function showPanel(){
     $('#panel').classList.remove('d-none');
