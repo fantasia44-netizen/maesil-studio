@@ -4,23 +4,32 @@
 웹 요청을 블로킹하지 않으며, 데이터센터 IP/디스크 부담을 웹 서버와 분리한다.
 
 입력 두 경로:
-  - source_url:        1688/타오바오 상품페이지 또는 .mp4 직링크 → 워커가 다운로드
-  - raw_storage_path:  사용자가 업로드해 Storage 임시경로에 올려둔 원본 → 워커가 내려받아 처리
+  - source_url:        직접 영상 링크(cloud.video.taobao.com/....mp4, 우클릭→동영상 주소 복사)
+                       또는 1688 상품페이지 URL(자동추출, 안티봇으로 실패 가능)
+  - raw_storage_path:  사용자가 업로드해 Storage 임시경로에 올려둔 원본
 
 산출:
-  creations(status=done).output_data = {
-    video_url, storage_path, platform, source_url, meta{duration,width,height,...}
-  }
-무료 단계(포인트 미차감)이므로 실패 시 환불 없이 status=failed 만 기록.
+  creations(status=done).output_data = {video_url, storage_path, platform, source_url, meta}
+무료 단계(포인트 미차감)이므로 실패 시 환불 없이 status=failed + 상세 에러 기록.
 """
 import logging
 import os
 import tempfile
+import traceback
 import uuid
 
 from celery_app import celery
 
 logger = logging.getLogger(__name__)
+
+
+def _set_step(supabase, creation_id, step):
+    """진행 단계를 output_data.step 에 기록 (폴링 UI에 실시간 표시)."""
+    try:
+        supabase.table('creations').update(
+            {'output_data': {'step': step}}).eq('id', creation_id).execute()
+    except Exception:
+        pass
 
 
 @celery.task(bind=True, name='tasks.coupas_task.import_source_video',
@@ -41,11 +50,14 @@ def import_source_video(self, creation_id, user_id,
     local_path = None
     muted_path = None
     platform = 'upload'
+    step = '시작'
 
     try:
-        # 1) 원본 확보 — URL 다운로드 또는 Storage 원본 내려받기
+        # 1) 원본 확보
         if source_url:
             platform = vi.detect_source_platform(source_url)
+            step = '영상 다운로드 중'
+            _set_step(supabase, creation_id, step)
             result = vi.import_from_url(source_url)
             if not result.get('ok'):
                 raise RuntimeError(result.get('error') or '영상을 가져오지 못했습니다.')
@@ -54,6 +66,8 @@ def import_source_video(self, creation_id, user_id,
             meta = result.get('meta') or {}
             resolved_url = result.get('source_url')
         elif raw_storage_path:
+            step = '업로드 원본 불러오는 중'
+            _set_step(supabase, creation_id, step)
             tmp_dir = tempfile.mkdtemp(prefix='coupas_')
             local_path = os.path.join(tmp_dir, f'{uuid.uuid4().hex[:10]}.mp4')
             data = supabase.storage.from_(vi.STORAGE_BUCKET).download(raw_storage_path)
@@ -65,15 +79,19 @@ def import_source_video(self, creation_id, user_id,
             raise ValueError('source_url 또는 raw_storage_path 가 필요합니다.')
 
         # 2) 오디오 제거 (무음화)
+        step = '소리 제거 중'
+        _set_step(supabase, creation_id, step)
         muted_path = os.path.join(tmp_dir, f'{uuid.uuid4().hex[:10]}_mute.mp4')
         vi.strip_audio(local_path, muted_path)
         muted_meta = vi.probe_video(muted_path)
 
-        # 3) Storage 업로드 (정리 잡이 스캔하는 규칙 경로)
+        # 3) Storage 업로드
+        step = '저장 중'
+        _set_step(supabase, creation_id, step)
         dest_path = vi.source_storage_path(user_id, creation_id)
         video_url = vi.upload_file(supabase, muted_path, dest_path)
 
-        # 4) 업로드 원본(raw)은 처리 후 즉시 제거 — 스토리지 절약
+        # 4) 업로드 원본(raw) 즉시 제거 — 스토리지 절약
         if raw_storage_path:
             vi.delete_storage_paths(supabase, [raw_storage_path])
 
@@ -99,11 +117,23 @@ def import_source_video(self, creation_id, user_id,
                     creation_id, platform, out_meta.get('duration'))
 
     except Exception as e:
-        logger.error('[coupas_task] import 오류 cid=%s: %s', creation_id, e, exc_info=True)
+        # 에러를 절대 비우지 않음 — SoftTimeLimitExceeded 등 str()이 빈 예외 대응
+        is_timeout = 'SoftTimeLimit' in type(e).__name__
+        if is_timeout:
+            err = f'시간 초과(240초) — [{step}] 단계에서 지연. Render IP가 CDN 다운로드에 느릴 수 있습니다.'
+        else:
+            base = str(e).strip() or repr(e) or type(e).__name__
+            err = f'[{step}] {base}'
+        logger.error('[coupas_task] import 오류 cid=%s: %s\n%s',
+                     creation_id, err, traceback.format_exc())
         try:
             supabase.table('creations').update({
                 'status': 'failed',
-                'output_data': {'error': str(e)[:300]},
+                'output_data': {
+                    'error': err[:300],
+                    'step': step,
+                    'trace': traceback.format_exc()[-600:],
+                },
             }).eq('id', creation_id).execute()
         except Exception:
             pass

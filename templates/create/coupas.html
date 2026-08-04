@@ -131,8 +131,10 @@
         const r = await fetch(`/create/coupas/import/status/${id}`);
         const j = await r.json();
         if (!j.ok) return;
-        if (j.status === 'done') done(j.output_data || {});
-        else if (j.status === 'failed') fail((j.output_data || {}).error);
+        const od = j.output_data || {};
+        if (j.status === 'done') done(od);
+        else if (j.status === 'failed') fail(od.error);
+        else if (od.step) $('#progressMsg').textContent = od.step + '…';   // 실시간 단계
       } catch(e){ /* keep polling */ }
     }, 2500);
   }
