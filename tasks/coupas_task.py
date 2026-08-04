@@ -32,6 +32,81 @@ def _set_step(supabase, creation_id, step):
         pass
 
 
+def _fail(supabase, creation_id, step, e):
+    """실패 기록 — 에러를 절대 비우지 않음(SoftTimeLimit 등 대응)."""
+    import traceback
+    if 'SoftTimeLimit' in type(e).__name__:
+        err = f'시간 초과 — [{step}] 단계에서 지연되었습니다.'
+    else:
+        err = f'[{step}] {str(e).strip() or repr(e) or type(e).__name__}'
+    logger.error('[coupas_task] 오류 cid=%s: %s\n%s', creation_id, err, traceback.format_exc())
+    try:
+        supabase.table('creations').update({
+            'status': 'failed',
+            'output_data': {'error': err[:300], 'step': step,
+                            'trace': traceback.format_exc()[-600:]},
+        }).eq('id', creation_id).execute()
+    except Exception:
+        pass
+
+
+@celery.task(bind=True, name='tasks.coupas_task.render_narrated_video',
+             max_retries=0, soft_time_limit=300, time_limit=360)
+def render_narrated_video(self, creation_id, user_id, video_url, segments,
+                          voice_key='female_natural', tts_speed=1.05,
+                          supabase_url='', supabase_key=''):
+    """무음 영상 + 멘트 → TTS 음성 + 타임라인 자막 합성 → 최종 MP4 (B·C단계)."""
+    import sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+    from supabase import create_client
+    from services import coupas_render as cr, video_import as vi
+    from services.config_service import get_config
+
+    supabase = create_client(supabase_url, supabase_key)
+    tmp_dir = None
+    step = '시작'
+    try:
+        step = '음성 준비 중'
+        _set_step(supabase, creation_id, step)
+        tts_key = get_config('google_tts_api_key')
+        if not tts_key:
+            raise RuntimeError('google_tts_api_key가 설정되지 않았습니다. 시스템 설정에서 등록하세요.')
+
+        tmp_dir = tempfile.mkdtemp(prefix='coupasrender_')
+        muted = os.path.join(tmp_dir, 'muted.mp4')
+        step = '영상 불러오는 중'
+        _set_step(supabase, creation_id, step)
+        cr.download(video_url, muted)
+
+        step = '음성·자막 합성 중'
+        _set_step(supabase, creation_id, step)
+        out = os.path.join(tmp_dir, 'out.mp4')
+        meta = cr.render_narration(muted, segments, voice_key, float(tts_speed),
+                                   tts_key, out, tmp_dir)
+
+        step = '저장 중'
+        _set_step(supabase, creation_id, step)
+        dest = f'coupas/rendered/{user_id}/{creation_id}.mp4'
+        final_url = vi.upload_file(supabase, out, dest)
+
+        supabase.table('creations').update({
+            'status': 'done',
+            'output_data': {'video_url': final_url, 'storage_path': dest,
+                            'meta': meta, 'source_deleted': False},
+        }).eq('id', creation_id).execute()
+        logger.info('[coupas_task] render 완료 cid=%s dur=%s', creation_id, meta.get('duration'))
+    except Exception as e:
+        _fail(supabase, creation_id, step, e)
+        raise
+    finally:
+        if tmp_dir:
+            from services import video_import as _vi
+            _vi._safe_rmtree(tmp_dir)
+
+
 @celery.task(bind=True, name='tasks.coupas_task.import_source_video',
              max_retries=0, soft_time_limit=240, time_limit=300)
 def import_source_video(self, creation_id, user_id,

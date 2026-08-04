@@ -205,6 +205,7 @@ CREATION_LABELS = {
     'shorts_video':         '쇼츠/릴스 영상',
     'shorts_video_kling':   '쇼츠/릴스 영상 (Kling 모션)',
     'coupas_import':        '쿠파스 소스 영상',
+    'coupas_video':         '쿠파스 완성 영상',
     # 홍보 자료
     'business_proposal':    '거래처 제안서',
     'sponsorship_proposal': '협찬 제안서',

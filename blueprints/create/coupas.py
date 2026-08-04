@@ -214,6 +214,51 @@ def coupas_script():
         return jsonify(ok=False, message=f'멘트 생성 실패: {str(e)[:200]}')
 
 
+@create_bp.route('/coupas/render', methods=['POST'])
+@login_required
+def coupas_render():
+    """무음 영상 + 멘트 세그먼트 → 워커에서 TTS 음성 + 타임라인 자막 합성 (B·C단계).
+
+    무료 단계(개발 중). creation_type='coupas_video'. 상태는 import/status 라우트로 폴링.
+    """
+    supabase = current_app.supabase
+    body = request.get_json(silent=True) or {}
+    video_url = (body.get('video_url') or '').strip()
+    segments = body.get('segments') or []
+    voice = (body.get('voice') or 'female_natural').strip()
+    texts = [s.get('text', '').strip() for s in segments if isinstance(s, dict) and s.get('text', '').strip()]
+
+    if not video_url:
+        return jsonify(ok=False, message='영상이 없습니다. 먼저 영상을 가져오세요.')
+    if not texts:
+        return jsonify(ok=False, message='멘트가 비어있습니다.')
+
+    creation_id = str(uuid.uuid4())
+    su, sk = _supabase_creds()
+    try:
+        row = {
+            'id': creation_id, 'user_id': current_user.id,
+            'creation_type': 'coupas_video',
+            'input_data': {'voice': voice, 'seg_count': len(texts)},
+            'output_data': {'step': '준비 중'},
+            'points_used': 0, 'status': 'generating',
+            'model_used': 'tts+ffmpeg', 'created_at': now_kst().isoformat(),
+        }
+        if getattr(current_user, 'operator_id', None):
+            row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(row).execute()
+    except Exception as e:
+        logger.warning('[coupas_render] creations insert: %s', e)
+
+    from tasks.coupas_task import render_narrated_video
+    render_narrated_video.delay(
+        creation_id=creation_id, user_id=current_user.id,
+        video_url=video_url, segments=segments, voice_key=voice, tts_speed=1.05,
+        supabase_url=su, supabase_key=sk)
+
+    return jsonify(ok=True, creation_id=creation_id)
+
+
 @create_bp.route('/coupas/import/status/<creation_id>', methods=['GET'])
 @login_required
 def coupas_import_status(creation_id):

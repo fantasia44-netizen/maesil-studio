@@ -117,8 +117,41 @@
 
         <label class="form-label small fw-semibold mt-4">쿠팡 캡션 초안 <span class="text-muted fw-normal">(링크 자리 <code>[쿠팡링크]</code>)</span></label>
         <textarea id="captionBox" class="form-control" rows="6" style="font-size:.85rem"></textarea>
-        <div class="form-text">다음 단계에서 이 멘트로 음성(TTS)·자막을 입힙니다. (음성/자막 단계는 준비 중)</div>
+
+        <hr class="my-4">
+        <div class="d-flex align-items-end gap-2 flex-wrap">
+          <div>
+            <label class="form-label small fw-semibold">목소리</label>
+            <select id="voiceSel" class="form-select form-select-sm" style="width:auto">
+              <option value="female_natural">여성 · 자연스러운</option>
+              <option value="female_bright">여성 · 밝은</option>
+              <option value="male_calm">남성 · 차분한</option>
+              <option value="male_clear">남성 · 또렷한</option>
+            </select>
+          </div>
+          <button id="btnRender" class="btn btn-danger"><i class="bi bi-film me-1"></i>음성·자막 입혀 영상 만들기</button>
+        </div>
+        <div class="form-text">위 멘트로 TTS 음성을 만들고, 그 타이밍에 자막을 영상에 입힙니다. (배경음·CTA는 다음 단계)</div>
       </div>
+    </div>
+  </div>
+
+  <!-- 3단계: 완성 영상 (음성+자막) -->
+  <div id="finalCard" class="card mb-4 d-none">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold"><i class="bi bi-badge-hd me-2" style="color:#e8355a"></i>3단계 · 음성·자막 입힌 영상</h6>
+    </div>
+    <div class="card-body p-4">
+      <div id="renderProgress" class="d-flex align-items-center gap-2">
+        <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+        <span id="renderMsg" class="small fw-semibold">준비 중…</span>
+      </div>
+      <div id="renderResult" class="d-none">
+        <video id="finalVideo" controls playsinline
+               style="max-width:320px;width:100%;border-radius:10px;background:#000"></video>
+        <div class="mt-2"><a id="finalDl" class="btn btn-sm btn-outline-secondary" download><i class="bi bi-download me-1"></i>영상 다운로드</a></div>
+      </div>
+      <div id="renderFail" class="alert alert-danger py-2 px-3 mb-0 d-none" style="font-size:.82rem"></div>
     </div>
   </div>
 
@@ -264,6 +297,67 @@
     }
   });
   $('#btnAddSeg').addEventListener('click', () => addSegRow('', 'body'));
+
+  // ── 3단계: 음성+자막 합성 ───────────────────────────────────
+  function collectSegs(){
+    return Array.from(document.querySelectorAll('#segList .seg-text'))
+      .map(inp => ({ text: inp.value.trim(), role: (inp.parentElement.dataset.role || 'body') }))
+      .filter(s => s.text);
+  }
+  let renderTimer = null;
+  function renderFail(msg){
+    if (renderTimer) clearInterval(renderTimer);
+    $('#renderProgress').classList.add('d-none');
+    $('#renderFail').textContent = msg || '영상 생성에 실패했습니다.';
+    $('#renderFail').classList.remove('d-none');
+  }
+  function pollRender(id){
+    renderTimer = setInterval(async () => {
+      try {
+        const r = await fetch(`/create/coupas/import/status/${id}`);
+        const j = await r.json();
+        if (!j.ok) return;
+        const od = j.output_data || {};
+        if (j.status === 'done'){
+          clearInterval(renderTimer);
+          $('#renderProgress').classList.add('d-none');
+          $('#finalVideo').src = od.video_url || '';
+          $('#finalDl').href = od.video_url || '';
+          $('#renderResult').classList.remove('d-none');
+        } else if (j.status === 'failed'){
+          renderFail(od.error);
+        } else if (od.step){
+          $('#renderMsg').textContent = od.step + '…';
+        }
+      } catch(e){}
+    }, 2500);
+  }
+  $('#btnRender').addEventListener('click', async () => {
+    const segs = collectSegs();
+    if (!segs.length) return alert('멘트가 비어있습니다.');
+    if (!state.video_url) return alert('영상이 없습니다. 먼저 영상을 가져오세요.');
+    $('#finalCard').classList.remove('d-none');
+    $('#renderProgress').classList.remove('d-none');
+    $('#renderResult').classList.add('d-none');
+    $('#renderFail').classList.add('d-none');
+    $('#renderMsg').textContent = '요청 중… (음성 생성·합성까지 20~60초)';
+    $('#btnRender').disabled = true;
+    $('#finalCard').scrollIntoView({ behavior:'smooth', block:'start' });
+    try {
+      const r = await fetch('/create/coupas/render', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken': CSRF},
+        body: JSON.stringify({ video_url: state.video_url, segments: segs, voice: $('#voiceSel').value }),
+      });
+      const j = await r.json();
+      if (!j.ok) { renderFail(j.message); return; }
+      pollRender(j.creation_id);
+    } catch(e){
+      renderFail('요청 중 오류가 발생했습니다.');
+    } finally {
+      $('#btnRender').disabled = false;
+    }
+  });
 
   function startPoll(id){
     poll = setInterval(async () => {
