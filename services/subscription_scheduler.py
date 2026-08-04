@@ -55,8 +55,16 @@ def init_scheduler(app):
             kwargs={'app': app},
         )
 
+        # 쿠파스 원본 영상 정리 — 매일 03:00 KST (7일 경과분 Storage 삭제)
+        _scheduler.add_job(
+            _cleanup_coupas_sources,
+            'cron', hour=3, minute=0,
+            id='coupas_source_cleanup',
+            kwargs={'app': app},
+        )
+
         _scheduler.start()
-        logger.info('[Scheduler] APScheduler 시작 — 구독갱신(02:00) + 트라이얼만료(09:00)')
+        logger.info('[Scheduler] APScheduler 시작 — 구독갱신(02:00) + 원본정리(03:00) + 트라이얼만료(09:00)')
 
     except ImportError:
         logger.warning('[Scheduler] APScheduler 미설치 — 백그라운드 작업 비활성화')
@@ -365,6 +373,20 @@ def _handle_renewal_failure(supabase, sub, owner_id, owner_tbl,
 # ──────────────────────────────────────
 # 트라이얼 만료 체크
 # ──────────────────────────────────────
+
+def _cleanup_coupas_sources(app):
+    """매일 03:00 KST — 7일 경과한 쿠파스 원본 영상을 Storage 에서 삭제."""
+    with app.app_context():
+        try:
+            supabase = app.supabase
+            if not supabase:
+                return
+            from services.video_import import cleanup_expired_sources
+            res = cleanup_expired_sources(supabase)
+            logger.info('[Scheduler] 쿠파스 원본 정리: %s', res)
+        except Exception as e:
+            logger.error('[Scheduler] 쿠파스 원본 정리 실패: %s', e)
+
 
 def _check_trial_expiry(app):
     """매일 09:00 KST — trial 구독 중 current_period_end 지난 건을 expired 처리."""

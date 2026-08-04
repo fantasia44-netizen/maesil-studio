@@ -204,6 +204,7 @@ CREATION_LABELS = {
     'shorts_scene_images':  '쇼츠 씬 이미지 미리보기',
     'shorts_video':         '쇼츠/릴스 영상',
     'shorts_video_kling':   '쇼츠/릴스 영상 (Kling 모션)',
+    'coupas_import':        '쿠파스 소스 영상',
     # 홍보 자료
     'business_proposal':    '거래처 제안서',
     'sponsorship_proposal': '협찬 제안서',
@@ -230,6 +231,7 @@ MENU_REGISTRY = [
     ('경험담 블로그', 'bi-camera',            'create.experience',    None,  '콘텐츠 생성'),
     ('인스타그램',  'bi-instagram',           'create.instagram',     None,  '콘텐츠 생성'),
     ('쇼츠/릴스',   'bi-play-circle',         'create.shorts',        None,  '콘텐츠 생성'),
+    ('쿠파스 스튜디오', 'bi-camera-video',     'create.coupas',        None,  '콘텐츠 생성'),
     ('상세페이지 초안', 'bi-layout-text-sidebar', 'create.detail_page',         None, '콘텐츠 생성'),
     # ── 홍보물
     ('배너 만들기',   'bi-images',             'create.banner',    None, '홍보물'),

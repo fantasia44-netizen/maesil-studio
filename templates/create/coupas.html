@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block title %}쿠파스 스튜디오 — 매실 스튜디오{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.dashboard') }}" class="text-muted text-decoration-none">홈</a> / 쿠파스 스튜디오{% endblock %}
+
+{% block content %}
+<div style="max-width:820px">
+
+  <div class="card mb-4">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-camera-video me-2" style="color:#e8355a"></i>쿠파스 스튜디오
+        <span class="badge bg-light text-dark ms-2 fw-normal" style="font-size:.72rem">1단계 · 영상 가져오기</span>
+      </h6>
+    </div>
+    <div class="card-body p-4">
+
+      <div class="alert alert-secondary py-2 px-3 mb-4" style="font-size:.78rem">
+        원본 영상을 가져와 <b>소리를 제거</b>합니다. 이후 단계에서 자막·음성(TTS)·배경음을 새로 입힙니다.<br>
+        · <b>1688</b> 상품 URL 붙여넣기 지원 · <b>타오바오/티몰</b>은 로그인 벽으로 불가 → 파일 업로드 · 원본은 <b>7일 후 자동 삭제</b>
+      </div>
+
+      <!-- 탭 -->
+      <ul class="nav nav-pills mb-3" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-tab="url" type="button">URL 붙여넣기</button></li>
+        <li class="nav-item"><button class="nav-link" data-tab="upload" type="button">파일 업로드</button></li>
+      </ul>
+
+      <!-- URL 탭 -->
+      <div id="tab-url">
+        <label class="form-label small fw-semibold">1688 상품 URL</label>
+        <div class="input-group">
+          <input type="url" id="srcUrl" class="form-control"
+                 placeholder="https://detail.1688.com/offer/........html">
+          <button class="btn btn-danger" id="btnUrl"><i class="bi bi-download me-1"></i>가져오기</button>
+        </div>
+        <div class="form-text">데스크톱 URL 그대로 붙여넣으면 됩니다 (모바일 자동 변환).</div>
+      </div>
+
+      <!-- 업로드 탭 -->
+      <div id="tab-upload" class="d-none">
+        <label class="form-label small fw-semibold">영상 파일 (mp4/mov/webm, 최대 200MB)</label>
+        <div class="input-group">
+          <input type="file" id="srcFile" class="form-control" accept="video/*">
+          <button class="btn btn-danger" id="btnFile"><i class="bi bi-upload me-1"></i>가져오기</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 진행/결과 -->
+  <div id="panel" class="card mb-4 d-none">
+    <div class="card-body p-4">
+      <div id="progress" class="d-flex align-items-center gap-2">
+        <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+        <span id="progressMsg" class="small fw-semibold">영상을 가져오는 중…</span>
+      </div>
+
+      <div id="result" class="d-none">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <i class="bi bi-check-circle-fill text-success"></i>
+          <span class="fw-bold">소리 제거 완료</span>
+          <span id="metaBadge" class="badge bg-light text-dark fw-normal small"></span>
+        </div>
+        <video id="resultVideo" controls playsinline muted
+               style="max-width:320px;width:100%;border-radius:10px;background:#000"></video>
+        <div id="errBox" class="alert alert-warning py-2 px-3 mt-3 d-none" style="font-size:.8rem"></div>
+      </div>
+
+      <div id="failBox" class="alert alert-danger py-2 px-3 mb-0 d-none" style="font-size:.82rem"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  let poll = null;
+
+  // 탭 전환
+  document.querySelectorAll('[data-tab]').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-tab]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    $('#tab-url').classList.toggle('d-none', btn.dataset.tab !== 'url');
+    $('#tab-upload').classList.toggle('d-none', btn.dataset.tab !== 'upload');
+  }));
+
+  function showPanel(){
+    $('#panel').classList.remove('d-none');
+    $('#progress').classList.remove('d-none');
+    $('#result').classList.add('d-none');
+    $('#failBox').classList.add('d-none');
+    $('#progressMsg').textContent = '영상을 가져오는 중… (1688은 재시도로 20~40초 걸릴 수 있어요)';
+  }
+  function fail(msg){
+    if (poll) clearInterval(poll);
+    $('#progress').classList.add('d-none');
+    $('#failBox').textContent = msg || '가져오기에 실패했습니다.';
+    $('#failBox').classList.remove('d-none');
+  }
+  function done(od){
+    if (poll) clearInterval(poll);
+    $('#progress').classList.add('d-none');
+    $('#result').classList.remove('d-none');
+    $('#resultVideo').src = od.video_url || '';
+    const m = od.meta || {};
+    const parts = [];
+    if (m.duration) parts.push(m.duration + '초');
+    if (m.width && m.height) parts.push(m.width + '×' + m.height);
+    if (m.size_bytes) parts.push((m.size_bytes/1024/1024).toFixed(1) + 'MB');
+    if (od.platform) parts.push(od.platform);
+    $('#metaBadge').textContent = parts.join(' · ');
+    if (m.duration == null) {
+      $('#errBox').textContent = '메타데이터를 읽지 못했지만 영상은 저장됐습니다.';
+      $('#errBox').classList.remove('d-none');
+    }
+  }
+
+  function startPoll(id){
+    poll = setInterval(async () => {
+      try {
+        const r = await fetch(`/create/coupas/import/status/${id}`);
+        const j = await r.json();
+        if (!j.ok) return;
+        if (j.status === 'done') done(j.output_data || {});
+        else if (j.status === 'failed') fail((j.output_data || {}).error);
+      } catch(e){ /* keep polling */ }
+    }, 2500);
+  }
+
+  async function submit(payload, isFile){
+    showPanel();
+    try {
+      const opt = isFile ? { method:'POST', body: payload }
+                         : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) };
+      const r = await fetch('/create/coupas/import', opt);
+      const j = await r.json();
+      if (!j.ok) return fail(j.message);
+      startPoll(j.creation_id);
+    } catch(e){ fail('요청 중 오류가 발생했습니다.'); }
+  }
+
+  $('#btnUrl').addEventListener('click', () => {
+    const url = $('#srcUrl').value.trim();
+    if (!url) return alert('상품 URL을 입력하세요.');
+    submit({ url }, false);
+  });
+  $('#btnFile').addEventListener('click', () => {
+    const f = $('#srcFile').files[0];
+    if (!f) return alert('영상 파일을 선택하세요.');
+    const fd = new FormData(); fd.append('video', f);
+    submit(fd, true);
+  });
+})();
+</script>
+{% endblock %}
