@@ -102,6 +102,84 @@ def coupas_import():
     return jsonify(ok=True, creation_id=creation_id)
 
 
+@create_bp.route('/coupas/script', methods=['POST'])
+@login_required
+def coupas_script():
+    """상품명+셀링포인트 → 영상 길이에 맞춘 홍보 멘트 세그먼트 + 쿠팡 캡션 초안.
+
+    무료(포인트 미차감). 세그먼트는 자막 한 줄 = TTS 한 조각 단위.
+    실제 타이밍은 이후 TTS 단계에서 각 세그먼트 음성 길이로 확정.
+    """
+    import json
+    import re as _re
+
+    data = request.get_json(silent=True) or {}
+    product_name = (data.get('product_name') or '').strip()
+    selling_points = (data.get('selling_points') or '').strip()
+    try:
+        duration = float(data.get('duration') or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+    if not product_name:
+        return jsonify(ok=False, message='상품명을 입력하세요.')
+
+    # 한국어 나레이션 대략 4.5자/초 → 세그먼트 수 가늠 (영상 길이 모르면 20초 가정)
+    dur = duration if duration and duration > 3 else 20.0
+    seg_count = max(3, min(8, round(dur / 5)))   # 5초당 1세그먼트, 3~8개
+
+    from services.claude_service import generate_text
+
+    system = (
+        '당신은 쿠팡 파트너스용 숏폼 상품 홍보 영상의 나레이션 작가입니다. '
+        '스크롤을 멈추게 하는 강한 훅으로 시작해, 상품의 매력을 빠르고 친근한 구어체로 전달하고, '
+        '마지막에 쿠팡에서 확인하도록 자연스럽게 유도합니다. '
+        '\n[규칙]\n'
+        '• 한국어 구어체, 각 문장은 자막 한 줄로 읽기 좋게 12~22자.\n'
+        '• 과장·허위 광고 표현 금지(최고/1위/100% 등 근거 없는 단정 회피). 체감·감성 위주.\n'
+        '• 의료·효능 단정 금지. 가격/할인 언급은 하지 않음(변동되므로).\n'
+        '• 첫 세그먼트=훅, 마지막=CTA(쿠팡 유도), 중간=핵심 매력.\n'
+        '순수 JSON만 출력.'
+    )
+    prompt = f"""아래 상품으로 {dur:.0f}초 분량 숏폼 홍보 나레이션을 만드세요.
+
+[상품명]
+{product_name}
+
+[핵심 셀링포인트 / 참고]
+{selling_points or '(입력 없음 — 상품명과 영상 분위기로 추론)'}
+
+[분량] 세그먼트 {seg_count}개 (첫=훅, 끝=CTA)
+
+[출력 — 순수 JSON]
+{{
+  "segments": [
+    {{"role": "hook",  "text": "스크롤 멈추는 첫 마디"}},
+    {{"role": "body",  "text": "핵심 매력 한 줄"}},
+    {{"role": "cta",   "text": "지금 쿠팡에서 확인해보세요 같은 유도"}}
+  ],
+  "caption": "인스타/릴스 캡션 초안 (해시태그 5개 포함, 링크는 [쿠팡링크]로 표시)"
+}}
+세그먼트는 정확히 {seg_count}개. 순수 JSON만 출력."""
+
+    try:
+        raw = generate_text(system, prompt, max_tokens=1200)
+        clean = _re.sub(r'^```(?:json)?\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
+        s, e = clean.find('{'), clean.rfind('}') + 1
+        if s >= 0 and e > s:
+            clean = clean[s:e]
+        parsed = json.loads(clean)
+        segments = parsed.get('segments') or []
+        caption = parsed.get('caption') or ''
+        # 쿠팡 파트너스 의무 고지 문구 자동 첨부 (없으면)
+        notice = '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.'
+        if caption and notice[:20] not in caption:
+            caption = f'{caption}\n\n{notice}'
+        return jsonify(ok=True, segments=segments[:8], caption=caption)
+    except Exception as e:
+        logger.error('[coupas/script] %s', e)
+        return jsonify(ok=False, message=f'멘트 생성 실패: {str(e)[:200]}')
+
+
 @create_bp.route('/coupas/import/status/<creation_id>', methods=['GET'])
 @login_required
 def coupas_import_status(creation_id):

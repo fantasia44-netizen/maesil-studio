@@ -78,12 +78,47 @@
     </div>
   </div>
 
+  <!-- 2단계: 홍보 멘트 -->
+  <div id="scriptCard" class="card mb-4 d-none">
+    <div class="card-header py-3">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-chat-quote me-2" style="color:#e8355a"></i>2단계 · 홍보 멘트 만들기
+        <span class="badge bg-light text-dark ms-2 fw-normal" style="font-size:.72rem">자막 = 음성</span>
+      </h6>
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold">상품명</label>
+          <input id="prodName" class="form-control" placeholder="예: 손뜨개 과일 참 키링">
+        </div>
+        <div class="col-md-7">
+          <label class="form-label small fw-semibold">핵심 셀링포인트 <span class="text-muted fw-normal">(선택)</span></label>
+          <input id="sellPoints" class="form-control" placeholder="예: 수제 디테일, 가방·에어팟 꾸미기, 선물용">
+        </div>
+      </div>
+      <button id="btnScript" class="btn btn-danger mt-3"><i class="bi bi-magic me-1"></i>멘트 생성</button>
+      <span id="scriptSpin" class="ms-2 small d-none"><span class="spinner-border spinner-border-sm text-danger"></span> 생성 중…</span>
+
+      <div id="scriptResult" class="mt-4 d-none">
+        <label class="form-label small fw-semibold">멘트 <span class="text-muted fw-normal">(자막이자 음성 — 줄마다 수정 가능)</span></label>
+        <div id="segList"></div>
+        <button id="btnAddSeg" class="btn btn-sm btn-outline-secondary mt-1" type="button"><i class="bi bi-plus"></i> 줄 추가</button>
+
+        <label class="form-label small fw-semibold mt-4">쿠팡 캡션 초안 <span class="text-muted fw-normal">(링크 자리 <code>[쿠팡링크]</code>)</span></label>
+        <textarea id="captionBox" class="form-control" rows="6" style="font-size:.85rem"></textarea>
+        <div class="form-text">다음 단계에서 이 멘트로 음성(TTS)·자막을 입힙니다. (음성/자막 단계는 준비 중)</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
 (function(){
   const $ = s => document.querySelector(s);
   const CSRF = '{{ csrf_token() }}';   // CSRFProtect 전역 활성 — 모든 POST에 필수
+  const state = {};                    // duration, video_url 등 단계 간 전달
   let poll = null;
 
   // 탭 전환
@@ -124,7 +159,60 @@
       $('#errBox').textContent = '메타데이터를 읽지 못했지만 영상은 저장됐습니다.';
       $('#errBox').classList.remove('d-none');
     }
+    // 2단계(멘트) 열기
+    state.duration = m.duration || 0;
+    state.video_url = od.video_url || '';
+    $('#scriptCard').classList.remove('d-none');
   }
+
+  // ── 2단계: 홍보 멘트 ────────────────────────────────────────
+  function roleLabel(r){ return {hook:'훅', cta:'CTA', body:'본문'}[r] || '본문'; }
+  function addSegRow(text, role){
+    const row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-2';
+    row.dataset.role = role || 'body';
+    row.innerHTML =
+      '<span class="input-group-text" style="width:56px;font-size:.7rem;justify-content:center">'
+      + roleLabel(role) + '</span>'
+      + '<input class="form-control seg-text">'
+      + '<button class="btn btn-outline-danger seg-del" type="button">&times;</button>';
+    row.querySelector('.seg-text').value = text || '';
+    row.querySelector('.seg-del').addEventListener('click', () => row.remove());
+    $('#segList').appendChild(row);
+  }
+  function renderSegs(segs){
+    $('#segList').innerHTML = '';
+    (segs || []).forEach(s => addSegRow(s.text || '', s.role || 'body'));
+  }
+
+  $('#btnScript').addEventListener('click', async () => {
+    const product_name = $('#prodName').value.trim();
+    if (!product_name) return alert('상품명을 입력하세요.');
+    $('#scriptSpin').classList.remove('d-none');
+    $('#btnScript').disabled = true;
+    try {
+      const r = await fetch('/create/coupas/script', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken': CSRF},
+        body: JSON.stringify({
+          product_name,
+          selling_points: $('#sellPoints').value.trim(),
+          duration: state.duration || 0,
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) { alert(j.message || '멘트 생성 실패'); return; }
+      renderSegs(j.segments);
+      $('#captionBox').value = j.caption || '';
+      $('#scriptResult').classList.remove('d-none');
+    } catch(e) {
+      alert('요청 중 오류가 발생했습니다.');
+    } finally {
+      $('#scriptSpin').classList.add('d-none');
+      $('#btnScript').disabled = false;
+    }
+  });
+  $('#btnAddSeg').addEventListener('click', () => addSegRow('', 'body'));
 
   function startPoll(id){
     poll = setInterval(async () => {
