@@ -268,12 +268,19 @@ def coupas_render():
     except (TypeError, ValueError):
         tts_speed = 1.3
     tts_speed = max(0.8, min(2.0, tts_speed))
-    bgm = (body.get('bgm') or '').strip()          # '' | mood키 | storage경로(업로드)
+    bgm = (body.get('bgm') or '').strip()          # '' | lib:<file> | storage경로(업로드)
     try:
         bgm_volume = float(body.get('bgm_volume') or 0.18)
     except (TypeError, ValueError):
         bgm_volume = 0.18
     bgm_volume = max(0.0, min(1.0, bgm_volume))
+    sub_pos = (body.get('sub_pos') or 'bottom').strip()
+    if sub_pos not in ('bottom', 'center', 'top'):
+        sub_pos = 'bottom'
+    try:
+        bgm_start = max(0.0, float(body.get('bgm_start') or 0))
+    except (TypeError, ValueError):
+        bgm_start = 0.0
     texts = [s.get('text', '').strip() for s in segments if isinstance(s, dict) and s.get('text', '').strip()]
 
     if not video_url:
@@ -303,6 +310,7 @@ def coupas_render():
         creation_id=creation_id, user_id=current_user.id,
         video_url=video_url, segments=segments, voice_key=voice, tts_speed=tts_speed,
         caption_style=caption_style, bgm=bgm, bgm_volume=bgm_volume,
+        sub_pos=sub_pos, bgm_start=bgm_start,
         supabase_url=su, supabase_key=sk)
 
     return jsonify(ok=True, creation_id=creation_id)

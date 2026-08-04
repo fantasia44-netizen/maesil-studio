@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 
 import requests
@@ -21,6 +22,20 @@ from services.shorts_service import (
 logger = logging.getLogger(__name__)
 
 MAX_SEGMENTS = 12
+
+
+def _strip_emoji(text: str) -> str:
+    """TTS 입력에서 이모지/픽토그램 제거 (자막에는 그대로 남김).
+
+    유니코드 카테고리 So(기타 기호)·Sk(수식 기호) + 변형선택자/ZWJ 제거.
+    한글·영문·일반 문장부호는 유지.
+    """
+    import unicodedata
+    drop = {'️', '‍', '⃣'}
+    out = ''.join(
+        c for c in text
+        if c not in drop and unicodedata.category(c) not in ('So', 'Sk'))
+    return re.sub(r'\s{2,}', ' ', out).strip()
 
 
 def download(url: str, dest: str, timeout: int = 60) -> str:
@@ -79,18 +94,22 @@ CAPTION_STYLES = {
 DEFAULT_CAPTION_STYLE = 'outline'
 
 
-def _build_ass(timed: list[dict], w: int, h: int, style: str = DEFAULT_CAPTION_STYLE) -> str:
+def _build_ass(timed: list[dict], w: int, h: int, style: str = DEFAULT_CAPTION_STYLE,
+               sub_pos: str = 'bottom') -> str:
     """세그먼트 타이밍 → ASS 자막.
 
-    Sub = 흘러가는 자막(하단 22%), Hook = 첫 훅(상단 대형 + 숫자 강조).
+    Sub = 흘러가는 자막(위치 선택), Hook = 첫 훅(상단 대형 + 숫자 강조).
     style: outline(검정 외곽선) | cyan(파랑 외곽선) | box(반투명 박스).
+    sub_pos: bottom(하단) | center(중앙) | top(상단).
     """
     p = CAPTION_STYLES.get(style, CAPTION_STYLES[DEFAULT_CAPTION_STYLE])
     base = max(30, int(h / 16))
     hook_fs = int(base * 1.45)
     thick = max(2, base // p['thick'])
-    sub_marginv = int(h * 0.22)
     hook_marginv = int(h * 0.12)
+    # 자막 위치 → (Alignment, MarginV)
+    _POS = {'bottom': (2, int(h * 0.22)), 'center': (5, 0), 'top': (8, int(h * 0.15))}
+    sub_align, sub_marginv = _POS.get(sub_pos, _POS['bottom'])
     WHITE = '&H00FFFFFF'
     SHADOWCOL = '&H90000000'
     bs, col, sh = p['border'], p['color'], p['shadow']
@@ -108,7 +127,7 @@ def _build_ass(timed: list[dict], w: int, h: int, style: str = DEFAULT_CAPTION_S
         'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, '
         'BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, '
         'BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n'
-        + _style('Sub', base, 2, sub_marginv) + '\n'
+        + _style('Sub', base, sub_align, sub_marginv) + '\n'
         + _style('Hook', hook_fs, 8, hook_marginv) + '\n\n'
         '[Events]\n'
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n'
@@ -129,7 +148,8 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
                      tts_speed: float, tts_api_key: str,
                      out_path: str, work_dir: str,
                      caption_style: str = DEFAULT_CAPTION_STYLE,
-                     bgm_path: str | None = None, bgm_volume: float = 0.18) -> dict:
+                     bgm_path: str | None = None, bgm_volume: float = 0.18,
+                     sub_pos: str = 'bottom', bgm_start: float = 0.0) -> dict:
     """무음 영상에 TTS 나레이션 + 타임라인 자막(+선택 BGM)을 합성해 out_path 로 저장.
 
     반환: {duration, seg_count, width, height, bgm}
@@ -149,7 +169,9 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
         raw = (seg.get('text') or '').strip() if isinstance(seg, dict) else str(seg).strip()
         if not raw:
             continue
-        spoken = _normalize_tts_text(raw)
+        spoken = _strip_emoji(_normalize_tts_text(raw))   # 이모지는 음성으로 안 읽음
+        if not spoken:
+            continue
         try:
             mp3 = tts_synthesize(spoken, tts_api_key, voice_key, tts_speed)
         except requests.HTTPError as he:
@@ -189,7 +211,7 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
     # 3) ASS 자막 파일
     ass_path = os.path.join(work_dir, 'subs.ass')
     with open(ass_path, 'w', encoding='utf-8') as f:
-        f.write(_build_ass(timed, w, h, caption_style))
+        f.write(_build_ass(timed, w, h, caption_style, sub_pos))
 
     # 4) 최종 합성 — 무음영상(길이 부족시 루프) + 자막 번인 + 나레이션(+BGM), 나레이션 길이로 컷
     #    fontsdir 로 나눔폰트 위치를 libass 에 명시 (fontconfig 미스로 한글 □ 깨짐 방지)
@@ -202,14 +224,15 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
         '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out_path,
     ]
     if bgm_path and os.path.exists(bgm_path):
-        # 나레이션(원음) + BGM(볼륨↓) amix. 영상·BGM 모두 stream_loop 로 길이 채움.
+        # 나레이션(원음) + BGM(볼륨↓, 시작지점 skip, 0.4s 페이드인) amix.
+        vol = max(0.0, min(1.0, bgm_volume))
         fc = (f'[0:v]{ass_f}[v];'
-              f'[2:a]volume={max(0.0, min(1.0, bgm_volume)):.3f}[bg];'
+              f'[2:a]volume={vol:.3f},afade=t=in:st=0:d=0.4[bg];'
               f'[1:a][bg]amix=inputs=2:duration=first:normalize=0[a]')
         _ffmpeg('-y',
                 '-stream_loop', '-1', '-i', muted_local,
                 '-i', narration,
-                '-stream_loop', '-1', '-i', bgm_path,
+                '-ss', f'{max(0.0, bgm_start):.2f}', '-stream_loop', '-1', '-i', bgm_path,
                 '-t', f'{total:.3f}',
                 '-filter_complex', fc,
                 '-map', '[v]', '-map', '[a]',

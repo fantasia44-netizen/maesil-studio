@@ -138,6 +138,14 @@
             </select>
           </div>
           <div>
+            <label class="form-label small fw-semibold">자막 위치</label>
+            <select id="subPosSel" class="form-select form-select-sm" style="width:auto">
+              <option value="bottom" selected>아래</option>
+              <option value="center">중앙</option>
+              <option value="top">위</option>
+            </select>
+          </div>
+          <div>
             <label class="form-label small fw-semibold">말 속도</label>
             <select id="speedSel" class="form-select form-select-sm" style="width:auto">
               <option value="1.1">보통</option>
@@ -158,6 +166,22 @@
           <button id="btnRender" class="btn btn-danger"><i class="bi bi-film me-1"></i>음성·자막 입혀 영상 만들기</button>
         </div>
         <audio id="bgmAudio" preload="none"></audio>
+        <div id="bgmOptsRow" class="mt-2 d-none d-flex align-items-end gap-3 flex-wrap">
+          <div>
+            <label class="form-label small fw-semibold">배경음 볼륨</label>
+            <select id="bgmVolSel" class="form-select form-select-sm" style="width:auto">
+              <option value="0.10">작게</option>
+              <option value="0.18" selected>보통</option>
+              <option value="0.30">크게</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold">배경음 시작(초)</label>
+            <input id="bgmStart" type="number" min="0" step="1" value="0"
+                   class="form-control form-control-sm" style="width:90px">
+          </div>
+          <span class="form-text mb-1">인트로가 느리면 시작을 5~8초로 (드롭부터 재생 → 후킹에 매칭)</span>
+        </div>
         <div id="bgmUploadRow" class="mt-2 d-none">
           <input type="file" id="bgmFile" accept="audio/*" class="form-control form-control-sm d-inline-block" style="max-width:340px">
           <span id="bgmStatus" class="small ms-2 text-muted"></span>
@@ -391,6 +415,7 @@
   });
   $('#bgmSel').addEventListener('change', () => {
     $('#bgmUploadRow').classList.toggle('d-none', $('#bgmSel').value !== '__upload');
+    $('#bgmOptsRow').classList.toggle('d-none', $('#bgmSel').value === '');
     const a = $('#bgmAudio'); if (a && !a.paused) a.pause();
   });
   $('#bgmFile').addEventListener('change', async () => {
@@ -427,8 +452,11 @@
         headers:{'Content-Type':'application/json','X-CSRFToken': CSRF},
         body: JSON.stringify({ video_url: state.video_url, segments: segs,
                                voice: $('#voiceSel').value, caption_style: $('#capStyleSel').value,
+                               sub_pos: $('#subPosSel').value,
                                tts_speed: parseFloat($('#speedSel').value) || 1.3,
-                               bgm: currentBgm(), bgm_volume: 0.18 }),
+                               bgm: currentBgm(),
+                               bgm_volume: parseFloat($('#bgmVolSel').value) || 0.18,
+                               bgm_start: parseFloat($('#bgmStart').value) || 0 }),
       });
       const j = await r.json();
       if (!j.ok) { renderFail(j.message); return; }
