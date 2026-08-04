@@ -231,9 +231,9 @@ def coupas_script():
     if not product_name:
         return jsonify(ok=False, message='상품명을 입력하세요.')
 
-    # 한국어 나레이션 대략 4.5자/초 → 세그먼트 수 가늠 (영상 길이 모르면 20초 가정)
+    # 세그먼트(라인) 수 = 영상 길이 비례 (15초≈4, 20초≈5, 25초≈7 라인)
     dur = duration if duration and duration > 3 else 20.0
-    seg_count = max(3, min(8, round(dur / 5)))   # 5초당 1세그먼트, 3~8개
+    seg_count = max(3, min(10, round(dur / 3.7)))
 
     from services.claude_service import generate_text
 
@@ -256,7 +256,7 @@ def coupas_script():
 [핵심 셀링포인트 / 참고]
 {selling_points or '(입력 없음 — 상품명과 영상 분위기로 추론)'}
 
-[분량] 세그먼트 {seg_count}개 (첫=훅, 끝=CTA)
+[분량] 정확히 세그먼트 {seg_count}개 (첫=훅, 끝=CTA). 말하면 총 {dur:.0f}초에 가깝게 채우도록 각 문장을 너무 짧지 않게(12~22자)
 
 [출력 — 순수 JSON]
 {{
@@ -322,6 +322,47 @@ def coupas_upload_bgm():
         logger.error('[coupas/upload-bgm] %s', e)
         return jsonify(ok=False, message=f'업로드 실패: {e}')
     return jsonify(ok=True, bgm=path, name=file.filename)
+
+
+@create_bp.route('/coupas/trim', methods=['POST'])
+@login_required
+def coupas_trim():
+    """무음 영상을 [start,end] 구간으로 잘라 새 소스 생성 (긴 영상 편집)."""
+    supabase = current_app.supabase
+    body = request.get_json(silent=True) or {}
+    video_url = (body.get('video_url') or '').strip()
+    try:
+        start = max(0.0, float(body.get('start') or 0))
+        end = float(body.get('end') or 0)
+    except (TypeError, ValueError):
+        return jsonify(ok=False, message='시작/끝 값이 올바르지 않습니다.')
+    if not video_url:
+        return jsonify(ok=False, message='영상이 없습니다.')
+    if end <= start:
+        return jsonify(ok=False, message='끝 지점이 시작보다 커야 합니다.')
+
+    creation_id = str(uuid.uuid4())
+    su, sk = _supabase_creds()
+    try:
+        row = {
+            'id': creation_id, 'user_id': current_user.id,
+            'creation_type': 'coupas_import',
+            'input_data': {'mode': 'trim', 'start': start, 'end': end},
+            'output_data': {'step': '자르는 중'},
+            'points_used': 0, 'status': 'generating',
+            'model_used': 'trim', 'created_at': now_kst().isoformat(),
+        }
+        if getattr(current_user, 'operator_id', None):
+            row['operator_id'] = current_user.operator_id
+        supabase.table('creations').insert(row).execute()
+    except Exception as e:
+        logger.warning('[coupas_trim] insert: %s', e)
+
+    from tasks.coupas_task import trim_source_video
+    trim_source_video.delay(creation_id=creation_id, user_id=current_user.id,
+                            video_url=video_url, start=start, end=end,
+                            supabase_url=su, supabase_key=sk)
+    return jsonify(ok=True, creation_id=creation_id)
 
 
 @create_bp.route('/coupas/render', methods=['POST'])

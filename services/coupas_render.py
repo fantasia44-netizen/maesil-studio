@@ -182,6 +182,17 @@ def _build_ass(timed: list[dict], w: int, h: int, style: str = DEFAULT_CAPTION_S
     return header + '\n'.join(lines) + '\n'
 
 
+def trim_video(in_path: str, out_path: str, start: float, end: float) -> str:
+    """무음 영상을 [start, end] 구간으로 잘라 out_path 로 저장 (재인코딩 = 정확)."""
+    _ffmpeg('-y', '-i', in_path,
+            '-ss', f'{max(0.0, start):.2f}', '-to', f'{max(start + 0.5, end):.2f}',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-an',
+            '-movflags', '+faststart', out_path)
+    if not os.path.exists(out_path) or os.path.getsize(out_path) < 1024:
+        raise RuntimeError('영상 자르기 실패(빈 파일).')
+    return out_path
+
+
 def render_narration(muted_local: str, segments: list, voice_key: str,
                      tts_speed: float, tts_api_key: str,
                      out_path: str, work_dir: str,

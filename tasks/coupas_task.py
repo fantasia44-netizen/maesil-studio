@@ -50,6 +50,55 @@ def _fail(supabase, creation_id, step, e):
         pass
 
 
+@celery.task(bind=True, name='tasks.coupas_task.trim_source_video',
+             max_retries=0, soft_time_limit=180, time_limit=240)
+def trim_source_video(self, creation_id, user_id, video_url, start, end,
+                      supabase_url='', supabase_key=''):
+    """무음 영상을 [start,end] 구간으로 잘라 새 소스로 저장."""
+    import sys
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+    from supabase import create_client
+    from services import coupas_render as cr, video_import as vi
+
+    supabase = create_client(supabase_url, supabase_key)
+    tmp_dir = None
+    step = '시작'
+    try:
+        step = '영상 불러오는 중'
+        _set_step(supabase, creation_id, step)
+        tmp_dir = tempfile.mkdtemp(prefix='coupastrim_')
+        src = os.path.join(tmp_dir, 'src.mp4')
+        cr.download(video_url, src)
+
+        step = '자르는 중'
+        _set_step(supabase, creation_id, step)
+        out = os.path.join(tmp_dir, 'out.mp4')
+        cr.trim_video(src, out, float(start), float(end))
+        meta = vi.probe_video(out)
+
+        step = '저장 중'
+        _set_step(supabase, creation_id, step)
+        dest = vi.source_storage_path(user_id, creation_id)
+        url = vi.upload_file(supabase, out, dest)
+        supabase.table('creations').update({
+            'status': 'done',
+            'output_data': {'video_url': url, 'storage_path': dest, 'platform': 'trim',
+                            'meta': {'duration': meta.get('duration'), 'width': meta.get('width'),
+                                     'height': meta.get('height'), 'size_bytes': meta.get('size_bytes')},
+                            'source_deleted': False},
+        }).eq('id', creation_id).execute()
+        logger.info('[coupas_task] trim 완료 cid=%s %ss~%ss', creation_id, start, end)
+    except Exception as e:
+        _fail(supabase, creation_id, step, e)
+        raise
+    finally:
+        if tmp_dir:
+            from services import video_import as _vi
+            _vi._safe_rmtree(tmp_dir)
+
+
 @celery.task(bind=True, name='tasks.coupas_task.render_narrated_video',
              max_retries=0, soft_time_limit=300, time_limit=360)
 def render_narrated_video(self, creation_id, user_id, video_url, segments,
