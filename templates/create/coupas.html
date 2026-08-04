@@ -137,9 +137,33 @@
               <option value="box">반투명 박스</option>
             </select>
           </div>
+          <div>
+            <label class="form-label small fw-semibold">말 속도</label>
+            <select id="speedSel" class="form-select form-select-sm" style="width:auto">
+              <option value="1.1">보통</option>
+              <option value="1.3" selected>빠르게</option>
+              <option value="1.5">아주 빠르게</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold">배경음</label>
+            <div class="d-flex gap-1">
+              <select id="bgmSel" class="form-select form-select-sm" style="width:auto">
+                <option value="">없음</option>
+                <option value="__upload">직접 업로드…</option>
+              </select>
+              <button id="bgmPreview" type="button" class="btn btn-sm btn-outline-secondary" title="미리듣기"><i class="bi bi-play-fill"></i></button>
+            </div>
+          </div>
           <button id="btnRender" class="btn btn-danger"><i class="bi bi-film me-1"></i>음성·자막 입혀 영상 만들기</button>
         </div>
-        <div class="form-text">위 멘트로 TTS 음성을 만들고, 그 타이밍에 자막을 영상에 입힙니다. (배경음·CTA는 다음 단계)</div>
+        <audio id="bgmAudio" preload="none"></audio>
+        <div id="bgmUploadRow" class="mt-2 d-none">
+          <input type="file" id="bgmFile" accept="audio/*" class="form-control form-control-sm d-inline-block" style="max-width:340px">
+          <span id="bgmStatus" class="small ms-2 text-muted"></span>
+          <div class="form-text">픽사베이·Suno 등에서 받은 mp3를 올리면 배경음으로 깔립니다 (나레이션은 크게, 배경음은 작게 자동 믹스).</div>
+        </div>
+        <div class="form-text">위 멘트로 TTS 음성을 만들고, 그 타이밍에 자막을 영상에 입힙니다.</div>
       </div>
     </div>
   </div>
@@ -340,6 +364,52 @@
       } catch(e){}
     }, 2500);
   }
+  // ── 배경음 선택/업로드 ──────────────────────────────────────
+  state.bgmUploaded = '';
+  const bgmUrls = {};   // id → 미리듣기 URL
+  async function loadBgmList(){
+    try {
+      const r = await fetch('/create/coupas/bgm-list');
+      const j = await r.json();
+      const sel = $('#bgmSel');
+      const upOpt = sel.querySelector('option[value="__upload"]');
+      (j.items || []).forEach(it => {
+        bgmUrls[it.id] = it.url;
+        const o = document.createElement('option');
+        o.value = it.id; o.textContent = '🎵 ' + it.name;
+        sel.insertBefore(o, upOpt);
+      });
+    } catch(e){}
+  }
+  loadBgmList();
+  $('#bgmPreview').addEventListener('click', () => {
+    const a = $('#bgmAudio');
+    const url = bgmUrls[$('#bgmSel').value];
+    if (!url) return;
+    if (!a.paused && a.dataset.cur === url){ a.pause(); return; }
+    a.src = url; a.dataset.cur = url; a.play().catch(()=>{});
+  });
+  $('#bgmSel').addEventListener('change', () => {
+    $('#bgmUploadRow').classList.toggle('d-none', $('#bgmSel').value !== '__upload');
+    const a = $('#bgmAudio'); if (a && !a.paused) a.pause();
+  });
+  $('#bgmFile').addEventListener('change', async () => {
+    const f = $('#bgmFile').files[0];
+    if (!f) return;
+    $('#bgmStatus').textContent = '업로드 중…';
+    const fd = new FormData(); fd.append('bgm', f);
+    try {
+      const r = await fetch('/create/coupas/upload-bgm', { method:'POST', headers:{'X-CSRFToken': CSRF}, body: fd });
+      const j = await r.json();
+      if (j.ok){ state.bgmUploaded = j.bgm; $('#bgmStatus').textContent = '✓ ' + (j.name || '업로드됨'); }
+      else { state.bgmUploaded = ''; $('#bgmStatus').textContent = j.message || '업로드 실패'; }
+    } catch(e){ state.bgmUploaded = ''; $('#bgmStatus').textContent = '업로드 오류'; }
+  });
+  function currentBgm(){
+    const v = $('#bgmSel').value;
+    return v === '__upload' ? (state.bgmUploaded || '') : v;
+  }
+
   $('#btnRender').addEventListener('click', async () => {
     const segs = collectSegs();
     if (!segs.length) return alert('멘트가 비어있습니다.');
@@ -356,7 +426,9 @@
         method:'POST',
         headers:{'Content-Type':'application/json','X-CSRFToken': CSRF},
         body: JSON.stringify({ video_url: state.video_url, segments: segs,
-                               voice: $('#voiceSel').value, caption_style: $('#capStyleSel').value }),
+                               voice: $('#voiceSel').value, caption_style: $('#capStyleSel').value,
+                               tts_speed: parseFloat($('#speedSel').value) || 1.3,
+                               bgm: currentBgm(), bgm_volume: 0.18 }),
       });
       const j = await r.json();
       if (!j.ok) { renderFail(j.message); return; }

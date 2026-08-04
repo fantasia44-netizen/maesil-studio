@@ -417,6 +417,38 @@ def source_storage_path(user_id: str, creation_id: str) -> str:
     return f'{SOURCE_PREFIX}/{user_id}/{creation_id}.mp4'
 
 
+# ── 쿠파스 BGM 라이브러리 (static/sounds/bgm/coupas/ 에 넣은 mp3들) ──────
+COUPAS_BGM_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'static', 'sounds', 'bgm', 'coupas')
+_BGM_EXT = ('.mp3', '.m4a', '.wav', '.ogg')
+
+
+def list_coupas_bgm() -> list[dict]:
+    """BGM 라이브러리 목록 → [{id:'lib:<file>', name, url}]. 웹 드롭다운/미리듣기용."""
+    d = os.path.normpath(COUPAS_BGM_DIR)
+    out = []
+    if not os.path.isdir(d):
+        return out
+    for fn in sorted(os.listdir(d)):
+        if not fn.lower().endswith(_BGM_EXT):
+            continue
+        stem = os.path.splitext(fn)[0]
+        parts = [p for p in re.split(r'[-_]', stem) if p and not p.isdigit()]
+        name = ' '.join(parts).strip().title() or stem
+        out.append({'id': f'lib:{fn}', 'name': name,
+                    'url': f'/static/sounds/bgm/coupas/{fn}'})
+    return out
+
+
+def resolve_coupas_bgm(bgm_id: str) -> str | None:
+    """'lib:<filename>' → 로컬 절대경로 (경로 이탈 방지, 없으면 None)."""
+    if not bgm_id or not bgm_id.startswith('lib:'):
+        return None
+    fn = os.path.basename(bgm_id[4:])
+    p = os.path.join(os.path.normpath(COUPAS_BGM_DIR), fn)
+    return p if os.path.isfile(p) else None
+
+
 def upload_file(supabase, local_path: str, dest_path: str,
                 content_type: str = 'video/mp4') -> str:
     """로컬 파일을 Supabase Storage 에 업로드하고 공개 URL 반환."""

@@ -214,6 +214,42 @@ def coupas_script():
         return jsonify(ok=False, message=f'멘트 생성 실패: {str(e)[:200]}')
 
 
+@create_bp.route('/coupas/bgm-list', methods=['GET'])
+@login_required
+def coupas_bgm_list():
+    """BGM 라이브러리 목록(미리듣기 URL 포함)."""
+    from services.video_import import list_coupas_bgm
+    return jsonify(ok=True, items=list_coupas_bgm())
+
+
+@create_bp.route('/coupas/upload-bgm', methods=['POST'])
+@login_required
+def coupas_upload_bgm():
+    """사용자 BGM 파일(픽사베이/Suno 등) 업로드 → Storage 저장 → 경로 반환."""
+    request.max_content_length = 30 * 1024 * 1024   # 30MB
+    supabase = current_app.supabase
+    file = request.files.get('bgm')
+    if not file or not file.filename:
+        return jsonify(ok=False, message='오디오 파일이 없습니다.')
+    data = file.read()
+    if len(data) < 512:
+        return jsonify(ok=False, message='오디오 파일이 비어있습니다.')
+    ext = 'mp3'
+    if '.' in file.filename:
+        cand = file.filename.rsplit('.', 1)[-1].lower()
+        if cand in ('mp3', 'm4a', 'aac', 'wav', 'ogg'):
+            ext = cand
+    path = f'coupas/bgm/{current_user.id}/{uuid.uuid4().hex[:10]}.{ext}'
+    try:
+        supabase.storage.from_('creations').upload(
+            path, data, file_options={'content-type': file.mimetype or 'audio/mpeg',
+                                      'upsert': 'true'})
+    except Exception as e:
+        logger.error('[coupas/upload-bgm] %s', e)
+        return jsonify(ok=False, message=f'업로드 실패: {e}')
+    return jsonify(ok=True, bgm=path, name=file.filename)
+
+
 @create_bp.route('/coupas/render', methods=['POST'])
 @login_required
 def coupas_render():
@@ -227,6 +263,17 @@ def coupas_render():
     segments = body.get('segments') or []
     voice = (body.get('voice') or 'female_natural').strip()
     caption_style = (body.get('caption_style') or 'outline').strip()
+    try:
+        tts_speed = float(body.get('tts_speed') or 1.3)
+    except (TypeError, ValueError):
+        tts_speed = 1.3
+    tts_speed = max(0.8, min(2.0, tts_speed))
+    bgm = (body.get('bgm') or '').strip()          # '' | mood키 | storage경로(업로드)
+    try:
+        bgm_volume = float(body.get('bgm_volume') or 0.18)
+    except (TypeError, ValueError):
+        bgm_volume = 0.18
+    bgm_volume = max(0.0, min(1.0, bgm_volume))
     texts = [s.get('text', '').strip() for s in segments if isinstance(s, dict) and s.get('text', '').strip()]
 
     if not video_url:
@@ -254,8 +301,9 @@ def coupas_render():
     from tasks.coupas_task import render_narrated_video
     render_narrated_video.delay(
         creation_id=creation_id, user_id=current_user.id,
-        video_url=video_url, segments=segments, voice_key=voice, tts_speed=1.05,
-        caption_style=caption_style, supabase_url=su, supabase_key=sk)
+        video_url=video_url, segments=segments, voice_key=voice, tts_speed=tts_speed,
+        caption_style=caption_style, bgm=bgm, bgm_volume=bgm_volume,
+        supabase_url=su, supabase_key=sk)
 
     return jsonify(ok=True, creation_id=creation_id)
 

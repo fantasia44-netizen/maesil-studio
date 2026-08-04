@@ -128,10 +128,11 @@ def _build_ass(timed: list[dict], w: int, h: int, style: str = DEFAULT_CAPTION_S
 def render_narration(muted_local: str, segments: list, voice_key: str,
                      tts_speed: float, tts_api_key: str,
                      out_path: str, work_dir: str,
-                     caption_style: str = DEFAULT_CAPTION_STYLE) -> dict:
-    """무음 영상에 TTS 나레이션 + 타임라인 자막을 합성해 out_path 로 저장.
+                     caption_style: str = DEFAULT_CAPTION_STYLE,
+                     bgm_path: str | None = None, bgm_volume: float = 0.18) -> dict:
+    """무음 영상에 TTS 나레이션 + 타임라인 자막(+선택 BGM)을 합성해 out_path 로 저장.
 
-    반환: {duration, seg_count, width, height}
+    반환: {duration, seg_count, width, height, bgm}
     """
     # 한글 폰트 확보 + libass 가 참조할 폰트 디렉토리 확정
     _ensure_font('NanumGothicBold.ttf')
@@ -190,24 +191,40 @@ def render_narration(muted_local: str, segments: list, voice_key: str,
     with open(ass_path, 'w', encoding='utf-8') as f:
         f.write(_build_ass(timed, w, h, caption_style))
 
-    # 4) 최종 합성 — 무음영상(길이 부족시 루프) + 자막 번인 + 나레이션, 나레이션 길이에 맞춰 컷
-    #    fontsdir 로 나눔폰트 위치를 libass 에 명시 (fontconfig 미스로 한글이 □ 로 깨지는 것 방지)
-    ass_vf = f'ass={ass_path}'
+    # 4) 최종 합성 — 무음영상(길이 부족시 루프) + 자막 번인 + 나레이션(+BGM), 나레이션 길이로 컷
+    #    fontsdir 로 나눔폰트 위치를 libass 에 명시 (fontconfig 미스로 한글 □ 깨짐 방지)
+    ass_f = f'ass={ass_path}'
     if fonts_dir:
-        ass_vf = f'ass={ass_path}:fontsdir={fonts_dir}'
-    _ffmpeg(
-        '-y',
-        '-stream_loop', '-1', '-i', muted_local,   # 영상 (필요시 반복)
-        '-i', narration,                            # 나레이션 오디오
-        '-t', f'{total:.3f}',
-        '-vf', ass_vf,
-        '-map', '0:v:0', '-map', '1:a:0',
+        ass_f = f'ass={ass_path}:fontsdir={fonts_dir}'
+
+    common_tail = [
         '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-b:a', '128k',
-        '-movflags', '+faststart',
-        out_path,
-    )
+        '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out_path,
+    ]
+    if bgm_path and os.path.exists(bgm_path):
+        # 나레이션(원음) + BGM(볼륨↓) amix. 영상·BGM 모두 stream_loop 로 길이 채움.
+        fc = (f'[0:v]{ass_f}[v];'
+              f'[2:a]volume={max(0.0, min(1.0, bgm_volume)):.3f}[bg];'
+              f'[1:a][bg]amix=inputs=2:duration=first:normalize=0[a]')
+        _ffmpeg('-y',
+                '-stream_loop', '-1', '-i', muted_local,
+                '-i', narration,
+                '-stream_loop', '-1', '-i', bgm_path,
+                '-t', f'{total:.3f}',
+                '-filter_complex', fc,
+                '-map', '[v]', '-map', '[a]',
+                *common_tail)
+    else:
+        _ffmpeg('-y',
+                '-stream_loop', '-1', '-i', muted_local,
+                '-i', narration,
+                '-t', f'{total:.3f}',
+                '-vf', ass_f,
+                '-map', '0:v:0', '-map', '1:a:0',
+                *common_tail)
+
     if not os.path.exists(out_path) or os.path.getsize(out_path) < 1024:
         raise RuntimeError('최종 영상 생성 실패(빈 파일).')
 
-    return {'duration': round(total, 2), 'seg_count': used, 'width': w, 'height': h}
+    return {'duration': round(total, 2), 'seg_count': used, 'width': w, 'height': h,
+            'bgm': bool(bgm_path)}

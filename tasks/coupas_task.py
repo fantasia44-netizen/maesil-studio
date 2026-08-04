@@ -54,7 +54,7 @@ def _fail(supabase, creation_id, step, e):
              max_retries=0, soft_time_limit=300, time_limit=360)
 def render_narrated_video(self, creation_id, user_id, video_url, segments,
                           voice_key='female_natural', tts_speed=1.05,
-                          caption_style='outline',
+                          caption_style='outline', bgm='', bgm_volume=0.18,
                           supabase_url='', supabase_key=''):
     """무음 영상 + 멘트 → TTS 음성 + 타임라인 자막 합성 → 최종 MP4 (B·C단계)."""
     import sys
@@ -82,11 +82,28 @@ def render_narrated_video(self, creation_id, user_id, video_url, segments,
         _set_step(supabase, creation_id, step)
         cr.download(video_url, muted)
 
+        # BGM 해석: mood키(쇼츠 라이브러리) / 업로드 storage경로 / 없음
+        bgm_path = None
+        if bgm:
+            if bgm.startswith('lib:'):          # 쿠파스 BGM 라이브러리
+                bgm_path = vi.resolve_coupas_bgm(bgm)
+            elif '/' in bgm:                    # Storage 경로(업로드 트랙)
+                try:
+                    ext = os.path.splitext(bgm)[1] or '.mp3'
+                    bgm_path = os.path.join(tmp_dir, f'bgm{ext}')
+                    data = supabase.storage.from_(vi.STORAGE_BUCKET).download(bgm)
+                    with open(bgm_path, 'wb') as f:
+                        f.write(data)
+                except Exception as be:
+                    logger.warning('[coupas_task] BGM 다운로드 실패(%s): %s', bgm, be)
+                    bgm_path = None
+
         step = '음성·자막 합성 중'
         _set_step(supabase, creation_id, step)
         out = os.path.join(tmp_dir, 'out.mp4')
         meta = cr.render_narration(muted, segments, voice_key, float(tts_speed),
-                                   tts_key, out, tmp_dir, caption_style)
+                                   tts_key, out, tmp_dir, caption_style,
+                                   bgm_path=bgm_path, bgm_volume=float(bgm_volume))
 
         step = '저장 중'
         _set_step(supabase, creation_id, step)
