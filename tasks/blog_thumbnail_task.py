@@ -193,7 +193,7 @@ def transform_character(self, creation_id, user_id, character_data, style,
 
 
 @celery.task(bind=True, name='tasks.blog_thumbnail_task.scene',
-             max_retries=0, soft_time_limit=180, time_limit=240)
+             max_retries=0, soft_time_limit=260, time_limit=320)
 def scene(self, creation_id, user_id, headline, sub, badge, cta, theme, title_style,
          topic, refs, supabase_url, supabase_key, anthropic_api_key,
          style='cute_char'):

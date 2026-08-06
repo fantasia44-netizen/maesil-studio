@@ -244,6 +244,42 @@ def remove_background_ai(image_data: str, user_id: str = 'anon', supabase=None) 
     raise ValueError(f'AI 누끼 응답 파싱 실패: {data}')
 
 
+def _fal_request(endpoint: str, payload: dict, api_key: str,
+                 timeout: int = 120, retries: int = 3) -> dict:
+    """fal.run 호출 — 간헐적 오류(422/429/5xx/타임아웃) 재시도 + 오류 본문 노출.
+
+    nano-banana(Gemini) 계열은 동일 요청도 드물게 422를 반환하지만 재시도하면
+    성공하는 경우가 많다(백엔드 일시 오류·필터 오탐). 422는 이미지 생성 전 거부라
+    재시도해도 과금되지 않는다. 최종 실패 시 fal 응답 본문을 예외 메시지에 담아
+    원인을 진단할 수 있게 한다."""
+    import time as _t
+    last = ''
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(
+                f'https://fal.run/{endpoint}',
+                headers={'Authorization': f'Key {api_key}',
+                         'Content-Type': 'application/json'},
+                json=payload, timeout=timeout,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            last = f'{resp.status_code}: {(resp.text or "")[:400]}'
+            if resp.status_code in (422, 429, 500, 502, 503, 504) and attempt < retries:
+                logger.warning('[fal %s] %s → 재시도 %d/%d', endpoint, last, attempt, retries)
+                _t.sleep(1.5 * attempt)
+                continue
+            raise ValueError(f'이미지 생성 서버 오류 ({endpoint}) — {last}')
+        except requests.RequestException as e:
+            last = str(e)
+            if attempt < retries:
+                logger.warning('[fal %s] 요청 예외 %s → 재시도 %d/%d', endpoint, e, attempt, retries)
+                _t.sleep(1.5 * attempt)
+                continue
+            raise ValueError(f'이미지 생성 서버 연결 실패 ({endpoint}) — {last}')
+    raise ValueError(f'이미지 생성 실패 ({endpoint}) — {last}')
+
+
 def transform_character(image_data: str, style_prompt: str,
                         user_id: str = 'anon', supabase=None) -> str:
     """캐릭터 이미지 변형 — nano-banana(Gemini) 편집으로 정체성 유지하며 리스타일.
@@ -269,14 +305,9 @@ def transform_character(image_data: str, style_prompt: str,
         f'Cute flat illustration mascot sticker, clean vector style, '
         f'plain solid white background, centered, no text, no shadow.'
     )
-    resp = requests.post(
-        'https://fal.run/fal-ai/nano-banana/edit',
-        headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
-        json={'prompt': full, 'image_urls': [image_url], 'num_images': 1},
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    data = _fal_request('fal-ai/nano-banana/edit',
+                        {'prompt': full, 'image_urls': [image_url], 'num_images': 1},
+                        api_key, timeout=110, retries=2)
     if data.get('images'):
         return data['images'][0]['url']
     if data.get('image'):
@@ -517,14 +548,7 @@ def generate_scene(mascot_urls, topic: str, user_id: str = 'anon',
     if extra:
         payload['prompt'] += f' {extra.strip()}'
 
-    resp = requests.post(
-        f'https://fal.run/{endpoint}',
-        headers={'Authorization': f'Key {api_key}', 'Content-Type': 'application/json'},
-        json=payload,
-        timeout=150,
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    data = _fal_request(endpoint, payload, api_key, timeout=110, retries=2)
     if data.get('images'):
         return data['images'][0]['url']
     if data.get('image'):
