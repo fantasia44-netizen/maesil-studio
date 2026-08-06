@@ -5,7 +5,7 @@ from flask import current_app, jsonify
 from flask_login import current_user
 from services.tz_utils import now_kst
 from services.point_service import use_points, InsufficientPoints
-from models import POINT_COSTS, CREATION_MODELS
+from models import POINT_COSTS, CREATION_MODELS, CREATION_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -134,10 +134,12 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
 
     import time
     start = time.time()
+    deducted = False  # 실제 차감 성공 여부 — 실패 시 이 경우에만 환불
     try:
         # 포인트 차감 — User 객체 전달하여 operator 풀로 자동 라우팅
         use_points(current_user, creation_type, creation_id,
                    cost_override=cost, note_override=ledger_note)
+        deducted = True
 
         # Claude 호출
         from services.claude_service import generate_text
@@ -172,6 +174,15 @@ def run_text_generation(creation_type: str, brand: dict, input_data: dict,
             supabase.table('creations').update({'status': 'failed'}).eq('id', creation_id).execute()
         except Exception:
             pass
+        # 차감이 실제로 일어난 뒤 생성이 실패했으면 포인트 환불 (비동기 경로와 대칭).
+        #   use_points 가 InsufficientPoints 로 빠진 경우는 차감 전이라 deducted=False → 환불 안 함.
+        if deducted and cost > 0:
+            try:
+                from services.point_service import add_points
+                add_points(current_user, cost, 'refund', ref_id=creation_id,
+                           note=f'{ledger_note or CREATION_LABELS.get(creation_type, creation_type)} 생성 실패 환불')
+            except Exception as refund_err:
+                logger.error(f'[CREATE] 환불 실패 cid={creation_id}: {refund_err}')
         # 사용자에게 구체적 에러 표시 (민감 정보 제외)
         safe_msg = 'AI 생성 중 오류가 발생했습니다.'
         if 'overloaded' in err_str.lower() or 'rate_limit' in err_str.lower():

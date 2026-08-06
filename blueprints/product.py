@@ -724,7 +724,7 @@ def studio_generate_images(product_id):
     if not prompt_items:
         return jsonify(ok=False, message='프롬프트가 없습니다.')
 
-    from services.point_service import use_points, InsufficientPoints
+    from services.point_service import use_points, add_points, InsufficientPoints
     from services.config_service import get_config
     import requests as req_lib, uuid
 
@@ -733,8 +733,9 @@ def studio_generate_images(product_id):
         return jsonify(ok=False, message='fal.ai API 키가 설정되지 않았습니다.')
 
     total_cost = IMG_GEN_COST * len(prompt_items)
+    charge_ref = str(uuid.uuid4())
     try:
-        use_points(current_user, 'image_generation', str(uuid.uuid4()),
+        use_points(current_user, 'image_generation', charge_ref,
                    cost_override=total_cost,
                    note_override=f'스튜디오 이미지 {len(prompt_items)}장')
     except InsufficientPoints as ip:
@@ -776,6 +777,15 @@ def studio_generate_images(product_id):
             results.append({'role': role, 'ok': False, 'message': str(e)[:100]})
 
     success = [r for r in results if r.get('ok')]
+    # 실패 장수만큼 포인트 환불 (선차감했으므로 성공분만 정산되도록).
+    failed_n = len(results) - len(success)
+    if failed_n > 0:
+        try:
+            add_points(current_user, IMG_GEN_COST * failed_n, 'refund',
+                       ref_id=charge_ref,
+                       note=f'스튜디오 이미지 실패 {failed_n}장 환불')
+        except Exception as e:
+            logger.error(f'[STUDIO] 이미지 실패 환불 오류: {e}')
     return jsonify(ok=bool(success), results=results,
                    message=f'{len(success)}/{len(results)}장 생성 완료')
 
