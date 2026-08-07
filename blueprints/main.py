@@ -220,9 +220,22 @@ def history_detail(creation_id):
         return redirect(url_for('main.history'))
 
     from models import CREATION_LABELS
+
+    # 구글판(google_text)이 있는 생성물은 이력에서도 워드프레스로 재발행 가능.
+    #   버튼 노출 판단용으로 이 브랜드의 워드프레스 연결 여부를 넘긴다.
+    od = creation.get('output_data') or {}
+    wp_connected = False
+    if creation.get('brand_id') and od.get('google_text'):
+        try:
+            from services.wordpress_connection import is_connected as wp_is_connected
+            wp_connected = wp_is_connected(creation['brand_id'])
+        except Exception as e:
+            logger.warning(f'[HISTORY_DETAIL] wp is_connected 확인 실패: {e}')
+
     return render_template('history/detail.html',
                            creation=creation,
-                           CREATION_LABELS=CREATION_LABELS)
+                           CREATION_LABELS=CREATION_LABELS,
+                           wp_connected=wp_connected)
 
 
 @main_bp.route('/history/<creation_id>/cancel', methods=['POST'])

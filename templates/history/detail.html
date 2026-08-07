@@ -168,6 +168,29 @@
       </div>
     </div>
 
+    <!-- 구글 블로그(워드프레스) 재발행 — 구글판이 있는 생성물만 -->
+    {% if is_done and od.google_text %}
+    <div class="card mb-3">
+      <div class="card-header py-2">
+        <small class="fw-semibold text-muted"><i class="bi bi-globe2 me-1"></i>구글 블로그(워드프레스) 발행</small>
+      </div>
+      <div class="card-body p-3">
+        {% if wp_connected %}
+        <p class="small text-muted mb-2">이 글의 <b>구글판</b>을 워드프레스에 <b>초안</b>으로 다시 보냅니다. 발행 후 워드프레스에서 검토·게시하세요.</p>
+        <button id="wpPublishBtn" class="btn btn-sm btn-primary" onclick="wpPublish()">
+          <i class="bi bi-send me-1"></i>구글 블로그로 발행 (초안)
+        </button>
+        <div id="wpPublishResult" class="small mt-2"></div>
+        {% else %}
+        <p class="small text-muted mb-2">이 글엔 구글판이 있지만, 이 브랜드에 워드프레스가 연결되어 있지 않습니다. 연결하면 여기서 바로 발행할 수 있습니다.</p>
+        <a href="{{ url_for('integrations.index', wp_brand_id=creation.brand_id) }}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-link-45deg me-1"></i>워드프레스 연결하기
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- 입력 정보 -->
     {% if creation.input_data %}
     <div class="card mb-3">
@@ -231,6 +254,41 @@
 
 {% block extra_script %}
 <script>
+{% if is_done and od.google_text and wp_connected %}
+// ── 구글 블로그(워드프레스) 재발행 — 저장된 구글판을 초안으로 전송 ──
+const _wpGoogleText = {{ od.google_text | tojson }};
+const _wpBrandId = {{ (creation.brand_id or '') | tojson }};
+async function wpPublish() {
+  const btn = document.getElementById('wpPublishBtn');
+  const out = document.getElementById('wpPublishResult');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>발행 중...';
+  out.innerHTML = '';
+  try {
+    const res = await fetch('{{ url_for("integrations.wordpress_publish") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+      body: JSON.stringify({ brand_id: _wpBrandId, google_text: _wpGoogleText, status: 'draft' }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      out.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>'
+        + (data.message || '워드프레스에 초안으로 저장되었습니다.') + '</span>'
+        + (data.edit_link ? ' <a href="' + data.edit_link + '" target="_blank" rel="noopener">워드프레스에서 열기 →</a>' : '');
+    } else {
+      out.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>'
+        + (data.message || '발행에 실패했습니다.') + '</span>';
+    }
+  } catch (e) {
+    out.innerHTML = '<span class="text-danger">발행 요청 실패: ' + e + '</span>';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+{% endif %}
+
 function copyResult() {
   const text = document.getElementById('resultContent')?.textContent || '';
   navigator.clipboard.writeText(text).then(() => {
