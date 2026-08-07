@@ -793,6 +793,29 @@ _STYLE_CONTEXT = {
     'minimal':      '미니멀 플랫 디자인 — 단순한 기하학적 형태, 흰 배경, 군더더기 없는 현대적 레이아웃',
 }
 
+# 이미지 슬롯별 피사체 타입 — 사람 일색을 막고 스토리처럼 사람/사물/배경을 섞는다.
+_IMG_SUBJECT_HINT = {
+    'person':     '사람 중심 — 타겟 독자가 등장하는 라이프스타일 씬(감정·행동이 드러나게)',
+    'object':     '사물 클로즈업 — 사람 없이 주제와 관련된 소품·재료·오브젝트를 정물/플랫레이로',
+    'background': '배경·환경 — 사람 없이 장소·공간·분위기를 담은 와이드 씬',
+}
+
+
+def _blog_image_subjects(n: int) -> list[str]:
+    """이미지 n장의 피사체 타입 배치 (사람/사물/배경 혼합).
+
+    첫 컷(후킹)·마지막 컷(구매 유도)은 사람 중심, 중간 컷은 사물→사람→배경을
+    순환해 단조로움을 없앤다. 예) 5장 → 사람·사물·사람·배경·사람.
+    """
+    if n <= 1:
+        return ['person']
+    subjects = ['person'] * n
+    subjects[-1] = 'person'
+    cycle = ['object', 'person', 'background']
+    for idx, i in enumerate(range(1, n - 1)):
+        subjects[i] = cycle[idx % len(cycle)]
+    return subjects
+
 
 @create_bp.route('/blog/image-prompts', methods=['POST'])
 @login_required
@@ -835,11 +858,15 @@ def blog_image_prompts():
         '  ❌ BAD: "laptop displaying product listing" '
         '  ✅ GOOD: "working at a laptop, focused and engaged" '
         ''
-        'RULE 3 — Person first: When the scene involves a person, START the prompt with the person. '
-        '  Keep it to 3-4 core elements max: [person] + [action/emotion] + [setting] + [lighting]. '
-        '  Too many elements cause FLUX to drop the person and generate a flat-lay instead. '
-        '  ❌ BAD: long list of 8+ descriptors → FLUX generates objects, no person '
-        '  ✅ GOOD: "Korean woman in her 30s, smiling, holding smartphone, bright home office, natural light" '
+        'RULE 3 — Match each slot\'s subject type (varies per image; do NOT make every image a person): '
+        '  • PERSON slot: START with the person; keep 3-4 core elements max — '
+        '    [person] + [action/emotion] + [setting] + [lighting]. Too many descriptors make FLUX drop the person. '
+        '    ✅ GOOD: "Korean woman in her 30s, smiling, holding smartphone, bright home office, natural light" '
+        '  • OBJECT slot: a clean still-life / close-up / flat-lay of topic-related props — NO person in frame. '
+        '    ✅ GOOD: "flat-lay of fresh ingredients and a ceramic bowl on a light wood table, soft daylight" '
+        '  • BACKGROUND slot: an environment / place / mood wide shot — NO prominent person. '
+        '    ✅ GOOD: "cozy sunlit kitchen interior, warm tones, empty, shallow depth of field" '
+        '  Follow the subject type given for each slot in the image plan below. '
         ''
         'RULE 4 — No text on ANY surface or object: '
         'NEVER describe sticky notes, bulletin boards, whiteboards, posters, or signage with text. '
@@ -861,27 +888,31 @@ def blog_image_prompts():
     ai_count = max(1, ai_count)
 
     if has_product_image:
+        subjects = _blog_image_subjects(ai_count)
         slots_desc = '\n'.join(
-            f'{i+1}. 스토리/라이프스타일 이미지 {i+1} — 제품 없이 타겟 독자의 일상·감성·사용 맥락을 담은 장면'
+            f'{i+1}. [{_IMG_SUBJECT_HINT[subjects[i]]}]'
             for i in range(ai_count)
         )
-        image_plan = f"""이미지 {ai_count}장의 역할
+        image_plan = f"""이미지 {ai_count}장의 구성 — 아래 지정한 피사체 타입을 반드시 지키세요
 (슬롯1은 실제 제품 원본 사진으로 이미 확정되어 있으니, AI 이미지에는 제품 패키지·제품 자체를 넣지 마세요)
 
 {slots_desc}
 
-중요: 모든 AI 이미지는 제품이 사용되는 상황, 감성, 라이프스타일만 표현합니다. 서로 중복되지 않게 각각 다른 씬/각도/분위기로 구성하세요."""
+중요: 위 [ ] 안의 피사체 타입(사람/사물/배경)을 그대로 따르세요. '사물'·'배경' 컷에는 사람을 넣지 말고, 사람 일색이 되지 않게 하세요. 각 이미지는 서로 다른 씬·각도·분위기로, 글의 흐름을 따라가는 하나의 스토리처럼 구성합니다."""
         slot_count = f'{ai_count}개'
     else:
-        slots_desc = '\n'.join(
-            f'{i+1}. {"인트로 — 시선을 잡는 메인 비주얼" if i==0 else "아웃트로 — 구매 유도 마무리 비주얼" if i==total_count-1 else f"본문 {i} — 핵심 내용 보완 라이프스타일 씬"}'
-            for i in range(total_count)
-        )
-        image_plan = f"""이미지 {total_count}장의 역할:
+        subjects = _blog_image_subjects(total_count)
+        def _role(i):
+            base = ('인트로 — 시선을 잡는 메인 비주얼' if i == 0
+                    else '아웃트로 — 구매 유도 마무리 비주얼' if i == total_count - 1
+                    else f'본문 {i} — 핵심 내용 보완')
+            return f'{base} · [{_IMG_SUBJECT_HINT[subjects[i]]}]'
+        slots_desc = '\n'.join(f'{i+1}. {_role(i)}' for i in range(total_count))
+        image_plan = f"""이미지 {total_count}장의 구성 — 역할과 피사체 타입을 함께 지키세요:
 
 {slots_desc}
 
-서로 중복되지 않게 각각 다른 씬·각도·분위기로 구성하세요."""
+중요: 위 [ ] 안의 피사체 타입(사람/사물/배경)을 그대로 따르세요. '사물'·'배경' 컷에는 사람을 넣지 말고, 사람 일색이 되지 않게 하세요. 각 이미지는 서로 다른 씬·각도·분위기로, 글의 흐름을 따라가는 하나의 스토리처럼 구성합니다."""
         slot_count = f'{total_count}개'
 
     user_prompt = f"""아래 정보를 바탕으로 블로그 포스트에 사용할 이미지 프롬프트 {slot_count}를 JSON 배열로 생성하세요.
