@@ -254,9 +254,10 @@
 
 {% block extra_script %}
 <script>
-{% if is_done and od.google_text and wp_connected %}
+{# od/is_done 는 content 블록 지역변수라 이 블록엔 없음 → creation 으로 직접 판정 #}
+{% if creation.status == 'done' and (creation.output_data or {}).google_text and wp_connected %}
 // ── 구글 블로그(워드프레스) 재발행 — 저장된 구글판을 초안으로 전송 ──
-const _wpGoogleText = {{ od.google_text | tojson }};
+const _wpGoogleText = {{ (creation.output_data or {}).google_text | tojson }};
 const _wpBrandId = {{ (creation.brand_id or '') | tojson }};
 async function wpPublish() {
   const btn = document.getElementById('wpPublishBtn');
