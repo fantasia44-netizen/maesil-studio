@@ -341,6 +341,43 @@ def _upload_image_to_wp(client, url: str, idx) -> dict | None:
         return None
 
 
+def _pick_focus_keyword(title: str, tags: list) -> str:
+    """Rank Math 초점 키워드 선택.
+
+    제목의 주제부(구분자 앞) 앞 2~3 단어를 쓴다 → '키워드가 제목에 포함' 체크를
+    항상 통과. 제목이 비면 첫 태그로 폴백.
+    """
+    main = re.split(r'\s*[—\-–|:·]\s*', (title or '').strip())[0]
+    words = main.split()
+    kw = ' '.join(words[:3]).strip()
+    if kw:
+        return kw
+    for t in (tags or []):
+        t = (t or '').strip().lstrip('#')
+        if t:
+            return t
+    return (title or '').strip()[:20]
+
+
+def _set_rankmath_meta(client, post: dict, title: str, excerpt: str, tags: list) -> None:
+    """발행된 글에 Rank Math SEO 메타(초점키워드/제목/설명)를 설정.
+
+    실패 시 예외를 던지므로 호출부에서 try/except 로 감싼다(발행엔 영향 없음).
+    """
+    if not isinstance(post, dict) or not post.get('id'):
+        return
+    meta = {}
+    kw = _pick_focus_keyword(title, tags)
+    if kw:
+        meta['rank_math_focus_keyword'] = kw
+    if title:
+        meta['rank_math_title'] = title
+    if excerpt:
+        meta['rank_math_description'] = excerpt
+    if meta:
+        client.update_post_meta(post['id'], meta)
+
+
 def create_full_post(supabase, brand_id: str, google_text: str, *,
                      body_image_urls=None, thumbnail_url: str | None = None,
                      status: str = 'draft', title_override: str | None = None) -> dict:
@@ -435,6 +472,11 @@ def create_full_post(supabase, brand_id: str, google_text: str, *,
             tag_ids=tag_ids or None, featured_media=featured_id,
         )
         mark_used(brand_id, supabase=supabase)
+        # Rank Math SEO 메타 자동 설정 (초점키워드/제목/설명) — 실패해도 발행 유지
+        try:
+            _set_rankmath_meta(client, post, title, excerpt, tags)
+        except Exception as e:
+            logger.warning('[WP] Rank Math 메타 설정 실패(무시): %s', e)
     except WordPressError as e:
         logger.warning('[WP] 완성본 발행 실패 brand=%s: %s', brand_id, e)
         mark_error(brand_id, str(e), supabase=supabase)

@@ -201,6 +201,14 @@ class WordPressClient:
             body['featured_media'] = featured_media
         return self._request('POST', f'/posts/{post_id}', json_body=body)
 
+    def update_post_meta(self, post_id, meta: dict) -> dict:
+        """POST /posts/<id> — 메타 필드만 갱신 (Rank Math SEO 등).
+
+        메타 키가 REST에 등록돼 있지 않으면 400을 던지므로, 호출자에서
+        try/except 로 감싸 발행 흐름을 보호한다.
+        """
+        return self._request('POST', f'/posts/{post_id}', json_body={'meta': meta})
+
     def upload_media(self, filename: str, content: bytes,
                      mime: str = 'image/jpeg') -> dict:
         """POST /media — 이미지 바이너리 업로드. list 응답(rest_route 오라우팅)이면
