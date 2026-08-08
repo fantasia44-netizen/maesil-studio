@@ -192,6 +192,11 @@ def create_google_post(supabase, brand_id: str, google_text: str, *,
             tag_ids=tag_ids or None,
         )
         mark_used(brand_id, supabase=supabase)
+        try:
+            _set_rankmath_meta(client, post, title,
+                               parsed.get('excerpt') or '', parsed.get('tags') or [])
+        except Exception as e:
+            logger.warning('[WP] Rank Math 메타 설정 실패(무시): %s', e)
     except WordPressError as e:
         logger.warning(f'[WP] publish 실패 brand={brand_id}: {e}')
         mark_error(brand_id, str(e), supabase=supabase)
@@ -376,6 +381,42 @@ def _set_rankmath_meta(client, post: dict, title: str, excerpt: str, tags: list)
         meta['rank_math_description'] = excerpt
     if meta:
         client.update_post_meta(post['id'], meta)
+
+
+def backfill_rankmath_meta(supabase, brand_id: str, max_pages: int = 10) -> dict:
+    """기존 발행글 전체에 Rank Math 메타(초점키워드/제목/설명)를 일괄 설정.
+
+    반환: {ok, total, updated, failed}. 개별 글 실패는 건너뛰고 계속 진행.
+    """
+    client = get_client_for_user(brand_id, supabase=supabase)
+    if not client:
+        return {'ok': False, 'message': '워드프레스가 연결되지 않았습니다.',
+                'total': 0, 'updated': 0, 'failed': 0}
+    total = updated = failed = 0
+    for page in range(1, max_pages + 1):
+        try:
+            posts = client.list_posts(per_page=100, page=page, status='publish')
+        except Exception as e:
+            logger.warning('[WP] backfill 목록 조회 종료 page=%s: %s', page, e)
+            break
+        if not posts:
+            break
+        for p in posts:
+            total += 1
+            title = (p.get('title') or {}).get('rendered') or ''
+            excerpt = re.sub(r'<[^>]+>', '',
+                             (p.get('excerpt') or {}).get('rendered') or '').strip()
+            try:
+                _set_rankmath_meta(client, p, title, excerpt, [])
+                updated += 1
+            except Exception as e:
+                failed += 1
+                logger.warning('[WP] backfill 실패 post=%s: %s', p.get('id'), e)
+        if len(posts) < 100:
+            break
+    logger.info('[WP] backfill 완료 brand=%s total=%d updated=%d failed=%d',
+                brand_id, total, updated, failed)
+    return {'ok': True, 'total': total, 'updated': updated, 'failed': failed}
 
 
 def create_full_post(supabase, brand_id: str, google_text: str, *,

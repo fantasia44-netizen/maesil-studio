@@ -209,6 +209,14 @@ class WordPressClient:
         """
         return self._request('POST', f'/posts/{post_id}', json_body={'meta': meta})
 
+    def list_posts(self, per_page: int = 100, page: int = 1,
+                   status: str = 'publish') -> list:
+        """GET /posts — 글 목록(id/title/excerpt). 백필 등 배치 작업용."""
+        params = {'per_page': per_page, 'page': page, 'status': status,
+                  '_fields': 'id,title,excerpt'}
+        r = self._request('GET', '/posts', params=params)
+        return r if isinstance(r, list) else []
+
     def upload_media(self, filename: str, content: bytes,
                      mime: str = 'image/jpeg') -> dict:
         """POST /media — 이미지 바이너리 업로드. list 응답(rest_route 오라우팅)이면
