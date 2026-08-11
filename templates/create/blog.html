@@ -3067,15 +3067,19 @@ async function renderFinalContent() {
   }
 
   // ── 완성본 DB 저장 (Haiku 성공/폴백 무관하게 항상 저장) ──────
-  if (blogCreationId && validImgs.length > 0) {
+  //   썸네일(대표이미지)도 함께 저장 → 이력에서 재발행할 때 썸네일까지 들어가게.
+  const _thumbForSave = (generatedImages.find(g => g && g.isThumbnail && g.url) || {}).url
+    || (typeof _thumbPreviewUrl !== 'undefined' ? (_thumbPreviewUrl || '') : '');
+  if (blogCreationId && (validImgs.length > 0 || _thumbForSave)) {
     try {
       await fetch('{{ url_for("create.blog_save_final") }}', {
         method: 'POST',
         headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
         body: JSON.stringify({
-          creation_id: blogCreationId,
-          images:      validImgs.map(g => ({role:g.role, url:g.url, is_product:!!g.isOriginal})),
-          placements:  placements || [],
+          creation_id:   blogCreationId,
+          images:        validImgs.map(g => ({role:g.role, url:g.url, is_product:!!g.isOriginal})),
+          placements:    placements || [],
+          thumbnail_url: _thumbForSave,
         })
       });
     } catch {}

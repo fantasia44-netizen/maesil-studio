@@ -159,7 +159,17 @@
           </div>
           {% endif %}
 
-          <!-- ③ 텍스트 -->
+          <!-- ③ 대표 썸네일 (블로그 완성본에 저장된 경우) -->
+          {% if od.thumbnail_url %}
+          <div class="mb-3 text-center">
+            <img src="{{ od.thumbnail_url }}" alt="대표 썸네일"
+                 style="max-width:300px;width:100%;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.12);cursor:zoom-in"
+                 onclick="openImg('{{ od.thumbnail_url }}', '대표 썸네일')">
+            <div class="small text-muted mt-1"><i class="bi bi-image me-1"></i>대표 썸네일</div>
+          </div>
+          {% endif %}
+
+          <!-- ④ 텍스트 -->
           {% if has_text %}
           <div id="resultContent" class="result-box" style="white-space:pre-wrap;line-height:1.9;font-size:.91rem">{{ od.text }}</div>
           {% endif %}
@@ -176,7 +186,9 @@
       </div>
       <div class="card-body p-3">
         {% if wp_connected %}
-        <p class="small text-muted mb-2">이 글의 <b>구글판</b>을 워드프레스에 <b>초안</b>으로 다시 보냅니다. 발행 후 워드프레스에서 검토·게시하세요.</p>
+        <p class="small text-muted mb-2">이 글의 <b>구글판</b>을 <b>본문 이미지{% if od.thumbnail_url %} + 대표 썸네일{% endif %}</b>과 함께 워드프레스에 <b>초안</b>으로 보냅니다. 발행 후 워드프레스에서 검토·게시하세요.
+          {% if not od.thumbnail_url %}<br><span style="font-size:.9em">※ 이 글엔 저장된 대표 썸네일이 없어 본문 이미지만 들어갑니다. (예전 글은 썸네일이 저장되지 않았습니다)</span>{% endif %}
+        </p>
         <button id="wpPublishBtn" class="btn btn-sm btn-primary" onclick="wpPublish()">
           <i class="bi bi-send me-1"></i>구글 블로그로 발행 (초안)
         </button>
@@ -256,9 +268,12 @@
 <script>
 {# od/is_done 는 content 블록 지역변수라 이 블록엔 없음 → creation 으로 직접 판정 #}
 {% if creation.status == 'done' and (creation.output_data or {}).google_text and wp_connected %}
-// ── 구글 블로그(워드프레스) 재발행 — 저장된 구글판을 초안으로 전송 ──
+// ── 구글 블로그(워드프레스) 재발행 — 구글판 + 본문이미지 + 대표썸네일을 초안으로 전송 ──
 const _wpGoogleText = {{ (creation.output_data or {}).google_text | tojson }};
 const _wpBrandId = {{ (creation.brand_id or '') | tojson }};
+const _wpBodyImages = ({{ (creation.output_data or {}).images | tojson }} || [])
+  .map(function (x) { return x && x.url; }).filter(Boolean);
+const _wpThumbUrl = {{ (creation.output_data or {}).thumbnail_url | tojson }} || '';
 async function wpPublish() {
   const btn = document.getElementById('wpPublishBtn');
   const out = document.getElementById('wpPublishResult');
@@ -267,10 +282,13 @@ async function wpPublish() {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>발행 중...';
   out.innerHTML = '';
   try {
-    const res = await fetch('{{ url_for("integrations.wordpress_publish") }}', {
+    const res = await fetch('{{ url_for("integrations.wordpress_publish_full") }}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-      body: JSON.stringify({ brand_id: _wpBrandId, google_text: _wpGoogleText, status: 'draft' }),
+      body: JSON.stringify({
+        brand_id: _wpBrandId, google_text: _wpGoogleText,
+        body_images: _wpBodyImages, thumbnail_url: _wpThumbUrl, status: 'draft',
+      }),
     });
     const data = await res.json();
     if (data.ok) {

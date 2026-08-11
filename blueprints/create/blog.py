@@ -1675,11 +1675,12 @@ def blog_save_final():
       images: [{role, url, is_product}]
       placements: [{after_para_idx, image_idx}]
     """
-    supabase    = current_app.supabase
-    data        = request.get_json(force=True) or {}
-    creation_id = (data.get('creation_id') or '').strip()
-    images      = data.get('images', [])
-    placements  = data.get('placements', [])
+    supabase      = current_app.supabase
+    data          = request.get_json(force=True) or {}
+    creation_id   = (data.get('creation_id') or '').strip()
+    images        = data.get('images', [])
+    placements    = data.get('placements', [])
+    thumbnail_url = (data.get('thumbnail_url') or '').strip()
 
     if not creation_id:
         return jsonify(ok=False, message='creation_id 없음')
@@ -1696,6 +1697,8 @@ def blog_save_final():
         existing['images']     = images
         existing['placements'] = placements
         existing['has_final']  = True
+        if thumbnail_url:
+            existing['thumbnail_url'] = thumbnail_url
 
         supabase.table('creations').update({
             'output_data': existing,
