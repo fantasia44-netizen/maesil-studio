@@ -139,6 +139,24 @@
 • 친근하고 신뢰감 있는 톤으로, 너무 광고스럽지 않게"></textarea>
         </div>
 
+        <!-- 실제 경험 입력 — 전문가 글의 핵심 (E-E-A-T) -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold">
+            <i class="bi bi-stars me-1" style="color:#e8355a"></i>이 글에 넣을 <b>실제 경험·데이터</b>
+            <span class="text-muted fw-normal small">(선택 · 있으면 전문가 글로 격상)</span>
+          </label>
+          <div class="text-muted small mb-2">
+            직접 겪은 사례·실제 수치를 <b>대충이라도</b> 적으면 AI가 1인칭 전문가 글로 녹여냅니다. (없으면 일반 설명글)
+            · 입력한 경험은 <b>저장돼 다음 글에도 자동 활용</b>됩니다. <span class="text-danger">지어내지 말고 실제 겪은 것만.</span>
+          </div>
+          <textarea id="blogExperience" class="form-control" rows="4"
+                    style="font-size:.9rem;line-height:1.8;resize:vertical"
+                    placeholder="예시:
+• 쿠팡 광고 ROAS를 1080%까지 올린 실제 과정 — 광고비 75% 줄이고 키워드 30개로 압축, 어떤 판단을 했는지
+• 안 팔리던 상품 재등록했더니 2주 만에 노출이 오른 실제 케이스와 그때 바꾼 것
+• (실제 겪은 것만 — 없으면 비워두세요)"></textarea>
+        </div>
+
         <div class="row g-3 mb-4">
           <div class="col-sm-6">
             <label class="form-label fw-semibold small">분량</label>
@@ -2478,6 +2496,9 @@ async function generateBlogText() {
 
   const targets = document.querySelector('input[name="blogTargets"]:checked')?.value || 'naver';
   fd.append('targets', targets);
+
+  // 이 글에 직접 입력한 실제 경험 (있으면 전문가 글 + 저장소 축적)
+  fd.append('manual_experience', document.getElementById('blogExperience')?.value?.trim() || '');
 
   try {
     const res  = await fetch('{{ url_for("create.blog_generate") }}', { method: 'POST', body: fd });

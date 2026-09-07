@@ -524,6 +524,35 @@ def blog_generate():
         except Exception as e:
             logger.warning('[blog_generate] 경험 데이터 조회 실패(계속): %s', e)
 
+    # 이 글에 직접 입력한 실제 경험 → ① 즉시 주입 ② 저장소에 구조화 저장(다음 글 자동 재사용)
+    manual_exp = (request.form.get('manual_experience') or '').strip()
+    if manual_exp:
+        try:
+            from services.experience_store import structure_free_text, create_record
+            from services.config_service import get_config
+            structured = structure_free_text(manual_exp, get_config('anthropic_api_key')) or {}
+            row = {
+                'brand_id':           brand['id'],
+                'user_id':            current_user.id,
+                'title':              (structured.get('title') or input_data['topic'])[:120],
+                'summary':            structured.get('summary'),
+                'problem':            structured.get('problem'),
+                'action':             structured.get('action'),
+                'result':             structured.get('result'),
+                'numbers_json':       structured.get('numbers') or structured.get('numbers_json') or {},
+                'category':           structured.get('category'),
+                'platform':           structured.get('platform'),
+                'keywords':           structured.get('keywords') or [],
+                'confidentiality':    'anonymized',
+                'usable_for_content': True,
+            }
+            create_record(supabase, {k: v for k, v in row.items() if v not in (None, '', [], {})})
+        except Exception as e:
+            logger.warning('[blog_generate] 경험 저장 실패(계속): %s', e)
+        # 이번 글엔 검색 경험보다 우선해서 즉시 주입
+        _mb = f'[이 글에 직접 입력한 실제 경험 — 최우선 근거]\n{manual_exp}'
+        experience_block = (_mb + '\n\n' + experience_block).strip() if experience_block else _mb
+
     # 연결된 실제 상품(매실인사이트 임포트) → 사실 근거로 자동 주입
     product_ref_block = ''
     if use_experience:
