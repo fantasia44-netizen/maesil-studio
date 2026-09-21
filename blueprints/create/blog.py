@@ -602,6 +602,9 @@ def blog_generate():
         except Exception as e:
             logger.warning('[blog_generate] 내부링크 조회 실패(계속): %s', e)
 
+    # 숫자 검증용: 이 글의 '근거' 텍스트 저장 → 발행 전 지어낸 숫자 대조에 사용
+    input_data['fact_source'] = (experience_block + '\n' + product_ref_block).strip()
+
     # 프롬프트 빌드
     from services.prompts.blog import build_prompt
     system, user, max_tokens = build_prompt(
@@ -696,6 +699,42 @@ def blog_text_status(creation_id):
         row, current_user.id,
         done_fields={'text': 'text', 'google_text': 'google_text'},
     )
+
+
+@create_bp.route('/blog/verify-numbers/<creation_id>', methods=['GET'])
+@login_required
+def blog_verify_numbers(creation_id):
+    """생성된 글의 숫자가 근거(이미지·경험 데이터)에 있는지 대조 → 확인 필요 목록.
+
+    허위광고 방지: 본문·표·FAQ·메타의 금액/퍼센트/배수 중 근거에서 못 찾은 값을
+    돌려준다. (틀림 판정이 아니라 사람 검토용 플래그)
+    """
+    supabase = current_app.supabase
+    if not supabase:
+        return jsonify(ok=False, flags=[], checked=False)
+    try:
+        row = supabase.table('creations').select(
+            'id, user_id, input_data, output_data'
+        ).eq('id', creation_id).single().execute().data
+    except Exception:
+        return jsonify(ok=False, flags=[], checked=False)
+    if not row or str(row.get('user_id')) != str(current_user.id):
+        return jsonify(ok=False, flags=[], checked=False)
+
+    input_data = row.get('input_data') or {}
+    output_data = row.get('output_data') or {}
+    source = (input_data.get('fact_source') or '').strip()
+    if not source:
+        return jsonify(ok=True, flags=[], checked=False)   # 근거 없으면 검증 생략
+
+    draft = '\n'.join(str(output_data.get(k) or '') for k in ('text', 'google_text'))
+    try:
+        from services.number_verify import verify
+        flags = verify(draft, source)
+    except Exception as e:
+        logger.warning('[blog_verify_numbers] 실패: %s', e)
+        return jsonify(ok=False, flags=[], checked=False)
+    return jsonify(ok=True, flags=flags, checked=True)
 
 
 # ─────────────────────────────────────────────────────────────

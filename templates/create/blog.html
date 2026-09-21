@@ -2553,6 +2553,7 @@ async function generateBlogText() {
     document.getElementById('step3Meta').textContent = (data.cost_charged || data.cost ? (data.cost_charged || data.cost) + 'P 사용 · ' : '') + '내용을 직접 수정할 수 있습니다';
     document.getElementById('step3Loading').classList.add('d-none');
     document.getElementById('step3Content').classList.remove('d-none');
+    verifyBlogNumbers(blogCreationId);   // 근거에 없는 숫자 대조 → 경고 배너
     saveBlogDraft(3);   // 글 초안 완료 → 임시저장
   } catch (err) {
     document.getElementById('step3Loading').classList.add('d-none');
@@ -2560,6 +2561,31 @@ async function generateBlogText() {
     errEl.textContent = '글 생성 실패: ' + err.message;
     errEl.classList.remove('d-none');
   }
+}
+
+// ── 숫자 검증: 근거(이미지·경험)에 없는 금액/%/배수를 경고 배너로 ──
+async function verifyBlogNumbers(creationId) {
+  const old = document.getElementById('blogNumberWarn');
+  if (old) old.classList.add('d-none');
+  if (!creationId) return;
+  try {
+    const url = `{{ url_for('create.blog_verify_numbers', creation_id='__ID__') }}`.replace('__ID__', creationId);
+    const r = await fetch(url).then(x => x.json());
+    if (!r.ok || !r.checked || !(r.flags && r.flags.length)) return;
+    let el = document.getElementById('blogNumberWarn');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'blogNumberWarn';
+      el.className = 'alert alert-warning small mb-3';
+      const parent = document.getElementById('step3Content');
+      parent.insertBefore(el, parent.firstChild);
+    }
+    el.innerHTML =
+      '<b>⚠️ 근거에서 확인되지 않는 숫자 — 발행 전 확인하세요</b><br>'
+      + r.flags.map(f => `<span class="badge bg-danger me-1 mb-1">${f}</span>`).join(' ')
+      + '<div class="text-muted mt-1">업로드한 데이터·경험에 없는 값이에요. 지어낸 숫자면 실제 값으로 고쳐야 합니다(허위광고 방지).</div>';
+    el.classList.remove('d-none');
+  } catch (e) { /* 검증 실패는 조용히 무시 */ }
 }
 
 // ── 결과 탭 전환 (네이버판 / 구글·워드프레스판) ────────────────
