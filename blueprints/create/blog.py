@@ -553,6 +553,28 @@ def blog_generate():
         _mb = f'[이 글에 직접 입력한 실제 경험 — 최우선 근거]\n{manual_exp}'
         experience_block = (_mb + '\n\n' + experience_block).strip() if experience_block else _mb
 
+    # 업로드한 데이터·성과 이미지 → Claude 비전으로 읽어 사실 근거로 주입
+    #   (manual_experience 와 동일 패턴 · 글 숫자는 이미지에 보이는 값만 쓰게 함)
+    try:
+        _img_files = request.files.getlist('data_images')
+        _img_pairs = []
+        for _f in (_img_files or []):
+            if not _f or not getattr(_f, 'filename', ''):
+                continue
+            _data = _f.read()
+            if _data:
+                _img_pairs.append((_data, getattr(_f, 'mimetype', '') or 'image/jpeg'))
+        if _img_pairs:
+            from services.image_analysis import analyze_images
+            from services.config_service import get_config
+            _vtext = analyze_images(_img_pairs, get_config('anthropic_api_key'))
+            if _vtext:
+                _ib = ('[업로드한 데이터 이미지에서 읽은 실제 값 — 근거]\n'
+                       '(글의 숫자는 아래 값만 사용. 없는 숫자는 지어내지 말 것)\n' + _vtext)
+                experience_block = (_ib + '\n\n' + experience_block).strip() if experience_block else _ib
+    except Exception as e:
+        logger.warning('[blog_generate] 이미지 분석 실패(계속): %s', e)
+
     # 연결된 실제 상품(매실인사이트 임포트) → 사실 근거로 자동 주입
     product_ref_block = ''
     if use_experience:

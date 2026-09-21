@@ -155,6 +155,18 @@
 • 쿠팡 광고 ROAS를 1080%까지 올린 실제 과정 — 광고비 75% 줄이고 키워드 30개로 압축, 어떤 판단을 했는지
 • 안 팔리던 상품 재등록했더니 2주 만에 노출이 오른 실제 케이스와 그때 바꾼 것
 • (실제 겪은 것만 — 없으면 비워두세요)"></textarea>
+          <div class="mt-2">
+            <label class="form-label small fw-semibold mb-1">
+              <i class="bi bi-image me-1" style="color:#e8355a"></i>데이터·성과 이미지
+              <span class="text-muted fw-normal">(선택 · 캡처를 올리면 AI가 읽어 근거로 사용)</span>
+            </label>
+            <input type="file" id="blogDataImages" class="form-control form-control-sm"
+                   accept="image/*" multiple>
+            <div class="text-muted small mt-1">
+              성과·정산 화면 캡처를 올리면 AI가 <b>숫자를 읽어</b> 글 근거로 씁니다.
+              (브랜드·상품명은 자동 익명 처리 · 여러 장 가능)
+            </div>
+          </div>
         </div>
 
         <div class="row g-3 mb-4">
@@ -2499,6 +2511,10 @@ async function generateBlogText() {
 
   // 이 글에 직접 입력한 실제 경험 (있으면 전문가 글 + 저장소 축적)
   fd.append('manual_experience', document.getElementById('blogExperience')?.value?.trim() || '');
+
+  // 업로드한 데이터·성과 이미지 (있으면 AI가 비전으로 읽어 근거로 사용)
+  const _dataImgs = document.getElementById('blogDataImages')?.files || [];
+  for (let i = 0; i < _dataImgs.length; i++) fd.append('data_images', _dataImgs[i]);
 
   try {
     const res  = await fetch('{{ url_for("create.blog_generate") }}', { method: 'POST', body: fd });
