@@ -569,8 +569,10 @@ def blog_generate():
             from services.config_service import get_config
             _vtext = analyze_images(_img_pairs, get_config('anthropic_api_key'))
             if _vtext:
-                _ib = ('[업로드한 데이터 이미지에서 읽은 실제 값 — 근거]\n'
-                       '(글의 숫자는 아래 값만 사용. 없는 숫자는 지어내지 말 것)\n' + _vtext)
+                _ib = ('[업로드한 데이터 이미지에서 읽은 실제 값 — 본문에 쓸 수 있는 유일한 숫자 출처]\n'
+                       '아래 목록에 있는 값만 본문 숫자로 사용한다. 여기 없는 수치(광고비·매출·비율·'
+                       '증감률·기간 등)는 절대 만들지 말고, 과장·근사로 바꾸지 마라. 추세가 작거나 '
+                       '반대여도 있는 그대로 쓴다.\n' + _vtext)
                 experience_block = (_ib + '\n\n' + experience_block).strip() if experience_block else _ib
     except Exception as e:
         logger.warning('[blog_generate] 이미지 분석 실패(계속): %s', e)
