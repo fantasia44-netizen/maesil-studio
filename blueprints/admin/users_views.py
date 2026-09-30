@@ -193,6 +193,54 @@ def add_user_points(user_id):
     return redirect(url_for('admin.user_detail', user_id=user_id))
 
 
+# ── 무료기간(트라이얼) 연장 ────────────────────────────────────────────────
+@admin_bp.route('/users/<user_id>/extend-trial', methods=['POST'])
+@login_required
+@require_superadmin
+def extend_user_trial(user_id):
+    days = request.form.get('days', 0, type=int)
+    if days <= 0 or days > 3650:
+        flash('연장 일수를 1~3650일 사이로 입력하세요.', 'warning')
+        return redirect(url_for('admin.user_detail', user_id=user_id))
+
+    supabase = current_app.supabase
+    from datetime import datetime, timedelta
+    from services.tz_utils import ensure_aware
+
+    def _parse(v):
+        try:
+            return ensure_aware(datetime.fromisoformat(str(v).replace('Z', '+00:00')))
+        except Exception:
+            return None
+
+    try:
+        row = (supabase.table('users')
+               .select('trial_ends_at, current_period_end')
+               .eq('id', user_id).single().execute().data) or {}
+        now = now_kst()
+        base = _parse(row.get('current_period_end')) or _parse(row.get('trial_ends_at'))
+        # 종료일이 미래면 거기에 더하고, 지났거나 없으면 지금부터
+        start = base if (base and base > now) else now
+        new_end = start + timedelta(days=days)
+        new_iso = new_end.isoformat()
+        supabase.table('users').update({
+            'subscription_status': 'trial',
+            'trial_ends_at':       new_iso,
+            'current_period_end':  new_iso,
+            'updated_at':          now_kst().isoformat(),
+        }).eq('id', user_id).execute()
+        # 캐시 무효화 → 다음 요청에서 즉시 반영
+        try:
+            getattr(current_app, 'user_cache', {}).pop(user_id, None)
+        except Exception:
+            pass
+        flash(f'무료기간 {days}일 연장 완료 (종료일 {new_end.strftime("%Y-%m-%d")})', 'success')
+    except Exception as e:
+        logger.error(f'[ADMIN] extend_trial error: {e}')
+        flash('오류가 발생했습니다.', 'danger')
+    return redirect(url_for('admin.user_detail', user_id=user_id))
+
+
 # ── 비활성화 / 활성화 ──────────────────────────────────────────────────────
 @admin_bp.route('/users/<user_id>/deactivate', methods=['POST'])
 @login_required

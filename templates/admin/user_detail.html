@@ -110,6 +110,28 @@
       </div>
     </div>
 
+    <!-- 무료기간 연장 -->
+    <div class="card mb-3">
+      <div class="card-header py-3"><h6 class="mb-0 fw-bold">무료기간 연장</h6></div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.extend_user_trial', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="input-group input-group-sm mb-2">
+            <input type="number" name="days" id="extendDays" class="form-control"
+                   placeholder="연장 일수" min="1" max="3650" value="30" required>
+            <span class="input-group-text">일</span>
+          </div>
+          <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+            <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('extendDays').value=7">7일</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('extendDays').value=15">15일</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('extendDays').value=30">30일</button>
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline-info w-100">무료기간 연장</button>
+        </form>
+        <div class="text-muted small mt-1">현재 종료일 이후로 더해집니다(만료됐으면 지금부터). 트라이얼 상태로 전환돼요.</div>
+      </div>
+    </div>
+
     <!-- 계정 상태 관리 -->
     <div class="card">
       <div class="card-header py-3"><h6 class="mb-0 fw-bold">계정 상태 관리</h6></div>
