@@ -435,6 +435,8 @@
 const CSRF          = document.getElementById('csrfToken').value;
 const STORE_ID      = document.getElementById('portoneStoreId').value;
 const CHANNEL_CARD  = document.getElementById('portoneChannelCard').value;
+const BUYER_NAME    = {{ (current_user.name or '고객')|tojson }};
+const BUYER_EMAIL   = {{ (current_user.email or '')|tojson }};
 const CHANNEL_KAKAO = document.getElementById('portoneChannelKakao').value;
 
 // 현재 결제 컨텍스트 (모달에서 참조)
@@ -491,6 +493,10 @@ async function _pgSubscribe(pg) {
   } else {
     params.billingKeyMethod = 'CARD';
   }
+
+  // KPN 등 일부 PG는 구매자 이름이 필수 → 항상 구매자 정보 세팅
+  params.customer = { fullName: BUYER_NAME };
+  if (BUYER_EMAIL) params.customer.email = BUYER_EMAIL;
 
   let billingKeyRes;
   try {
