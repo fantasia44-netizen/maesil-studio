@@ -214,21 +214,37 @@ def extend_user_trial(user_id):
             return None
 
     try:
-        row = (supabase.table('users')
-               .select('trial_ends_at, current_period_end')
-               .eq('id', user_id).single().execute().data) or {}
         now = now_kst()
-        base = _parse(row.get('current_period_end')) or _parse(row.get('trial_ends_at'))
+        # 구독/무료기간은 subscriptions 테이블에 있음 (로그인 시 users row로 병합됨).
+        # 로그인 병합 기준(user_id)과 동일하게 최신 구독 row를 찾아 연장한다.
+        sr = (supabase.table('subscriptions')
+              .select('id, current_period_end')
+              .eq('user_id', user_id)
+              .order('created_at', desc=True).limit(1).execute())
+        existing = (sr.data or [None])[0]
+        base = _parse(existing.get('current_period_end')) if existing else None
         # 종료일이 미래면 거기에 더하고, 지났거나 없으면 지금부터
         start = base if (base and base > now) else now
         new_end = start + timedelta(days=days)
         new_iso = new_end.isoformat()
-        supabase.table('users').update({
-            'subscription_status': 'trial',
-            'trial_ends_at':       new_iso,
-            'current_period_end':  new_iso,
-            'updated_at':          now_kst().isoformat(),
-        }).eq('id', user_id).execute()
+
+        if existing:
+            supabase.table('subscriptions').update({
+                'status':             'trial',
+                'current_period_end': new_iso,
+                'updated_at':         now.isoformat(),
+            }).eq('id', existing['id']).execute()
+        else:
+            supabase.table('subscriptions').insert({
+                'user_id':              user_id,
+                'plan_type':            'free',
+                'status':               'trial',
+                'current_period_start': now.isoformat(),
+                'current_period_end':   new_iso,
+                'created_at':           now.isoformat(),
+                'updated_at':           now.isoformat(),
+            }).execute()
+
         # 캐시 무효화 → 다음 요청에서 즉시 반영
         try:
             getattr(current_app, 'user_cache', {}).pop(user_id, None)
