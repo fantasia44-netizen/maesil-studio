@@ -2610,7 +2610,7 @@ async function runBlogQualityCheck() {
   if (!text) { alert('검사할 본문이 없습니다.'); return; }
   btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>검사 중…';
   try {
-    const fd = new FormData(); fd.append('text', text);
+    const fd = new FormData(); fd.append('csrf_token', CSRF); fd.append('text', text);
     const r = await fetch('{{ url_for("create.blog_quality_check") }}', {method:'POST', body:fd});
     const j = await r.json();
     if (!j.ok) { alert(j.message || '검사 실패'); return; }
