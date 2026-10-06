@@ -664,7 +664,7 @@ def _generate_flux(prompt: str, engine: str, size: str) -> tuple[str, str]:
             'num_images': 1,
             'enable_safety_checker': True,
         },
-        timeout=60,
+        timeout=180,   # fal.run 생성이 가끔 60초↑ (워커 백그라운드라 넉넉히)
     )
     resp.raise_for_status()
     data = resp.json()
