@@ -16,7 +16,7 @@ _HARD_LIMIT = int(os.environ.get('SHORTS_TASK_HARD_LIMIT', 660))   # 11분
 @celery.task(bind=True, name='tasks.shorts_task.generate_preview_image',
              max_retries=0, soft_time_limit=90, time_limit=120)
 def generate_preview_image(self, creation_id, user_id, flux_prompt, style,
-                          supabase_url, supabase_key):
+                          supabase_url, supabase_key, anthropic_api_key=None):
     """씬 1개 FLUX 미리보기 이미지 생성 — /shorts/preview-image가 씬마다 순차 호출.
     무료 미리보기 단계라 포인트 환불 없음(과금 자체가 없음)."""
     import sys
@@ -58,7 +58,7 @@ def generate_preview_image(self, creation_id, user_id, flux_prompt, style,
 @celery.task(bind=True, name='tasks.shorts_task.generate_scene_images',
              max_retries=0, soft_time_limit=180, time_limit=240)
 def generate_scene_images(self, creation_id, user_id, scenes, style,
-                          supabase_url, supabase_key):
+                          supabase_url, supabase_key, anthropic_api_key=None):
     """5씬 FLUX 이미지 일괄 생성(순차) — 메인 서버 블로킹 없이 워커에서 처리.
     무료 미리보기 단계라 포인트 환불 없음(과금 자체가 없음)."""
     import sys

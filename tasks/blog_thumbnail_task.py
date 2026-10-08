@@ -124,7 +124,8 @@ def classic_thumbnail(self, creation_id, user_id, line1, line2, brand_name, acce
 
 @celery.task(bind=True, name='tasks.blog_thumbnail_task.cutout',
              max_retries=0, soft_time_limit=90, time_limit=120)
-def cutout(self, creation_id, user_id, character_data, supabase_url, supabase_key):
+def cutout(self, creation_id, user_id, character_data, supabase_url, supabase_key,
+           anthropic_api_key=None):
     """캐릭터 AI 정밀 누끼(birefnet) — 결과를 Storage에 올리고 URL을 output_data에 저장.
     (라우트/상태 응답에서 data URL로 재조립해 프론트 계약 유지)"""
     _setup()
@@ -160,7 +161,7 @@ def cutout(self, creation_id, user_id, character_data, supabase_url, supabase_ke
 @celery.task(bind=True, name='tasks.blog_thumbnail_task.transform_character',
              max_retries=0, soft_time_limit=150, time_limit=180)
 def transform_character(self, creation_id, user_id, character_data, style,
-                        supabase_url, supabase_key):
+                        supabase_url, supabase_key, anthropic_api_key=None):
     """캐릭터 변형(nano-banana) — 결과를 무료 누끼 후 Storage에 올리고 URL 저장."""
     _setup()
     from supabase import create_client
